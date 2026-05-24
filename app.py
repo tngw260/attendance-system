@@ -110,6 +110,7 @@ DEFAULT_SETTINGS = {
     'deduct_absent':     '2',
     'deduct_late':       '1',
     'deduct_leave':      '0',
+    'makeup_late_points':'1',
     'alert_threshold':   '5',
     'sem1_start':        '05-16',
     'sem1_end':          '10-15',
@@ -1123,10 +1124,11 @@ def api_late_list():
 @app.post('/api/late/<int:attendance_id>/makeup')
 @login_required
 def api_late_makeup(attendance_id):
-    """บันทึกว่านักเรียนทำบำเพ็ญประโยชน์แล้ว → คืนคะแนนที่หักจากการมาสาย"""
+    """บันทึกว่านักเรียนทำบำเพ็ญประโยชน์แล้ว → คืนคะแนนตามที่ตั้งไว้"""
     u = current_user()
     settings = get_settings()
-    refund = int(settings.get('deduct_late', '1') or 0)
+    # ใช้ makeup_late_points (กำหนดได้ในหน้า settings) — fallback เป็น deduct_late ถ้าไม่ได้ตั้ง
+    refund = int(settings.get('makeup_late_points') or settings.get('deduct_late', '1') or 0)
 
     with get_db() as con:
         att = con.execute("""
