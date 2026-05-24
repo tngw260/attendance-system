@@ -61,6 +61,7 @@ const code = (new URLSearchParams(location.search).get('code') || '').toUpperCas
 
 document.addEventListener('DOMContentLoaded', () => {
   applyTheme();
+  showInAppBrowserBanner();
   if (code) load(code);
 });
 

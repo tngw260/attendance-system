@@ -150,6 +150,8 @@ async function loadCurrentUser() {
     applyTheme();
     // Inject footer credit
     injectFooter();
+    // Show LINE/in-app browser banner (if applicable)
+    showInAppBrowserBanner();
 
     const el = document.getElementById('userBadge');
     if (el && currentUser) {
@@ -191,13 +193,99 @@ function upgradeBehaviorMenu() {
 
   li.classList.add('dropdown');
   li.innerHTML = `
-    <a class="nav-link dropdown-toggle ${isActive ? 'active' : ''}" href="#" data-bs-toggle="dropdown">
+    <a class="nav-link dropdown-toggle ${isActive ? 'active' : ''}" href="#" data-bs-toggle="dropdown" role="button" aria-expanded="false">
       <i class="bi bi-award me-1"></i>คะแนนความประพฤติ
     </a>
     <ul class="dropdown-menu">
       <li><a class="dropdown-item ${location.pathname === '/behavior-report.html' ? 'active' : ''}" href="/behavior-report.html"><i class="bi bi-bar-chart me-2"></i>รายงานคะแนน</a></li>
       ${rulesItem}
     </ul>`;
+
+  // Fallback manual handler — สำหรับ in-app browsers (LINE, Facebook, Instagram)
+  // ที่ Bootstrap dropdown ทำงานไม่ดี
+  const toggle = li.querySelector('.dropdown-toggle');
+  const menu = li.querySelector('.dropdown-menu');
+  toggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isOpen = menu.classList.contains('show');
+    // Close all other open dropdowns first
+    document.querySelectorAll('.dropdown-menu.show').forEach(m => {
+      if (m !== menu) m.classList.remove('show');
+    });
+    menu.classList.toggle('show', !isOpen);
+    toggle.setAttribute('aria-expanded', !isOpen);
+  });
+  // Close when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!li.contains(e.target)) {
+      menu.classList.remove('show');
+      toggle.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+
+// In-app browser detection (LINE, Facebook, Instagram, etc.)
+function detectInAppBrowser() {
+  const ua = navigator.userAgent || '';
+  if (/Line\//i.test(ua)) return 'LINE';
+  if (/FBAN|FBAV|FB_IAB/i.test(ua)) return 'Facebook';
+  if (/Instagram/i.test(ua)) return 'Instagram';
+  if (/Messenger/i.test(ua)) return 'Messenger';
+  return null;
+}
+
+function showInAppBrowserBanner() {
+  const inApp = detectInAppBrowser();
+  if (!inApp) return;
+  // Don't annoy users every page — store dismissal in sessionStorage
+  if (sessionStorage.getItem('inAppBannerDismissed') === '1') return;
+  if (document.getElementById('inAppBanner')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'inAppBanner';
+  banner.style.cssText = `
+    position: sticky; top: 0; z-index: 1050;
+    background: #fff3cd; border-bottom: 2px solid #ffc107;
+    padding: 10px 16px; font-size: .88rem;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  `;
+  banner.innerHTML = `
+    <div>
+      <i class="bi bi-exclamation-triangle text-warning me-1"></i>
+      <strong>คุณกำลังเปิดผ่าน ${inApp}</strong> — เพื่อให้ใช้งานได้ครบ
+      <a href="javascript:void(0)" onclick="openExternal()" class="fw-bold text-decoration-underline ms-1">
+        แตะที่นี่เพื่อเปิดในเบราว์เซอร์
+      </a>
+    </div>
+    <button onclick="dismissInAppBanner()" class="btn-close" aria-label="ปิด"
+      style="font-size: .7rem;"></button>
+  `;
+  document.body.prepend(banner);
+}
+
+function dismissInAppBanner() {
+  sessionStorage.setItem('inAppBannerDismissed', '1');
+  document.getElementById('inAppBanner')?.remove();
+}
+
+function openExternal() {
+  const url = location.href;
+  const inApp = detectInAppBrowser();
+  if (inApp === 'LINE') {
+    // LINE: append ?openExternalBrowser=1
+    const sep = url.includes('?') ? '&' : '?';
+    location.href = url + sep + 'openExternalBrowser=1';
+  } else {
+    // Try copying URL + show alert
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        alert('คัดลอกลิงก์แล้ว — เปิด Safari/Chrome แล้ววางลิงก์ในแถบที่อยู่');
+      });
+    } else {
+      alert('กรุณาเปิดลิงก์นี้ใน Safari หรือ Chrome:\n\n' + url);
+    }
+  }
 }
 
 async function applyTheme() {
