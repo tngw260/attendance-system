@@ -124,7 +124,7 @@ function renderStudents(students, level, room, date) {
           </div>
         </div>
         <div class="status-btns btn-group btn-group-sm" role="group">${btnHtml}</div>
-        <div style="min-width:120px;">
+        <div class="note-wrap">
           <input type="text" class="form-control form-control-sm note-input"
             placeholder="หมายเหตุ" value="${s.note ?? ''}" style="font-size:.82rem;">
         </div>

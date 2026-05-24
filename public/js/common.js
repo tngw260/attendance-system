@@ -192,8 +192,9 @@ function upgradeBehaviorMenu() {
     : '';
 
   li.classList.add('dropdown');
+  // หมายเหตุ: ใช้ manual handler ล้วน ไม่ใส่ data-bs-toggle เพื่อหลีกเลี่ยงปัญหาใน LINE/FB in-app browser
   li.innerHTML = `
-    <a class="nav-link dropdown-toggle ${isActive ? 'active' : ''}" href="#" data-bs-toggle="dropdown" role="button" aria-expanded="false">
+    <a class="nav-link dropdown-toggle ${isActive ? 'active' : ''}" href="#" role="button" aria-expanded="false">
       <i class="bi bi-award me-1"></i>คะแนนความประพฤติ
     </a>
     <ul class="dropdown-menu">
@@ -201,28 +202,42 @@ function upgradeBehaviorMenu() {
       ${rulesItem}
     </ul>`;
 
-  // Fallback manual handler — สำหรับ in-app browsers (LINE, Facebook, Instagram)
-  // ที่ Bootstrap dropdown ทำงานไม่ดี
   const toggle = li.querySelector('.dropdown-toggle');
   const menu = li.querySelector('.dropdown-menu');
-  toggle.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const isOpen = menu.classList.contains('show');
-    // Close all other open dropdowns first
+
+  const openMenu = () => {
     document.querySelectorAll('.dropdown-menu.show').forEach(m => {
       if (m !== menu) m.classList.remove('show');
     });
-    menu.classList.toggle('show', !isOpen);
-    toggle.setAttribute('aria-expanded', !isOpen);
-  });
-  // Close when clicking outside
+    menu.classList.add('show');
+    toggle.setAttribute('aria-expanded', 'true');
+  };
+  const closeMenu = () => {
+    menu.classList.remove('show');
+    toggle.setAttribute('aria-expanded', 'false');
+  };
+  const toggleMenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (menu.classList.contains('show')) closeMenu();
+    else openMenu();
+  };
+
+  // ใช้ทั้ง click และ touchend สำหรับ in-app browsers
+  toggle.addEventListener('click', toggleMenu);
+  toggle.addEventListener('touchend', (e) => {
+    // Prevent double-firing on touch devices
+    e.preventDefault();
+    toggleMenu(e);
+  }, { passive: false });
+
+  // ปิดเมื่อ tap ข้างนอก
   document.addEventListener('click', (e) => {
-    if (!li.contains(e.target)) {
-      menu.classList.remove('show');
-      toggle.setAttribute('aria-expanded', 'false');
-    }
+    if (!li.contains(e.target)) closeMenu();
   });
+  document.addEventListener('touchend', (e) => {
+    if (!li.contains(e.target)) closeMenu();
+  }, { passive: true });
 }
 
 // In-app browser detection (LINE, Facebook, Instagram, etc.)

@@ -118,7 +118,8 @@ body {
 .student-row {
   display: flex;
   align-items: center;
-  gap: .75rem;
+  flex-wrap: wrap;
+  gap: .5rem .75rem;
   padding: .65rem 1rem;
   background: #fff;
   transition: background .15s;
@@ -156,9 +157,31 @@ body {
   padding: .3rem .65rem;
   border-radius: 6px !important;
 }
-@media (max-width: 576px) {
-  .status-btns .btn { font-size: .78rem; padding: .25rem .5rem; }
-  .student-name { font-size: .9rem; }
+.status-btns { flex-wrap: wrap; }
+
+/* Note input — responsive: เต็ม width บนมือถือ, fixed บน desktop */
+.student-row .note-wrap { min-width: 120px; flex: 0 0 auto; }
+
+@media (max-width: 768px) {
+  .student-row {
+    padding: .55rem .75rem;
+    gap: .4rem .5rem;
+  }
+  .student-row > .student-num { width: 1.6rem; }
+  .student-row > .flex-grow-1 { flex-basis: calc(100% - 2.5rem); min-width: 0; }
+  .student-row > .status-btns,
+  .status-btns {
+    flex-basis: 100%;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .student-row .note-wrap {
+    flex-basis: 100%;
+    width: 100%;
+    min-width: 0;
+  }
+  .status-btns .btn { font-size: .78rem; padding: .3rem .55rem; }
+  .student-name { font-size: .92rem; }
 }
 
 /* ── CLASS CARDS (DASHBOARD) ── */
