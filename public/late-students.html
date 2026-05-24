@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>นักเรียนมาสาย / บำเพ็ญประโยชน์</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+        <li class="nav-item"><a class="nav-link" href="/attendance.html"><i class="bi bi-check2-square me-1"></i>เช็คชื่อ</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/late-students.html"><i class="bi bi-clock-history me-1"></i>มาสาย</a></li>
+        <li class="nav-item"><a class="nav-link" href="/students.html"><i class="bi bi-people me-1"></i>นักเรียน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/report.html"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/behavior-report.html"><i class="bi bi-award me-1"></i>คะแนน</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/users.html"><i class="bi bi-shield-lock me-1"></i>ผู้ใช้</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/settings.html"><i class="bi bi-gear me-1"></i>ตั้งค่า</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header no-print">
+  <div class="container">
+    <h1><i class="bi bi-clock-history me-2"></i>นักเรียนมาสาย / บำเพ็ญประโยชน์</h1>
+    <div class="subtitle">เช็คนักเรียนที่บำเพ็ญประโยชน์เพื่อแก้มาสาย — คืนคะแนนความประพฤติให้</div>
+  </div>
+</div>
+
+<div class="print-only" style="display:none;">
+  <div class="text-center mb-3">
+    <h3 class="mb-1">โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</h3>
+    <h5>รายชื่อนักเรียนมาสาย — <span id="printDate"></span></h5>
+  </div>
+</div>
+
+<div class="container pb-5">
+
+  <!-- Filter -->
+  <div class="card mb-3 no-print">
+    <div class="card-body py-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-4">
+          <label class="form-label fw-600 mb-1">วันที่</label>
+          <input type="date" id="selDate" class="form-control" onchange="load()">
+        </div>
+        <div class="col-sm-3">
+          <button class="btn btn-outline-secondary w-100" onclick="setToday()">
+            <i class="bi bi-calendar-day me-1"></i>วันนี้
+          </button>
+        </div>
+        <div class="col-sm-3">
+          <button class="btn btn-primary w-100" onclick="load()">
+            <i class="bi bi-arrow-clockwise me-1"></i>รีเฟรช
+          </button>
+        </div>
+        <div class="col-sm-2">
+          <button class="btn btn-outline-primary w-100" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i>พิมพ์
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="row g-2 mb-3" id="summary" style="display:none;">
+    <div class="col-4">
+      <div class="card text-center border-warning">
+        <div class="card-body py-2">
+          <div class="fs-3 fw-bold text-warning" id="totalLate">0</div>
+          <div class="small text-muted">มาสายทั้งหมด</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="card text-center border-success">
+        <div class="card-body py-2">
+          <div class="fs-3 fw-bold text-success" id="madeUp">0</div>
+          <div class="small text-muted">บำเพ็ญแล้ว</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="card text-center border-danger">
+        <div class="card-body py-2">
+          <div class="fs-3 fw-bold text-danger" id="pending">0</div>
+          <div class="small text-muted">ยังไม่ได้บำเพ็ญ</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- List -->
+  <div id="list">
+    <div class="text-center text-muted py-5">
+      <div class="spinner-border text-primary"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="mainToast" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex"><div class="toast-body fw-500"></div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  document.getElementById('selDate').value = todayISO();
+  load();
+});
+
+function setToday() {
+  document.getElementById('selDate').value = todayISO();
+  load();
+}
+
+async function load() {
+  const date = document.getElementById('selDate').value;
+  document.getElementById('printDate').textContent = formatThaiDateFull(date);
+  document.getElementById('list').innerHTML =
+    '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+  try {
+    const d = await apiFetch('/api/late?date=' + date);
+    render(d);
+  } catch (e) {
+    document.getElementById('list').innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+function render(d) {
+  const rows = d.rows;
+  const total = rows.length;
+  const madeUp = rows.filter(r => r.makeup_id).length;
+  const pending = total - madeUp;
+
+  document.getElementById('totalLate').textContent = total;
+  document.getElementById('madeUp').textContent = madeUp;
+  document.getElementById('pending').textContent = pending;
+  document.getElementById('summary').style.display = '';
+
+  if (total === 0) {
+    document.getElementById('list').innerHTML = `
+      <div class="card">
+        <div class="card-body text-center text-success py-5">
+          <i class="bi bi-emoji-smile fs-1 d-block mb-2"></i>
+          <h5>ไม่มีนักเรียนมาสายในวันนี้</h5>
+          <p class="text-muted mb-0">${formatThaiDateFull(d.date)}</p>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // Group by class
+  const groups = {};
+  rows.forEach(r => {
+    const k = `${r.class_level}_${r.room}`;
+    if (!groups[k]) groups[k] = { level: r.class_level, room: r.room, rows: [] };
+    groups[k].rows.push(r);
+  });
+
+  let html = '';
+  Object.values(groups).sort((a,b) => a.level - b.level || a.room - b.room).forEach(g => {
+    const pendingInClass = g.rows.filter(r => !r.makeup_id).length;
+    html += `<div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center py-2">
+        <div>
+          <span class="fw-bold">ม.${g.level}/${g.room}</span>
+          <span class="badge bg-warning text-dark ms-1">${g.rows.length} คน</span>
+        </div>
+        ${pendingInClass > 0
+          ? `<span class="badge bg-danger">ยังไม่บำเพ็ญ ${pendingInClass} คน</span>`
+          : `<span class="badge bg-success">เคลียร์หมด ✓</span>`}
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:60px;" class="text-center">เลขที่</th>
+              <th>ชื่อ-นามสกุล</th>
+              <th>หมายเหตุ</th>
+              <th class="text-center" style="width:130px;">สถานะ</th>
+              <th class="text-center no-print" style="width:160px;">บำเพ็ญประโยชน์</th>
+            </tr>
+          </thead><tbody>`;
+
+    g.rows.forEach(r => {
+      const made = r.makeup_id;
+      html += `<tr class="${made ? 'table-success' : ''}">
+        <td class="text-center">${r.number ?? '-'}</td>
+        <td>
+          <span class="fw-500">${r.name}</span>
+          ${r.student_code ? `<small class="text-muted ms-1">${r.student_code}</small>` : ''}
+        </td>
+        <td class="text-muted small">${r.note || '-'}</td>
+        <td class="text-center">
+          ${made
+            ? `<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>แก้แล้ว</span>
+               <div class="small text-muted mt-1">+${r.makeup_points} โดย ${r.makeup_by_name || '-'}</div>`
+            : `<span class="badge bg-danger"><i class="bi bi-clock me-1"></i>ยังไม่แก้</span>`}
+        </td>
+        <td class="text-center no-print">
+          ${made
+            ? `<button class="btn btn-sm btn-outline-secondary" onclick="undoMakeup(${r.attendance_id})" title="ยกเลิก">
+                <i class="bi bi-x-circle"></i> ยกเลิก
+              </button>`
+            : `<button class="btn btn-sm btn-success" onclick="markMakeup(${r.attendance_id})">
+                <i class="bi bi-check2-circle me-1"></i>ทำแล้ว
+              </button>`}
+        </td>
+      </tr>`;
+    });
+    html += `</tbody></table></div></div>`;
+  });
+
+  document.getElementById('list').innerHTML = html;
+}
+
+async function markMakeup(attId) {
+  try {
+    const res = await apiFetch(`/api/late/${attId}/makeup`, { method: 'POST' });
+    showToast(res.message);
+    load();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function undoMakeup(attId) {
+  if (!confirm('ยกเลิกการบำเพ็ญประโยชน์? คะแนนที่คืนจะถูกหักกลับ')) return;
+  try {
+    await apiFetch(`/api/late/${attId}/makeup`, { method: 'DELETE' });
+    showToast('ยกเลิกแล้ว');
+    load();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+</script>
+</body>
+</html>

@@ -175,7 +175,7 @@ def init_db():
                 points      INTEGER NOT NULL,
                 reason      TEXT NOT NULL,
                 source      TEXT DEFAULT 'manual'
-                                CHECK (source IN ('manual','attendance')),
+                                CHECK (source IN ('manual','attendance','makeup')),
                 source_id   INTEGER,
                 recorded_by INTEGER REFERENCES users(id),
                 created_at  TEXT DEFAULT (datetime('now','localtime'))
@@ -266,6 +266,34 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_att_student ON attendance(student_id);
                 """)
                 print("  [Migrate] อัพเดทตาราง attendance รองรับสถานะ 'activity'")
+
+        # Migrate: behavior_logs.source - allow 'makeup'
+        try:
+            con.execute("INSERT INTO behavior_logs (student_id, date, points, reason, source) VALUES (-9999, '0000-01-01', 0, '_t', 'makeup')")
+            con.execute("DELETE FROM behavior_logs WHERE student_id=-9999")
+        except sqlite3.IntegrityError as e:
+            if 'CHECK' in str(e) or 'check' in str(e).lower():
+                con.executescript("""
+                    CREATE TABLE behavior_logs_new (
+                        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                        student_id  INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+                        date        TEXT NOT NULL,
+                        points      INTEGER NOT NULL,
+                        reason      TEXT NOT NULL,
+                        source      TEXT DEFAULT 'manual'
+                                       CHECK (source IN ('manual','attendance','makeup')),
+                        source_id   INTEGER,
+                        recorded_by INTEGER REFERENCES users(id),
+                        created_at  TEXT DEFAULT (datetime('now','localtime'))
+                    );
+                    INSERT INTO behavior_logs_new (id, student_id, date, points, reason, source, source_id, recorded_by, created_at)
+                      SELECT id, student_id, date, points, reason, source, source_id, recorded_by, created_at FROM behavior_logs;
+                    DROP TABLE behavior_logs;
+                    ALTER TABLE behavior_logs_new RENAME TO behavior_logs;
+                    CREATE INDEX IF NOT EXISTS idx_bhv_student ON behavior_logs(student_id);
+                    CREATE INDEX IF NOT EXISTS idx_bhv_source  ON behavior_logs(source, source_id);
+                """)
+                print("  [Migrate] อัพเดท behavior_logs รองรับ source='makeup'")
 
         # Default settings
         for k, v in DEFAULT_SETTINGS.items():
@@ -873,6 +901,108 @@ def api_attendance_post():
             apply_attendance_behavior(con, r['student_id'], att_id, date, r['status'], settings, uid)
 
     return jsonify(success=True, message=f"บันทึกการเช็คชื่อ {len(records)} คน สำเร็จ")
+
+# ── LATE STUDENTS + MAKEUP (บำเพ็ญประโยชน์แก้มาสาย) ──────
+
+@app.get('/api/late')
+@login_required
+def api_late_list():
+    """รายชื่อนักเรียนที่มาสายในวันที่ระบุ + สถานะการบำเพ็ญประโยชน์"""
+    u = current_user()
+    date = request.args.get('date', today_iso())
+    where, params, _, _ = user_class_filter(u)
+
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT a.id AS attendance_id, a.date, a.note,
+                   s.id, s.number, s.student_code, s.name, s.class_level, s.room,
+                   mk.id AS makeup_id, mk.points AS makeup_points, mk.created_at AS makeup_at,
+                   u.full_name AS makeup_by_name
+            FROM attendance a
+            JOIN students s ON s.id = a.student_id
+            LEFT JOIN behavior_logs mk ON mk.source='makeup' AND mk.source_id=a.id
+            LEFT JOIN users u ON u.id = mk.recorded_by
+            WHERE a.status='late' AND a.date=? {where}
+            ORDER BY s.class_level, s.room, s.number, s.name
+        """, [date] + params).fetchall()
+    return jsonify(rows=rows_to_list(rows), date=date)
+
+@app.post('/api/late/<int:attendance_id>/makeup')
+@login_required
+def api_late_makeup(attendance_id):
+    """บันทึกว่านักเรียนทำบำเพ็ญประโยชน์แล้ว → คืนคะแนนที่หักจากการมาสาย"""
+    u = current_user()
+    settings = get_settings()
+    refund = int(settings.get('deduct_late', '1') or 0)
+
+    with get_db() as con:
+        att = con.execute("""
+            SELECT a.*, s.class_level, s.room
+            FROM attendance a JOIN students s ON s.id=a.student_id
+            WHERE a.id=? AND a.status='late'
+        """, (attendance_id,)).fetchone()
+        if not att:
+            return jsonify(success=False, message='ไม่พบรายการมาสาย'), 404
+        if not can_access_student(u, att):
+            return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+
+        # ตรวจสอบว่ายังไม่ได้แก้
+        existing = con.execute(
+            "SELECT id FROM behavior_logs WHERE source='makeup' AND source_id=?",
+            (attendance_id,)
+        ).fetchone()
+        if existing:
+            return jsonify(success=False, message='นักเรียนคนนี้บำเพ็ญประโยชน์แล้ว'), 400
+
+        # บันทึกการคืนคะแนน
+        con.execute("""
+            INSERT INTO behavior_logs (student_id, date, points, reason, source, source_id, recorded_by)
+            VALUES (?, ?, ?, 'บำเพ็ญประโยชน์ (แก้มาสาย)', 'makeup', ?, ?)
+        """, (att['student_id'], today_iso(), refund, attendance_id, u['id']))
+        audit_log(con, 'late_makeup', 'attendance', attendance_id,
+                  {'student_id': att['student_id'], 'refund': refund})
+
+    return jsonify(success=True, refund=refund,
+                   message=f'บันทึกการบำเพ็ญประโยชน์ — คืนคะแนน +{refund}')
+
+@app.delete('/api/late/<int:attendance_id>/makeup')
+@login_required
+def api_late_undo_makeup(attendance_id):
+    """ยกเลิกการบำเพ็ญประโยชน์ (เช่นบันทึกผิดคน)"""
+    u = current_user()
+    with get_db() as con:
+        att = con.execute("""
+            SELECT a.*, s.class_level, s.room
+            FROM attendance a JOIN students s ON s.id=a.student_id
+            WHERE a.id=?
+        """, (attendance_id,)).fetchone()
+        if not att or not can_access_student(u, att):
+            return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+        con.execute("DELETE FROM behavior_logs WHERE source='makeup' AND source_id=?", (attendance_id,))
+        audit_log(con, 'late_undo_makeup', 'attendance', attendance_id, None)
+    return jsonify(success=True, message='ยกเลิกการบำเพ็ญแล้ว')
+
+@app.get('/api/late/summary')
+@login_required
+def api_late_summary():
+    """สรุปจำนวนนักเรียนมาสาย + บำเพ็ญแล้ว/ยัง — สำหรับ dashboard"""
+    u = current_user()
+    date = request.args.get('date', today_iso())
+    where, params, _, _ = user_class_filter(u)
+    with get_db() as con:
+        row = con.execute(f"""
+            SELECT
+              COUNT(*) AS total_late,
+              SUM(CASE WHEN mk.id IS NOT NULL THEN 1 ELSE 0 END) AS made_up,
+              SUM(CASE WHEN mk.id IS NULL THEN 1 ELSE 0 END) AS pending
+            FROM attendance a
+            JOIN students s ON s.id=a.student_id
+            LEFT JOIN behavior_logs mk ON mk.source='makeup' AND mk.source_id=a.id
+            WHERE a.status='late' AND a.date=? {where}
+        """, [date] + params).fetchone()
+    result = dict(row)
+    result['date'] = date
+    return jsonify(result)
 
 # ── BEHAVIOR SCORES ───────────────────────────────────────
 
