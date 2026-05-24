@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>รายงานคะแนนความประพฤติ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+        <li class="nav-item"><a class="nav-link" href="/attendance.html"><i class="bi bi-check2-square me-1"></i>เช็คชื่อ</a></li>
+        <li class="nav-item"><a class="nav-link" href="/students.html"><i class="bi bi-people me-1"></i>นักเรียน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/report.html"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/behavior-report.html"><i class="bi bi-award me-1"></i>คะแนน</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/users.html"><i class="bi bi-shield-lock me-1"></i>ผู้ใช้</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/settings.html"><i class="bi bi-gear me-1"></i>ตั้งค่า</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header no-print">
+  <div class="container">
+    <h1><i class="bi bi-award-fill me-2"></i>รายงานคะแนนความประพฤติ</h1>
+    <div class="subtitle">สรุปคะแนนรายคน + ประวัติการหักย้อนหลัง</div>
+  </div>
+</div>
+
+<div class="print-only" style="display:none;">
+  <div class="text-center mb-3">
+    <h3 class="mb-1">โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</h3>
+    <h5 id="printTitle" class="mb-0"></h5>
+  </div>
+</div>
+
+<div class="container pb-5">
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs mb-3 no-print" id="reportTabs">
+    <li class="nav-item">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#summaryTab">
+        <i class="bi bi-bar-chart me-1"></i>สรุปรายคน
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#logTab">
+        <i class="bi bi-clock-history me-1"></i>ประวัติย้อนหลัง
+      </button>
+    </li>
+  </ul>
+
+  <!-- Filter card (shared) -->
+  <div class="card mb-3 no-print">
+    <div class="card-header"><i class="bi bi-funnel me-2"></i>ตัวกรอง</div>
+    <div class="card-body">
+      <div class="mb-3">
+        <div class="btn-group btn-group-sm" role="group">
+          <input type="radio" class="btn-check" name="filterMode" id="modeDate" value="date" checked>
+          <label class="btn btn-outline-primary" for="modeDate">ช่วงวันที่</label>
+          <input type="radio" class="btn-check" name="filterMode" id="modeMonth" value="month">
+          <label class="btn btn-outline-primary" for="modeMonth">เดือน</label>
+          <input type="radio" class="btn-check" name="filterMode" id="modeSemester" value="semester">
+          <label class="btn btn-outline-primary" for="modeSemester">ภาคเรียน</label>
+          <input type="radio" class="btn-check" name="filterMode" id="modeAll" value="all">
+          <label class="btn btn-outline-primary" for="modeAll">ทั้งหมด</label>
+        </div>
+      </div>
+
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-2">
+          <label class="form-label small fw-600">ชั้น</label>
+          <select id="fLevel" class="form-select form-select-sm" onchange="onLevelChange()">
+            <option value="">ทุกชั้น</option>
+            <option value="1">ม.1</option><option value="2">ม.2</option>
+            <option value="3">ม.3</option><option value="4">ม.4</option>
+            <option value="5">ม.5</option><option value="6">ม.6</option>
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label small fw-600">ห้อง</label>
+          <select id="fRoom" class="form-select form-select-sm"><option value="">ทุกห้อง</option></select>
+        </div>
+
+        <div id="dateInputs" class="col-sm-6">
+          <div class="row g-2">
+            <div class="col-6"><label class="form-label small fw-600">ตั้งแต่</label>
+              <input type="date" id="fFrom" class="form-control form-control-sm"></div>
+            <div class="col-6"><label class="form-label small fw-600">ถึง</label>
+              <input type="date" id="fTo" class="form-control form-control-sm"></div>
+          </div>
+        </div>
+        <div id="monthInputs" class="col-sm-6" style="display:none;">
+          <label class="form-label small fw-600">เดือน-ปี</label>
+          <input type="month" id="fMonth" class="form-control form-control-sm">
+        </div>
+        <div id="semInputs" class="col-sm-6" style="display:none;">
+          <div class="row g-2">
+            <div class="col-6"><label class="form-label small fw-600">ภาคเรียน</label>
+              <select id="fSem" class="form-select form-select-sm">
+                <option value="1">ภาคเรียนที่ 1</option><option value="2">ภาคเรียนที่ 2</option>
+              </select></div>
+            <div class="col-6"><label class="form-label small fw-600">ปีการศึกษา (พ.ศ.)</label>
+              <input type="number" id="fYear" class="form-control form-control-sm"></div>
+          </div>
+        </div>
+
+        <!-- Only for log tab -->
+        <div id="sourceInput" class="col-sm-2" style="display:none;">
+          <label class="form-label small fw-600">ประเภท</label>
+          <select id="fSource" class="form-select form-select-sm">
+            <option value="">ทั้งหมด</option>
+            <option value="attendance">อัตโนมัติ (เช็คชื่อ)</option>
+            <option value="manual">บันทึกเอง</option>
+          </select>
+        </div>
+
+        <div class="col-sm-2">
+          <label class="form-label small fw-600">&nbsp;</label>
+          <button class="btn btn-primary btn-sm w-100" onclick="loadReport()">
+            <i class="bi bi-search"></i> ค้นหา
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="rangeInfo" class="alert alert-info py-2 small" style="display:none;"></div>
+
+  <!-- Action bar -->
+  <div class="d-flex justify-content-between align-items-center mb-3 no-print" id="actionBar" style="display:none;">
+    <div class="section-title mb-0">ผลลัพธ์ <span id="resultCount" class="text-muted fs-6 fw-normal"></span></div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-primary btn-sm" onclick="window.print()">
+        <i class="bi bi-printer-fill me-1"></i>พิมพ์
+      </button>
+      <button class="btn btn-success btn-sm" onclick="exportReport()">
+        <i class="bi bi-file-earmark-excel me-1"></i>ส่งออก Excel
+      </button>
+    </div>
+  </div>
+
+  <!-- Tab content -->
+  <div class="tab-content">
+    <div class="tab-pane fade show active" id="summaryTab">
+      <div id="summaryResult">
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-award fs-1 d-block mb-2"></i>เลือกตัวกรองแล้วกดค้นหา
+        </div>
+      </div>
+    </div>
+    <div class="tab-pane fade" id="logTab">
+      <div id="logResult">
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-clock-history fs-1 d-block mb-2"></i>เลือกตัวกรองแล้วกดค้นหา
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="mainToast" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex"><div class="toast-body fw-500"></div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/behavior-report.js"></script>
+</body>
+</html>

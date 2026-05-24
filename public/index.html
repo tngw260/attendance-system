@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบเช็คชื่อ - โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link active" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+        <li class="nav-item"><a class="nav-link" href="/attendance.html"><i class="bi bi-check2-square me-1"></i>เช็คชื่อ</a></li>
+        <li class="nav-item"><a class="nav-link" href="/students.html"><i class="bi bi-people me-1"></i>นักเรียน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/report.html"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/behavior-report.html"><i class="bi bi-award me-1"></i>คะแนน</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/users.html"><i class="bi bi-shield-lock me-1"></i>ผู้ใช้</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/settings.html"><i class="bi bi-gear me-1"></i>ตั้งค่า</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header">
+  <div class="container">
+    <h1><i class="bi bi-building-fill me-2"></i>โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</h1>
+    <div class="subtitle" id="thaiDate">ระบบบริหารการเช็คชื่อนักเรียน</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+
+  <!-- Stat cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-lg col-lg-2-4">
+      <div class="stat-card bg-total">
+        <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
+        <div>
+          <div class="stat-value" id="statTotal">-</div>
+          <div class="stat-label">นักเรียนทั้งหมด</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg col-lg-2-4">
+      <div class="stat-card bg-present">
+        <div class="stat-icon"><i class="bi bi-check-circle-fill"></i></div>
+        <div>
+          <div class="stat-value" id="statPresent">-</div>
+          <div class="stat-label">มาเรียนวันนี้</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg col-lg-2-4">
+      <div class="stat-card bg-absent">
+        <div class="stat-icon"><i class="bi bi-x-circle-fill"></i></div>
+        <div>
+          <div class="stat-value" id="statAbsent">-</div>
+          <div class="stat-label">ขาดเรียนวันนี้</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg col-lg-2-4">
+      <div class="stat-card bg-late">
+        <div class="stat-icon"><i class="bi bi-clock-fill"></i></div>
+        <div>
+          <div class="stat-value" id="statLate">-</div>
+          <div class="stat-label">มาสายวันนี้</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg col-lg-2-4">
+      <div class="stat-card bg-leave">
+        <div class="stat-icon"><i class="bi bi-calendar-minus-fill"></i></div>
+        <div>
+          <div class="stat-value" id="statLeave">-</div>
+          <div class="stat-label">ลาวันนี้</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts row -->
+  <div class="row g-4 mb-4" id="alertRow" style="display:none;">
+    <div class="col-12">
+      <div class="card border-danger">
+        <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-exclamation-triangle-fill me-2"></i>แจ้งเตือน — นักเรียนขาดเรียนเกินกำหนด</span>
+          <span class="badge bg-light text-danger" id="alertCount">0</span>
+        </div>
+        <div class="card-body p-0">
+          <div id="alertList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Monthly summary + Quick menu -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-8">
+      <div class="section-title"><i class="bi bi-calendar-month me-2"></i>สรุปประจำเดือนนี้</div>
+      <div class="row g-3" id="monthSummary">
+        <div class="col-6 col-md-3">
+          <div class="card text-center py-3 border-success">
+            <div class="text-success fs-2 fw-bold" id="monPresent">-</div>
+            <div class="small text-muted">มาเรียน (ครั้ง)</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card text-center py-3 border-danger">
+            <div class="text-danger fs-2 fw-bold" id="monAbsent">-</div>
+            <div class="small text-muted">ขาดเรียน (ครั้ง)</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card text-center py-3 border-warning">
+            <div class="text-warning fs-2 fw-bold" id="monLate">-</div>
+            <div class="small text-muted">มาสาย (ครั้ง)</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card text-center py-3 border-info">
+            <div class="text-info fs-2 fw-bold" id="monDays">-</div>
+            <div class="small text-muted">วันที่บันทึก</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="section-title"><i class="bi bi-lightning-fill me-2"></i>เมนูด่วน</div>
+      <div class="d-grid gap-2">
+        <a href="/attendance.html" class="btn btn-primary btn-lg fw-bold">
+          <i class="bi bi-check2-square me-2"></i>เช็คชื่อนักเรียน
+        </a>
+        <a href="/report.html" class="btn btn-outline-primary">
+          <i class="bi bi-bar-chart me-2"></i>ดูรายงาน
+        </a>
+        <a href="/students.html" class="btn btn-outline-secondary admin-only">
+          <i class="bi bi-file-earmark-excel me-2"></i>นำเข้ารายชื่อ Excel
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-8">
+      <div class="section-title"><i class="bi bi-graph-up me-2"></i>แนวโน้มการมาเรียน 14 วัน</div>
+      <div class="card border-0 shadow-sm">
+        <div class="card-body"><canvas id="weeklyChart" style="max-height:280px;"></canvas></div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="section-title"><i class="bi bi-pie-chart me-2"></i>สถานะวันนี้</div>
+      <div class="card border-0 shadow-sm">
+        <div class="card-body"><canvas id="todayChart" style="max-height:280px;"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Behavior score panel -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-5">
+      <div class="section-title"><i class="bi bi-award me-2"></i>สรุปคะแนนความประพฤติ</div>
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="row g-3 text-center">
+            <div class="col-6">
+              <div class="p-3 rounded" style="background:#e8f5e9;">
+                <div class="display-6 fw-bold text-success" id="bhvAvg">-</div>
+                <div class="small text-muted">คะแนนเฉลี่ย</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="p-3 rounded" style="background:#fff3cd;">
+                <div class="display-6 fw-bold text-warning" id="bhvMin">-</div>
+                <div class="small text-muted">คะแนนต่ำสุด</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-4">
+              <div class="border-end">
+                <div class="fs-4 fw-bold text-danger" id="bhvDeducted">-</div>
+                <div class="small text-muted">นักเรียนถูกหัก</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-4">
+              <div class="border-end">
+                <div class="fs-4 fw-bold text-primary" id="bhvMonthEvents">-</div>
+                <div class="small text-muted">หักเดือนนี้ (ครั้ง)</div>
+              </div>
+            </div>
+            <div class="col-12 col-md-4">
+              <div>
+                <div class="fs-4 fw-bold text-secondary" id="bhvMonthDeduction">-</div>
+                <div class="small text-muted">คะแนนหัก (เดือนนี้)</div>
+              </div>
+            </div>
+          </div>
+          <div class="d-grid mt-3">
+            <a href="/behavior-report.html" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-bar-chart me-1"></i>ดูรายงานคะแนนเต็ม
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="section-title"><i class="bi bi-exclamation-octagon me-2"></i>นักเรียนคะแนนต่ำ (ต้องดูแลเป็นพิเศษ)</div>
+      <div class="card border-0 shadow-sm">
+        <div id="lowScoreList" class="card-body p-0">
+          <div class="text-center text-muted py-4">
+            <div class="spinner-border spinner-border-sm"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Class summary -->
+  <div class="section-title"><i class="bi bi-grid-3x2-gap me-2"></i>สรุปรายชั้นเรียน — วันนี้</div>
+  <div id="classGrid">
+    <div class="text-center text-muted py-4">
+      <i class="bi bi-hourglass-split fs-3 d-block mb-2"></i>กำลังโหลด...
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="mainToast" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fw-500"></div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/dashboard.js"></script>
+</body>
+</html>

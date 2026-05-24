@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ผู้ปกครอง - โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    body { background: #f0f4fb; }
+    .parent-header {
+      background: linear-gradient(135deg, #0d3b8e, #1a55c8);
+      color: white; padding: 1.5rem; border-radius: 0 0 16px 16px;
+    }
+    .student-photo {
+      width: 90px; height: 90px; border-radius: 50%;
+      object-fit: cover; border: 4px solid white;
+    }
+  </style>
+</head>
+<body>
+
+<div class="parent-header">
+  <div class="container">
+    <div class="d-flex align-items-center gap-3" id="headerArea">
+      <i class="bi bi-person-circle" style="font-size:5rem;"></i>
+      <div>
+        <div class="text-white-50 small">โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</div>
+        <h2 class="mb-1">ข้อมูลนักเรียน</h2>
+        <div id="codeInput" class="mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container py-4">
+  <div id="content">
+    <div class="card">
+      <div class="card-body">
+        <h4 class="mb-3"><i class="bi bi-key me-2"></i>กรุณากรอกรหัสผู้ปกครอง</h4>
+        <p class="text-muted">รับรหัสจากครูประจำชั้นเพื่อตรวจสอบข้อมูลของบุตรหลาน</p>
+        <form id="codeForm">
+          <div class="input-group input-group-lg">
+            <input type="text" id="codeIn" class="form-control text-center fw-bold"
+              placeholder="ABCDEF" maxlength="6" required style="letter-spacing:.3em; text-transform:uppercase;">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-arrow-right me-2"></i>เข้าดู
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const code = (new URLSearchParams(location.search).get('code') || '').toUpperCase();
+
+document.addEventListener('DOMContentLoaded', () => {
+  applyTheme();
+  if (code) load(code);
+});
+
+document.getElementById('codeForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const c = document.getElementById('codeIn').value.trim().toUpperCase();
+  if (c) location.href = '/parent.html?code=' + c;
+});
+
+async function load(c) {
+  document.getElementById('content').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
+  try {
+    const r = await fetch('/api/parent/' + c);
+    if (!r.ok) {
+      const d = await r.json();
+      throw new Error(d.error || 'ไม่พบรหัส');
+    }
+    const d = await r.json();
+    render(d);
+  } catch (e) {
+    document.getElementById('content').innerHTML = `
+      <div class="alert alert-danger">
+        <h5><i class="bi bi-exclamation-octagon me-2"></i>${e.message}</h5>
+        <p class="mb-0">กรุณาตรวจสอบรหัสจากครูประจำชั้น</p>
+      </div>
+      <a href="/parent.html" class="btn btn-outline-primary">ลองอีกครั้ง</a>`;
+  }
+}
+
+function render(d) {
+  const s = d.student;
+  const b = d.behavior;
+  const a = d.attendance;
+  const scorePct = (b.score / b.start_score) * 100;
+  const color = scorePct >= 80 ? 'success' : scorePct >= 60 ? 'warning' : 'danger';
+
+  // Update header
+  const photoHtml = s.photo
+    ? `<img src="/photos/${s.photo}" class="student-photo">`
+    : '<i class="bi bi-person-circle" style="font-size:5rem;"></i>';
+  document.getElementById('headerArea').innerHTML = `
+    ${photoHtml}
+    <div>
+      <div class="text-white-50 small">${d.school_name || ''}</div>
+      <h2 class="mb-1">${s.name}</h2>
+      <div><span class="badge bg-light text-dark">ม.${s.class_level}/${s.room}</span>
+        ${s.number ? `<span class="badge bg-light text-dark ms-1">เลขที่ ${s.number}</span>` : ''}
+        ${s.student_code ? `<span class="badge bg-light text-dark ms-1">${s.student_code}</span>` : ''}
+      </div>
+    </div>`;
+
+  // Attendance stats this month
+  let attHtml = '';
+  if (a.recent.length === 0) {
+    attHtml = '<div class="text-muted text-center py-3">ยังไม่มีประวัติเช็คชื่อ</div>';
+  } else {
+    attHtml = '<div class="row g-2 mb-3">' +
+      `<div class="col-3"><div class="bg-success text-white p-2 rounded text-center"><div class="fs-4 fw-bold">${a.month.present||0}</div><small>มา</small></div></div>` +
+      `<div class="col-3"><div class="bg-danger text-white p-2 rounded text-center"><div class="fs-4 fw-bold">${a.month.absent||0}</div><small>ขาด</small></div></div>` +
+      `<div class="col-3"><div class="bg-warning text-dark p-2 rounded text-center"><div class="fs-4 fw-bold">${a.month.late||0}</div><small>มาสาย</small></div></div>` +
+      `<div class="col-3"><div class="bg-info text-white p-2 rounded text-center"><div class="fs-4 fw-bold">${a.month.leave||0}</div><small>ลา</small></div></div>` +
+      '</div>';
+    attHtml += '<div class="text-muted small mb-2">ประวัติล่าสุด (60 รายการ)</div>';
+    attHtml += '<div class="table-responsive"><table class="table table-sm">';
+    attHtml += '<thead class="table-light"><tr><th>วันที่</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead><tbody>';
+    a.recent.forEach(r => {
+      const STATUS = {
+        present: {l:'มา', c:'success'}, absent:{l:'ขาด', c:'danger'},
+        late: {l:'มาสาย', c:'warning'}, leave:{l:'ลา', c:'info'}
+      };
+      const st = STATUS[r.status] || {l:r.status, c:'secondary'};
+      attHtml += `<tr><td>${formatThaiDateShort(r.date)}</td><td><span class="badge bg-${st.c}">${st.l}</span></td><td>${r.note||''}</td></tr>`;
+    });
+    attHtml += '</tbody></table></div>';
+  }
+
+  // Behavior logs
+  let bhvHtml = '';
+  if (b.logs.length === 0) {
+    bhvHtml = '<div class="text-muted text-center py-3">ยังไม่มีประวัติการหักคะแนน</div>';
+  } else {
+    bhvHtml = '<div class="table-responsive"><table class="table table-sm"><thead class="table-light">' +
+      '<tr><th>วันที่</th><th>คะแนน</th><th>เหตุผล</th></tr></thead><tbody>';
+    b.logs.forEach(l => {
+      const sign = l.points < 0 ? `<span class="text-danger fw-bold">${l.points}</span>`
+                                : `<span class="text-success fw-bold">+${l.points}</span>`;
+      const src = l.source === 'attendance' ? '<small class="text-muted">(อัตโนมัติ)</small>' : '';
+      bhvHtml += `<tr><td>${formatThaiDateShort(l.date)}</td><td>${sign}</td><td>${l.reason} ${src}</td></tr>`;
+    });
+    bhvHtml += '</tbody></table></div>';
+  }
+
+  document.getElementById('content').innerHTML = `
+    <div class="row g-3 mb-4">
+      <div class="col-md-4">
+        <div class="card text-center">
+          <div class="card-body">
+            <div class="text-muted small mb-2">คะแนนความประพฤติ</div>
+            <div class="display-3 fw-bold text-${color}">${b.score}</div>
+            <div class="text-muted">จาก ${b.start_score} คะแนน</div>
+            <div class="progress mt-2" style="height:10px;">
+              <div class="progress-bar bg-${color}" style="width:${Math.max(0,Math.min(100,scorePct))}%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-8">
+        <div class="card">
+          <div class="card-header"><i class="bi bi-calendar-check me-2"></i>การมาเรียน (เดือนนี้)</div>
+          <div class="card-body">${attHtml}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-clock-history me-2"></i>ประวัติคะแนน</div>
+      <div class="card-body">${bhvHtml}</div>
+    </div>
+
+    <div class="text-center text-muted small py-3">
+      <i class="bi bi-shield-check me-1"></i>
+      โหมดผู้ปกครอง — ข้อมูลเฉพาะนักเรียน${s.name}
+    </div>`;
+}
+</script>
+</body>
+</html>

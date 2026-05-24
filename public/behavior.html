@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>คะแนนความประพฤติ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+        <li class="nav-item"><a class="nav-link" href="/attendance.html"><i class="bi bi-check2-square me-1"></i>เช็คชื่อ</a></li>
+        <li class="nav-item"><a class="nav-link" href="/students.html"><i class="bi bi-people me-1"></i>นักเรียน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/report.html"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/behavior-report.html"><i class="bi bi-award me-1"></i>คะแนน</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/users.html"><i class="bi bi-shield-lock me-1"></i>ผู้ใช้</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/settings.html"><i class="bi bi-gear me-1"></i>ตั้งค่า</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header">
+  <div class="container">
+    <button class="btn btn-sm btn-outline-light mb-2" onclick="goBack()">
+      <i class="bi bi-arrow-left me-1"></i>ย้อนกลับ
+    </button>
+    <h1><i class="bi bi-award me-2"></i>คะแนนความประพฤติ</h1>
+    <div class="subtitle" id="studentSub">ประวัติคะแนนรายบุคคล</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+  <div id="profileArea">
+    <div class="text-center text-muted py-5">
+      <div class="spinner-border text-primary mb-2"></div><div>กำลังโหลด...</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="mainToast" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex"><div class="toast-body fw-500"></div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const sid = new URLSearchParams(location.search).get('id');
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  if (!sid) { document.getElementById('profileArea').innerHTML = '<div class="alert alert-warning">ไม่พบรหัสนักเรียน</div>'; return; }
+  load();
+});
+
+let allRules = [];
+
+async function load() {
+  try {
+    const [d, rules] = await Promise.all([
+      apiFetch('/api/behavior/' + sid),
+      apiFetch('/api/behavior-rules?active=1').catch(() => [])
+    ]);
+    allRules = rules;
+    render(d);
+    populateRules();
+  } catch (e) {
+    document.getElementById('profileArea').innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+function populateRules() {
+  const sel = document.getElementById('ruleSel');
+  if (!sel) return;
+  const groups = {};
+  allRules.forEach(r => {
+    const cat = r.category || 'อื่นๆ';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(r);
+  });
+  let html = '<option value="">— กรอกเอง —</option>';
+  Object.keys(groups).sort().forEach(cat => {
+    html += `<optgroup label="${cat}">`;
+    groups[cat].forEach(r => {
+      const sign = r.points > 0 ? `+${r.points}` : r.points;
+      html += `<option value="${r.id}" data-points="${r.points}" data-name="${r.name.replace(/"/g, '&quot;')}">${r.name} (${sign})</option>`;
+    });
+    html += '</optgroup>';
+  });
+  sel.innerHTML = html;
+}
+
+function applyRule() {
+  const sel = document.getElementById('ruleSel');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt.value) return;
+  document.querySelector('input[name="points"]').value = opt.dataset.points;
+  document.querySelector('input[name="reason"]').value = opt.dataset.name;
+}
+
+function render(d) {
+  const s = d.student;
+  document.getElementById('studentSub').textContent = `${s.name} • ม.${s.class_level}/${s.room}`;
+
+  const scorePct = (d.score / d.start_score) * 100;
+  const color = scorePct >= 80 ? 'success' : scorePct >= 60 ? 'warning' : 'danger';
+
+  let logsHtml = '';
+  if (d.logs.length === 0) {
+    logsHtml = '<tr><td colspan="5" class="text-center text-muted py-4">ยังไม่มีประวัติการหักคะแนน</td></tr>';
+  } else {
+    d.logs.forEach(l => {
+      const sign = l.points > 0 ? `<span class="text-success fw-bold">+${l.points}</span>` :
+                                  `<span class="text-danger fw-bold">${l.points}</span>`;
+      const source = l.source === 'attendance'
+        ? '<span class="badge bg-secondary">อัตโนมัติ</span>'
+        : '<span class="badge bg-info">บันทึกเอง</span>';
+      logsHtml += `<tr>
+        <td>${formatThaiDateShort(l.date)}</td>
+        <td>${sign}</td>
+        <td>${l.reason}</td>
+        <td>${source}<br><small class="text-muted">${l.recorded_by_name || '-'}</small></td>
+        <td>${l.source === 'manual' ? `<button class="btn btn-sm btn-link text-danger p-0" onclick="delLog(${l.id})"><i class="bi bi-trash"></i></button>` : ''}</td>
+      </tr>`;
+    });
+  }
+
+  document.getElementById('profileArea').innerHTML = `
+    <div class="row g-4 mb-4">
+      <div class="col-md-5">
+        <div class="card text-center">
+          <div class="card-body py-4">
+            <div class="text-muted small mb-2">คะแนนปัจจุบัน</div>
+            <div class="display-1 fw-bold text-${color}">${d.score}</div>
+            <div class="text-muted">จาก ${d.start_score} คะแนน</div>
+            <div class="progress mt-3" style="height:10px;">
+              <div class="progress-bar bg-${color}" style="width:${Math.max(0, Math.min(100, scorePct))}%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-7">
+        <div class="card">
+          <div class="card-header"><i class="bi bi-pencil-square me-2"></i>บันทึกคะแนน</div>
+          <div class="card-body">
+            <form id="addForm">
+              <div class="mb-2">
+                <label class="form-label small fw-600">เลือกพฤติกรรม (จากรายการที่กำหนด)</label>
+                <select id="ruleSel" class="form-select" onchange="applyRule()">
+                  <option value="">— กรอกเอง —</option>
+                </select>
+              </div>
+              <div class="row g-2 mb-2">
+                <div class="col-4">
+                  <label class="form-label small">คะแนน</label>
+                  <input type="number" name="points" class="form-control" required value="-5">
+                  <small class="text-muted">- หัก / + เพิ่ม</small>
+                </div>
+                <div class="col-8">
+                  <label class="form-label small">เหตุผล/พฤติกรรม</label>
+                  <input type="text" name="reason" class="form-control" required
+                    placeholder="เช่น ทะเลาะวิวาท, ทำผิดระเบียบ">
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-plus-circle me-2"></i>บันทึก
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><i class="bi bi-clock-history me-2"></i>ประวัติการหักคะแนน</div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>วันที่</th><th>คะแนน</th><th>เหตุผล</th><th>ผู้บันทึก</th><th></th></tr>
+          </thead>
+          <tbody>${logsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('addForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      const res = await apiFetch('/api/behavior', {
+        method: 'POST',
+        body: JSON.stringify({ student_id: +sid, points: +fd.get('points'), reason: fd.get('reason') })
+      });
+      showToast(res.message);
+      load();
+    } catch (err) { showToast(err.message, 'danger'); }
+  });
+}
+
+async function delLog(id) {
+  if (!confirm('ลบบันทึกนี้?')) return;
+  try {
+    await apiFetch('/api/behavior/' + id, { method: 'DELETE' });
+    showToast('ลบแล้ว');
+    load();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+</script>
+</body>
+</html>

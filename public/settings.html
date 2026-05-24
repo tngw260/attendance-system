@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ตั้งค่าระบบ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+        <li class="nav-item"><a class="nav-link" href="/attendance.html"><i class="bi bi-check2-square me-1"></i>เช็คชื่อ</a></li>
+        <li class="nav-item"><a class="nav-link" href="/students.html"><i class="bi bi-people me-1"></i>นักเรียน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/report.html"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/behavior-report.html"><i class="bi bi-award me-1"></i>คะแนน</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/users.html"><i class="bi bi-shield-lock me-1"></i>ผู้ใช้</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/admin.html"><i class="bi bi-tools me-1"></i>เครื่องมือ</a></li>
+        <li class="nav-item admin-only"><a class="nav-link active" href="/settings.html"><i class="bi bi-gear me-1"></i>ตั้งค่า</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header">
+  <div class="container">
+    <h1><i class="bi bi-gear-fill me-2"></i>ตั้งค่าระบบ</h1>
+    <div class="subtitle">กำหนดค่าคะแนนความประพฤติและเกณฑ์แจ้งเตือน</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+  <form id="settingsForm">
+    <div class="row g-4">
+
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header bg-primary text-white"><i class="bi bi-trophy me-2"></i>คะแนนความประพฤติ</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-600">คะแนนเริ่มต้น/นักเรียน</label>
+              <input type="number" name="start_score" class="form-control" min="0">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-600">หักเมื่อขาดเรียน (ครั้งละ)</label>
+              <input type="number" name="deduct_absent" class="form-control" min="0">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-600">หักเมื่อมาสาย (ครั้งละ)</label>
+              <input type="number" name="deduct_late" class="form-control" min="0">
+            </div>
+            <div class="mb-0">
+              <label class="form-label fw-600">หักเมื่อลา (ครั้งละ)</label>
+              <input type="number" name="deduct_leave" class="form-control" min="0">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="card mb-4">
+          <div class="card-header bg-warning"><i class="bi bi-bell me-2"></i>การแจ้งเตือน</div>
+          <div class="card-body">
+            <label class="form-label fw-600">แจ้งเตือนเมื่อขาดเกิน (ครั้ง/เดือน)</label>
+            <input type="number" name="alert_threshold" class="form-control" min="1">
+            <small class="text-muted">นักเรียนที่ขาดเกินจำนวนนี้จะปรากฏในหน้าหลัก</small>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header bg-info text-white"><i class="bi bi-calendar2-range me-2"></i>ภาคเรียน</div>
+          <div class="card-body">
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label fw-600">ภาค 1 เริ่ม (MM-DD)</label>
+                <input type="text" name="sem1_start" class="form-control" placeholder="05-16">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-600">ภาค 1 จบ</label>
+                <input type="text" name="sem1_end" class="form-control" placeholder="10-15">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-600">ภาค 2 เริ่ม</label>
+                <input type="text" name="sem2_start" class="form-control" placeholder="11-01">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-600">ภาค 2 จบ</label>
+                <input type="text" name="sem2_end" class="form-control" placeholder="03-31">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header bg-secondary text-white"><i class="bi bi-palette me-2"></i>ธีมและโลโก้</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-600">ชื่อโรงเรียน</label>
+              <input type="text" name="school_name" class="form-control">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-600">สีหลักของระบบ</label>
+              <input type="color" name="theme_color" class="form-control form-control-color" style="height:42px;">
+              <small class="text-muted">รีเฟรชหน้าเพื่อดูผล</small>
+            </div>
+            <div class="mb-0">
+              <label class="form-label fw-600">โลโก้โรงเรียน</label>
+              <div id="currentLogo" class="mb-2"></div>
+              <input type="file" id="logoFile" class="form-control" accept="image/*"
+                onchange="uploadLogo()">
+              <small class="text-muted"><i class="bi bi-info-circle me-1"></i>เลือกไฟล์แล้วจะอัพโหลดอัตโนมัติ</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <button type="submit" class="btn btn-success btn-lg w-100 fw-bold">
+          <i class="bi bi-save2-fill me-2"></i>บันทึกการตั้งค่า
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="mainToast" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex"><div class="toast-body fw-500"></div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  if (currentUser?.role !== 'admin') { location.href = '/'; return; }
+
+  try {
+    const s = await apiFetch('/api/settings');
+    Object.keys(s).forEach(k => {
+      const el = document.querySelector(`[name="${k}"]`);
+      if (el) el.value = s[k];
+    });
+    if (s.school_logo) {
+      document.getElementById('currentLogo').innerHTML =
+        `<img src="${s.school_logo}" style="max-height:80px; border:1px solid #ddd; border-radius:6px; padding:4px;">`;
+    }
+  } catch (e) { showToast(e.message, 'danger'); }
+});
+
+async function uploadLogo() {
+  const f = document.getElementById('logoFile').files[0];
+  if (!f) return;
+  const fd = new FormData();
+  fd.append('file', f);
+  document.getElementById('currentLogo').innerHTML =
+    '<div class="spinner-border spinner-border-sm text-primary"></div> กำลังอัพโหลด...';
+  try {
+    const r = await fetch('/api/settings/logo', { method: 'POST', body: fd, credentials: 'same-origin' });
+    const d = await r.json();
+    if (d.success) {
+      showToast(d.message + ' (รีเฟรชเพื่อดูใน navbar)');
+      // Add cachebuster
+      const url = d.path + '?t=' + Date.now();
+      document.getElementById('currentLogo').innerHTML =
+        `<img src="${url}" style="max-height:80px; border:1px solid #ddd; border-radius:50%; padding:4px; background:white;">
+         <span class="badge bg-success ms-2">อัพโหลดแล้ว</span>`;
+    } else {
+      showToast(d.message, 'danger');
+      document.getElementById('currentLogo').innerHTML = '';
+    }
+  } catch (e) {
+    showToast(e.message, 'danger');
+    document.getElementById('currentLogo').innerHTML = '';
+  }
+}
+
+document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = {};
+  new FormData(e.target).forEach((v, k) => { data[k] = v; });
+  try {
+    const res = await apiFetch('/api/settings', { method: 'PUT', body: JSON.stringify(data) });
+    showToast(res.message);
+  } catch (err) { showToast(err.message, 'danger'); }
+});
+</script>
+</body>
+</html>

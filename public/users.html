@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ผู้ใช้ระบบ - โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+        <li class="nav-item"><a class="nav-link" href="/attendance.html"><i class="bi bi-check2-square me-1"></i>เช็คชื่อ</a></li>
+        <li class="nav-item"><a class="nav-link" href="/students.html"><i class="bi bi-people me-1"></i>นักเรียน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/report.html"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/behavior-report.html"><i class="bi bi-award me-1"></i>คะแนน</a></li>
+        <li class="nav-item admin-only"><a class="nav-link active" href="/users.html"><i class="bi bi-shield-lock me-1"></i>ผู้ใช้</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/settings.html"><i class="bi bi-gear me-1"></i>ตั้งค่า</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header">
+  <div class="container">
+    <h1><i class="bi bi-shield-lock-fill me-2"></i>จัดการผู้ใช้ระบบ</h1>
+    <div class="subtitle">เพิ่มและจัดการบัญชีครู/แอดมิน</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+  <div class="row g-4">
+
+    <div class="col-lg-5">
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <i class="bi bi-person-plus me-2"></i>เพิ่มผู้ใช้ใหม่
+        </div>
+        <div class="card-body">
+          <form id="addUserForm">
+            <div class="mb-3">
+              <label class="form-label fw-600">ชื่อ-นามสกุล</label>
+              <input type="text" name="full_name" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-600">ชื่อผู้ใช้ (สำหรับเข้าสู่ระบบ)</label>
+              <input type="text" name="username" class="form-control" required pattern="[a-zA-Z0-9_.-]+">
+              <small class="text-muted">ใช้ภาษาอังกฤษ/ตัวเลข/_/.</small>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-600">รหัสผ่าน</label>
+              <input type="password" name="password" class="form-control" required minlength="4">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-600">สิทธิ์</label>
+              <select name="role" class="form-select" id="roleSel" onchange="toggleClassFields()">
+                <option value="teacher">ครู (เช็คชื่อ + ดูรายงาน)</option>
+                <option value="admin">แอดมิน (จัดการทุกอย่าง)</option>
+              </select>
+            </div>
+            <div id="classFields">
+              <hr>
+              <div class="text-muted small mb-2">
+                <i class="bi bi-info-circle me-1"></i>
+                ห้องประจำ: ครูจะเห็น<strong>เฉพาะนักเรียนในห้องนี้</strong> เท่านั้น (เว้นว่าง = เห็นทุกห้อง)
+              </div>
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <label class="form-label small fw-600">ชั้นประจำ</label>
+                  <select name="assigned_level" class="form-select">
+                    <option value="">ทุกชั้น</option>
+                    <option value="1">ม.1</option><option value="2">ม.2</option>
+                    <option value="3">ม.3</option><option value="4">ม.4</option>
+                    <option value="5">ม.5</option><option value="6">ม.6</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-600">ห้องประจำ</label>
+                  <input type="number" name="assigned_room" class="form-control" min="1" max="20"
+                    placeholder="เว้นว่าง = ทุกห้อง">
+                </div>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 fw-bold">
+              <i class="bi bi-plus-circle me-2"></i>เพิ่มผู้ใช้
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div class="card mt-4">
+        <div class="card-header"><i class="bi bi-key me-2"></i>เปลี่ยนรหัสผ่านของฉัน</div>
+        <div class="card-body">
+          <form id="pwForm">
+            <div class="mb-2">
+              <label class="form-label fw-600">รหัสผ่านเดิม</label>
+              <input type="password" name="old" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-600">รหัสผ่านใหม่</label>
+              <input type="password" name="new" class="form-control" required minlength="4">
+            </div>
+            <button type="submit" class="btn btn-outline-primary w-100">
+              <i class="bi bi-check2-circle me-2"></i>บันทึก
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="section-title">รายชื่อผู้ใช้ระบบ</div>
+      <div id="userList" class="card"><div class="card-body text-center text-muted py-5">
+        <i class="bi bi-hourglass-split fs-3 d-block mb-2"></i>กำลังโหลด...
+      </div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Assign class modal -->
+<div class="modal fade" id="assignModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">
+          <i class="bi bi-building me-2"></i>กำหนดห้องประจำให้ครู
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="assignForm">
+        <div class="modal-body">
+          <input type="hidden" name="id">
+          <div class="alert alert-light border mb-3">
+            <i class="bi bi-person me-2"></i>
+            <strong id="assignName"></strong> <code id="assignUser" class="ms-1"></code>
+          </div>
+          <div class="text-muted small mb-3">
+            <i class="bi bi-info-circle me-1"></i>
+            ครูจะเห็น<strong>เฉพาะนักเรียนในห้องนี้</strong> เท่านั้น<br>
+            <span class="text-secondary">เว้นว่างทั้งคู่ = เห็นทุกห้องทุกชั้น (ครูประจำชาติ/ฝ่ายปกครอง)</span>
+          </div>
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label fw-600">ชั้น</label>
+              <select name="assigned_level" class="form-select">
+                <option value="">— ทุกชั้น —</option>
+                <option value="1">มัธยมศึกษาปีที่ 1</option>
+                <option value="2">มัธยมศึกษาปีที่ 2</option>
+                <option value="3">มัธยมศึกษาปีที่ 3</option>
+                <option value="4">มัธยมศึกษาปีที่ 4</option>
+                <option value="5">มัธยมศึกษาปีที่ 5</option>
+                <option value="6">มัธยมศึกษาปีที่ 6</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-600">ห้อง</label>
+              <select name="assigned_room" class="form-select">
+                <option value="">— ทุกห้อง —</option>
+                <option value="1">ห้อง 1</option><option value="2">ห้อง 2</option>
+                <option value="3">ห้อง 3</option><option value="4">ห้อง 4</option>
+                <option value="5">ห้อง 5</option><option value="6">ห้อง 6</option>
+                <option value="7">ห้อง 7</option><option value="8">ห้อง 8</option>
+                <option value="9">ห้อง 9</option><option value="10">ห้อง 10</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-circle me-2"></i>บันทึก
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="mainToast" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fw-500"></div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  if (currentUser?.role !== 'admin') { location.href = '/'; return; }
+  loadUsers();
+});
+
+function toggleClassFields() {
+  const role = document.getElementById('roleSel').value;
+  document.getElementById('classFields').style.display = role === 'admin' ? 'none' : '';
+}
+
+async function loadUsers() {
+  try {
+    const users = await apiFetch('/api/users');
+    let html = `<div class="table-responsive"><table class="table table-hover mb-0">
+      <thead class="table-light"><tr>
+        <th>ชื่อผู้ใช้</th><th>ชื่อ-นามสกุล</th><th>สิทธิ์</th><th>ห้องประจำ</th><th>วันที่สร้าง</th><th></th>
+      </tr></thead><tbody>`;
+    users.forEach(u => {
+      const me = u.id === currentUser.id;
+      const roleBadge = u.role === 'admin'
+        ? '<span class="badge bg-danger">แอดมิน</span>'
+        : '<span class="badge bg-info">ครู</span>';
+      let assignBadge;
+      if (u.role === 'admin') assignBadge = '<span class="text-muted">—</span>';
+      else if (u.assigned_level && u.assigned_room) assignBadge = `<span class="badge bg-primary">ม.${u.assigned_level}/${u.assigned_room}</span>`;
+      else if (u.assigned_level) assignBadge = `<span class="badge bg-info">ม.${u.assigned_level} ทุกห้อง</span>`;
+      else assignBadge = '<span class="badge bg-secondary">ทุกห้อง</span>';
+
+      html += `<tr>
+        <td><code>${u.username}</code> ${me ? '<span class="badge bg-secondary ms-1">คุณ</span>' : ''}</td>
+        <td>${u.full_name}</td>
+        <td>${roleBadge}</td>
+        <td>${assignBadge}</td>
+        <td class="text-muted small">${u.created_at}</td>
+        <td class="text-nowrap">
+          ${u.role === 'teacher' ? `<button class="btn btn-sm btn-outline-primary" onclick='openAssign(${JSON.stringify(u)})' title="กำหนดห้อง"><i class="bi bi-building"></i></button>` : ''}
+          <button class="btn btn-sm btn-outline-secondary" onclick="resetPw(${u.id}, '${u.username}')" title="รีเซ็ตรหัสผ่าน">
+            <i class="bi bi-key"></i>
+          </button>
+          ${!me ? `<button class="btn btn-sm btn-outline-danger" onclick="delUser(${u.id}, '${u.username}')" title="ลบ">
+            <i class="bi bi-trash"></i>
+          </button>` : ''}
+        </td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('userList').innerHTML = html;
+  } catch (e) {
+    document.getElementById('userList').innerHTML = `<div class="card-body alert alert-danger">${e.message}</div>`;
+  }
+}
+
+let assignModal;
+function openAssign(u) {
+  if (!assignModal) assignModal = new bootstrap.Modal('#assignModal');
+  const f = document.getElementById('assignForm');
+  f.id.value = u.id;
+  f.assigned_level.value = u.assigned_level || '';
+  f.assigned_room.value  = u.assigned_room  || '';
+  document.getElementById('assignName').textContent = u.full_name;
+  document.getElementById('assignUser').textContent = u.username;
+  assignModal.show();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('assignForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      const res = await apiFetch(`/api/users/${fd.get('id')}/assign`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          assigned_level: fd.get('assigned_level') || null,
+          assigned_room:  fd.get('assigned_room')  || null
+        })
+      });
+      showToast(res.message);
+      assignModal.hide();
+      loadUsers();
+    } catch (err) { showToast(err.message, 'danger'); }
+  });
+});
+
+document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  try {
+    const res = await apiFetch('/api/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: fd.get('username'), password: fd.get('password'),
+        full_name: fd.get('full_name'), role: fd.get('role'),
+        assigned_level: fd.get('assigned_level') || null,
+        assigned_room:  fd.get('assigned_room')  || null
+      })
+    });
+    showToast(res.message);
+    e.target.reset();
+    loadUsers();
+  } catch (err) { showToast(err.message, 'danger'); }
+});
+
+document.getElementById('pwForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  try {
+    const res = await apiFetch('/api/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({ old: fd.get('old'), new: fd.get('new') })
+    });
+    showToast(res.message);
+    e.target.reset();
+  } catch (err) { showToast(err.message, 'danger'); }
+});
+
+async function delUser(id, username) {
+  if (!confirm(`ลบบัญชี "${username}"?`)) return;
+  try {
+    await apiFetch(`/api/users/${id}`, { method: 'DELETE' });
+    showToast('ลบบัญชีแล้ว'); loadUsers();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function resetPw(id, username) {
+  const pw = prompt(`รหัสผ่านใหม่สำหรับ "${username}":`);
+  if (!pw) return;
+  if (pw.length < 4) { alert('รหัสผ่านต้องยาวอย่างน้อย 4 ตัว'); return; }
+  try {
+    await apiFetch(`/api/users/${id}/reset-password`, {
+      method: 'POST', body: JSON.stringify({ password: pw })
+    });
+    showToast('รีเซ็ตรหัสผ่านสำเร็จ');
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+</script>
+</body>
+</html>
