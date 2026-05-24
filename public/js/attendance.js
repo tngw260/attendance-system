@@ -153,7 +153,10 @@ function renderStudents(students, level, room, date) {
     btn.addEventListener('click', function () {
       const row    = this.closest('.student-row');
       const status = this.dataset.status;
-      const colors = { present: 'success', absent: 'danger', late: 'warning', leave: 'info' };
+      const colors = {
+        present: 'success', absent: 'danger',
+        late: 'warning', leave: 'info', activity: 'purple'
+      };
 
       row.querySelectorAll('.status-btn').forEach(b => {
         const s = b.dataset.status;
