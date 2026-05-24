@@ -20,10 +20,11 @@ function formatThaiDateFull(dateStr) {
 }
 
 const STATUS = {
-  present: { label: 'มา',     color: 'success', icon: 'bi-check-circle-fill'  },
-  absent:  { label: 'ขาด',    color: 'danger',  icon: 'bi-x-circle-fill'      },
-  late:    { label: 'มาสาย',  color: 'warning', icon: 'bi-clock-fill'         },
-  leave:   { label: 'ลา',     color: 'info',    icon: 'bi-calendar-minus-fill' }
+  present:  { label: 'มา',         color: 'success',   icon: 'bi-check-circle-fill'   },
+  absent:   { label: 'ขาด',        color: 'danger',    icon: 'bi-x-circle-fill'       },
+  late:     { label: 'มาสาย',      color: 'warning',   icon: 'bi-clock-fill'          },
+  leave:    { label: 'ลา',         color: 'info',      icon: 'bi-calendar-minus-fill' },
+  activity: { label: 'ไปกิจกรรม',  color: 'purple',    icon: 'bi-people-fill'         }
 };
 
 let currentUser = null;

@@ -105,6 +105,13 @@ body {
 .counter-pill.absent  { background: var(--absent); }
 .counter-pill.late    { background: var(--late); }
 .counter-pill.leave   { background: #0aa3c2; }
+.counter-pill.activity { background: #8e44ad; }
+
+/* "ไปกิจกรรม" sits between status btn-info and btn-warning palette */
+.btn-purple { background: #8e44ad; color: white; border-color: #8e44ad; }
+.btn-purple:hover { background: #7d3c98; color: white; }
+.btn-outline-purple { color: #8e44ad; border-color: #8e44ad; }
+.btn-outline-purple:hover { background: #8e44ad; color: white; }
 
 /* ── STUDENT ROWS (ATTENDANCE) ── */
 .student-list { border: 1px solid #dee2e6; border-radius: 10px; overflow: hidden; }
@@ -121,6 +128,7 @@ body {
 .student-row.status-absent  { border-left: 4px solid var(--absent);  }
 .student-row.status-late    { border-left: 4px solid var(--late);    }
 .student-row.status-leave   { border-left: 4px solid #0dcaf0; }
+.student-row.status-activity { border-left: 4px solid #8e44ad; }
 .student-row.status-present { border-left: 4px solid var(--present); }
 
 .student-num {

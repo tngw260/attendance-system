@@ -66,10 +66,10 @@ function renderTodayChart(t) {
   new Chart(canvas, {
     type: 'doughnut',
     data: {
-      labels: ['มา', 'ขาด', 'มาสาย', 'ลา'],
+      labels: ['มา', 'ขาด', 'มาสาย', 'ลา', 'ไปกิจกรรม'],
       datasets: [{
-        data: [t.present || 0, t.absent || 0, t.late || 0, t.leave || 0],
-        backgroundColor: ['#198754', '#dc3545', '#fd7e14', '#0dcaf0']
+        data: [t.present || 0, t.absent || 0, t.late || 0, t.leave || 0, t.activity || 0],
+        backgroundColor: ['#198754', '#dc3545', '#fd7e14', '#0dcaf0', '#8e44ad']
       }]
     },
     options: {
@@ -93,10 +93,11 @@ async function loadWeeklyChart() {
       data: {
         labels,
         datasets: [
-          { label: 'มา',    data: rows.map(r=>r.present||0), backgroundColor: '#198754' },
-          { label: 'ขาด',   data: rows.map(r=>r.absent ||0), backgroundColor: '#dc3545' },
-          { label: 'มาสาย', data: rows.map(r=>r.late   ||0), backgroundColor: '#fd7e14' },
-          { label: 'ลา',    data: rows.map(r=>r.leave  ||0), backgroundColor: '#0dcaf0' },
+          { label: 'มา',         data: rows.map(r=>r.present  ||0), backgroundColor: '#198754' },
+          { label: 'ขาด',        data: rows.map(r=>r.absent   ||0), backgroundColor: '#dc3545' },
+          { label: 'มาสาย',      data: rows.map(r=>r.late     ||0), backgroundColor: '#fd7e14' },
+          { label: 'ลา',         data: rows.map(r=>r.leave    ||0), backgroundColor: '#0dcaf0' },
+          { label: 'ไปกิจกรรม',  data: rows.map(r=>r.activity ||0), backgroundColor: '#8e44ad' },
         ]
       },
       options: {

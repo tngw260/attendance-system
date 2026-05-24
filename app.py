@@ -142,7 +142,7 @@ def init_db():
                 student_id  INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
                 date        TEXT NOT NULL,
                 status      TEXT NOT NULL DEFAULT 'present'
-                                CHECK (status IN ('present','absent','late','leave')),
+                                CHECK (status IN ('present','absent','late','leave','activity')),
                 note        TEXT,
                 recorded_by INTEGER REFERENCES users(id),
                 recorded_at TEXT DEFAULT (datetime('now','localtime')),
@@ -220,6 +220,33 @@ def init_db():
         if 'parent_code' not in scols:
             con.execute('ALTER TABLE students ADD COLUMN parent_code TEXT')
             con.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_stu_pcode ON students(parent_code)')
+
+        # Migrate: attendance - allow 'activity' status (rebuild if old CHECK constraint)
+        try:
+            con.execute("INSERT INTO attendance (student_id, date, status) VALUES (-9999, '0000-01-01', 'activity')")
+            con.execute("DELETE FROM attendance WHERE student_id=-9999")
+        except sqlite3.IntegrityError as e:
+            if 'CHECK' in str(e) or 'check' in str(e).lower():
+                con.executescript("""
+                    CREATE TABLE attendance_new (
+                        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                        student_id  INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+                        date        TEXT NOT NULL,
+                        status      TEXT NOT NULL DEFAULT 'present'
+                                        CHECK (status IN ('present','absent','late','leave','activity')),
+                        note        TEXT,
+                        recorded_by INTEGER REFERENCES users(id),
+                        recorded_at TEXT DEFAULT (datetime('now','localtime')),
+                        UNIQUE(student_id, date)
+                    );
+                    INSERT INTO attendance_new (id, student_id, date, status, note, recorded_by, recorded_at)
+                      SELECT id, student_id, date, status, note, recorded_by, recorded_at FROM attendance;
+                    DROP TABLE attendance;
+                    ALTER TABLE attendance_new RENAME TO attendance;
+                    CREATE INDEX IF NOT EXISTS idx_att_date    ON attendance(date);
+                    CREATE INDEX IF NOT EXISTS idx_att_student ON attendance(student_id);
+                """)
+                print("  [Migrate] อัพเดทตาราง attendance รองรับสถานะ 'activity'")
 
         # Default settings
         for k, v in DEFAULT_SETTINGS.items():
@@ -364,6 +391,7 @@ def apply_attendance_behavior(con, student_id, att_id, date, status, settings, u
         'absent': -int(settings.get('deduct_absent', '2') or 0),
         'late':   -int(settings.get('deduct_late', '1') or 0),
         'leave':  -int(settings.get('deduct_leave', '0') or 0),
+        # 'activity' และ 'present' ไม่หักคะแนน
     }
     reasons = {
         'absent': 'ขาดเรียน',
@@ -1170,10 +1198,11 @@ def api_dashboard():
 
         stats = con.execute(f"""
             SELECT COUNT(*) AS checked,
-                   SUM(status='present') AS present,
-                   SUM(status='absent')  AS absent,
-                   SUM(status='late')    AS late,
-                   SUM(status='leave')   AS leave
+                   SUM(status='present')  AS present,
+                   SUM(status='absent')   AS absent,
+                   SUM(status='late')     AS late,
+                   SUM(status='leave')    AS leave,
+                   SUM(status='activity') AS activity
             FROM attendance a JOIN students s ON s.id=a.student_id
             WHERE a.date=? {where}
         """, [today] + params).fetchone()
@@ -1203,11 +1232,12 @@ def api_dashboard():
 
         month_stats = con.execute(f"""
             SELECT
-              SUM(status='present') AS present,
-              SUM(status='absent')  AS absent,
-              SUM(status='late')    AS late,
-              SUM(status='leave')   AS leave,
-              COUNT(DISTINCT date)  AS days
+              SUM(status='present')  AS present,
+              SUM(status='absent')   AS absent,
+              SUM(status='late')     AS late,
+              SUM(status='leave')    AS leave,
+              SUM(status='activity') AS activity,
+              COUNT(DISTINCT date)   AS days
             FROM attendance a JOIN students s ON s.id=a.student_id
             WHERE a.date >= ? {where}
         """, [month_start] + params).fetchone()
@@ -1312,10 +1342,11 @@ def build_report_query(level, room, from_date, to_date, scope_where='', scope_pa
     sql = f"""
         SELECT s.id, s.number, s.student_code, s.name, s.class_level, s.room,
             COUNT(a.id) AS total_days,
-            SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) AS present,
-            SUM(CASE WHEN a.status='absent'  THEN 1 ELSE 0 END) AS absent,
-            SUM(CASE WHEN a.status='late'    THEN 1 ELSE 0 END) AS late,
-            SUM(CASE WHEN a.status='leave'   THEN 1 ELSE 0 END) AS leave
+            SUM(CASE WHEN a.status='present'  THEN 1 ELSE 0 END) AS present,
+            SUM(CASE WHEN a.status='absent'   THEN 1 ELSE 0 END) AS absent,
+            SUM(CASE WHEN a.status='late'     THEN 1 ELSE 0 END) AS late,
+            SUM(CASE WHEN a.status='leave'    THEN 1 ELSE 0 END) AS leave,
+            SUM(CASE WHEN a.status='activity' THEN 1 ELSE 0 END) AS activity
         FROM students s
         LEFT JOIN attendance a ON {join_cond}
         WHERE {where_cond}
@@ -1382,7 +1413,8 @@ def api_report_export():
     ws = wb.active
     ws.title = 'รายงานการมาเรียน'
 
-    headers = ['เลขที่','รหัสนักเรียน','ชื่อ-นามสกุล','ชั้น','วันที่บันทึก','มา','ขาด','มาสาย','ลา','คะแนนความประพฤติ']
+    headers = ['เลขที่','รหัสนักเรียน','ชื่อ-นามสกุล','ชั้น','วันที่บันทึก',
+               'มา','ขาด','มาสาย','ลา','กิจกรรม','คะแนนความประพฤติ']
     hfill = PatternFill(fill_type='solid', fgColor='1A5276')
     hfont = Font(bold=True, color='FFFFFF')
     for col, h in enumerate(headers, 1):
@@ -1395,10 +1427,12 @@ def api_report_export():
             r['number'], r['student_code'], r['name'],
             f"ม.{r['class_level']}/{r['room']}",
             r['total_days'], r['present'], r['absent'], r['late'], r['leave'],
+            r['activity'] or 0,
             start_score + scores.get(r['id'], 0)
         ])
-    for col, w in zip(ws.columns, [8, 16, 32, 10, 12, 8, 8, 8, 8, 14]):
-        ws.column_dimensions[col[0].column_letter].width = w
+    widths = [8, 16, 32, 10, 12, 8, 8, 8, 8, 10, 14]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
 
     buf = io.BytesIO(); wb.save(buf); buf.seek(0)
     return send_file(buf, as_attachment=True,
@@ -1724,10 +1758,11 @@ def api_parent_view(code):
 
         stats = con.execute("""
             SELECT
-              SUM(status='present') AS present,
-              SUM(status='absent')  AS absent,
-              SUM(status='late')    AS late,
-              SUM(status='leave')   AS leave,
+              SUM(status='present')  AS present,
+              SUM(status='absent')   AS absent,
+              SUM(status='late')     AS late,
+              SUM(status='leave')    AS leave,
+              SUM(status='activity') AS activity,
               COUNT(*) AS total
             FROM attendance WHERE student_id=? AND date >= ?
         """, (sid, month_start)).fetchone()
@@ -1766,10 +1801,11 @@ def api_chart_weekly():
     with get_db() as con:
         rows = con.execute(f"""
             SELECT a.date,
-                   SUM(status='present') AS present,
-                   SUM(status='absent')  AS absent,
-                   SUM(status='late')    AS late,
-                   SUM(status='leave')   AS leave
+                   SUM(status='present')  AS present,
+                   SUM(status='absent')   AS absent,
+                   SUM(status='late')     AS late,
+                   SUM(status='leave')    AS leave,
+                   SUM(status='activity') AS activity
             FROM attendance a JOIN students s ON s.id=a.student_id
             WHERE a.date >= ? AND a.date <= ? {where}
             GROUP BY a.date ORDER BY a.date

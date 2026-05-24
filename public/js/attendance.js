@@ -97,10 +97,11 @@ function renderStudents(students, level, room, date) {
 
   students.forEach(s => {
     const statuses = [
-      { key: 'present', label: 'มา',    cls: 'success' },
-      { key: 'absent',  label: 'ขาด',   cls: 'danger'  },
-      { key: 'leave',   label: 'ลา',    cls: 'info'    },
-      { key: 'late',    label: 'มาสาย', cls: 'warning' },
+      { key: 'present',  label: 'มา',         cls: 'success' },
+      { key: 'absent',   label: 'ขาด',        cls: 'danger'  },
+      { key: 'leave',    label: 'ลา',         cls: 'info'    },
+      { key: 'late',     label: 'มาสาย',      cls: 'warning' },
+      { key: 'activity', label: 'ไปกิจกรรม',  cls: 'purple'  },
     ];
 
     const btnHtml = statuses.map(st => {
@@ -162,16 +163,18 @@ function renderStudents(students, level, room, date) {
 function updateCounters() {
   const sec = document.getElementById('studentSection');
   const rows = sec.querySelectorAll('.student-row');
-  let counts = { present: 0, absent: 0, late: 0, leave: 0 };
+  let counts = { present: 0, absent: 0, late: 0, leave: 0, activity: 0 };
   rows.forEach(r => { if (counts[r.dataset.status] !== undefined) counts[r.dataset.status]++; });
-  document.getElementById('cntPresent').textContent = counts.present;
-  document.getElementById('cntAbsent').textContent  = counts.absent;
-  document.getElementById('cntLate').textContent    = counts.late;
-  document.getElementById('cntLeave').textContent   = counts.leave;
+  document.getElementById('cntPresent').textContent  = counts.present;
+  document.getElementById('cntAbsent').textContent   = counts.absent;
+  document.getElementById('cntLate').textContent     = counts.late;
+  document.getElementById('cntLeave').textContent    = counts.leave;
+  const elAct = document.getElementById('cntActivity');
+  if (elAct) elAct.textContent = counts.activity;
 }
 
 function setAll(status) {
-  const colors = { present: 'success', absent: 'danger', late: 'warning', leave: 'info' };
+  const colors = { present: 'success', absent: 'danger', late: 'warning', leave: 'info', activity: 'purple' };
   document.querySelectorAll('.student-row').forEach(row => {
     row.dataset.status = status;
     row.className = `student-row status-${status}`;

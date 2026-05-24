@@ -154,6 +154,7 @@ function renderReport(d) {
                 <th class="text-center text-danger">ขาด</th>
                 <th class="text-center text-warning">มาสาย</th>
                 <th class="text-center text-info">ลา</th>
+                <th class="text-center" style="color:#8e44ad;">กิจกรรม</th>
                 <th>% มา</th>
                 <th class="text-center">คะแนน</th>
               </tr>
@@ -173,6 +174,7 @@ function renderReport(d) {
           <td class="text-center fw-bold ${r.absent > 0 ? 'text-danger' : 'text-muted'}">${r.absent || 0}</td>
           <td class="text-center fw-bold ${r.late > 0 ? 'text-warning' : 'text-muted'}">${r.late || 0}</td>
           <td class="text-center fw-bold ${r.leave > 0 ? 'text-info' : 'text-muted'}">${r.leave || 0}</td>
+          <td class="text-center fw-bold ${r.activity > 0 ? '' : 'text-muted'}" style="${r.activity > 0 ? 'color:#8e44ad;' : ''}">${r.activity || 0}</td>
           <td>
             <div class="d-flex align-items-center gap-2">
               <div class="pct-bar flex-grow-1">
