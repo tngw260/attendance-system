@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สรุปรายวันส่ง LINE</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    .line-preview {
+      background: #f0f4fb;
+      border: 2px solid #00B900;
+      border-radius: 12px;
+      padding: 16px;
+      font-family: 'Sarabun', sans-serif;
+      white-space: pre-wrap;
+      min-height: 200px;
+      font-size: .95rem;
+      line-height: 1.7;
+      user-select: text;
+    }
+    .template-chip {
+      padding: 6px 14px;
+      border: 2px solid #dee2e6;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: .9rem;
+      user-select: none;
+      transition: all .15s;
+    }
+    .template-chip.active {
+      background: #00B900;
+      color: white;
+      border-color: #00B900;
+      font-weight: 600;
+    }
+    .template-chip:hover { border-color: #00B900; }
+    .btn-line {
+      background: #00B900;
+      color: white;
+      border-color: #00B900;
+    }
+    .btn-line:hover { background: #009000; color: white; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+        <li class="nav-item"><a class="nav-link" href="/attendance.html"><i class="bi bi-check2-square me-1"></i>เช็คชื่อ</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/line-summary.html"><i class="bi bi-chat-quote me-1"></i>สรุป LINE</a></li>
+        <li class="nav-item"><a class="nav-link" href="/uniform-check.html"><i class="bi bi-person-vcard me-1"></i>ตรวจเครื่องแต่งกาย</a></li>
+        <li class="nav-item"><a class="nav-link" href="/late-students.html"><i class="bi bi-clock-history me-1"></i>มาสาย</a></li>
+        <li class="nav-item"><a class="nav-link" href="/students.html"><i class="bi bi-people me-1"></i>นักเรียน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/report.html"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/behavior-report.html"><i class="bi bi-award me-1"></i>คะแนน</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/users.html"><i class="bi bi-shield-lock me-1"></i>ผู้ใช้</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/settings.html"><i class="bi bi-gear me-1"></i>ตั้งค่า</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header" style="background: linear-gradient(135deg, #00B900, #008f00);">
+  <div class="container">
+    <h1><i class="bi bi-chat-quote-fill me-2"></i>สรุปรายวันส่ง LINE</h1>
+    <div class="subtitle">สร้างข้อความสรุปสำหรับส่งกลุ่ม LINE ผู้ปกครอง</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+
+  <!-- Filter -->
+  <div class="card mb-3">
+    <div class="card-body py-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-5">
+          <label class="form-label fw-600 mb-1">ชั้น/ห้อง</label>
+          <select id="selClass" class="form-select" onchange="syncHiddenInputs(); loadSummary()">
+            <option value="">-- เลือกชั้น/ห้อง --</option>
+          </select>
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label fw-600 mb-1">วันที่</label>
+          <input type="date" id="selDate" class="form-control" onchange="loadSummary()">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label fw-600 mb-1">&nbsp;</label>
+          <button class="btn btn-primary w-100" onclick="loadSummary()">
+            <i class="bi bi-arrow-clockwise me-1"></i>โหลดใหม่
+          </button>
+        </div>
+        <input type="hidden" id="selLevel">
+        <input type="hidden" id="selRoom">
+      </div>
+    </div>
+  </div>
+
+  <!-- Template selector -->
+  <div class="mb-3">
+    <label class="form-label fw-600 mb-2">
+      <i class="bi bi-card-text me-1"></i>รูปแบบข้อความ
+    </label>
+    <div class="d-flex flex-wrap gap-2">
+      <label class="template-chip">
+        <input type="radio" name="template" value="full" checked hidden onchange="updatePreview()">
+        📋 เต็ม (มีรายชื่อ)
+      </label>
+      <label class="template-chip">
+        <input type="radio" name="template" value="short" hidden onchange="updatePreview()">
+        📊 สั้น (เฉพาะตัวเลข)
+      </label>
+      <label class="template-chip">
+        <input type="radio" name="template" value="issues" hidden onchange="updatePreview()">
+        ⚠️ เฉพาะที่มีปัญหา
+      </label>
+      <label class="template-chip">
+        <input type="radio" name="template" value="uniform" hidden onchange="updatePreview()">
+        👕 ตรวจเครื่องแต่งกาย
+      </label>
+    </div>
+  </div>
+
+  <!-- Options -->
+  <div class="card mb-3">
+    <div class="card-body py-3">
+      <div class="row g-2">
+        <div class="col-sm-6 col-md-4">
+          <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="optParentLink" checked onchange="updatePreview()">
+            <label class="form-check-label" for="optParentLink">แนบลิงก์ Parent Portal</label>
+          </div>
+        </div>
+        <div class="col-sm-6 col-md-4">
+          <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="optEmoji" checked onchange="updatePreview()">
+            <label class="form-check-label" for="optEmoji">ใช้ Emoji</label>
+          </div>
+        </div>
+        <div class="col-sm-6 col-md-4">
+          <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="optReason" checked onchange="updatePreview()">
+            <label class="form-check-label" for="optReason">แสดงหมายเหตุ</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="mb-2 d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i class="bi bi-eye me-1"></i>ตัวอย่างข้อความ</h5>
+    <small class="text-muted" id="charCount">0 ตัวอักษร</small>
+  </div>
+  <textarea id="previewBox" class="line-preview form-control" rows="14"
+    placeholder="เลือกชั้น/ห้องและวันที่..."></textarea>
+
+  <!-- Action buttons -->
+  <div class="d-flex gap-2 flex-wrap mt-3">
+    <button class="btn btn-line btn-lg flex-grow-1" onclick="shareLINE()">
+      <i class="bi bi-line me-2"></i>📲 แชร์ไป LINE
+    </button>
+    <button class="btn btn-outline-primary btn-lg" onclick="copyToClipboard()">
+      <i class="bi bi-clipboard me-2"></i>คัดลอก
+    </button>
+  </div>
+
+  <div class="alert alert-info mt-3 small">
+    <i class="bi bi-info-circle me-1"></i>
+    <strong>วิธีใช้:</strong> กดปุ่ม <strong>"แชร์ไป LINE"</strong> → เลือกกลุ่มผู้ปกครอง → ส่ง<br>
+    หรือกด <strong>"คัดลอก"</strong> → เปิด LINE เอง → ไปกลุ่ม → วาง (Paste) → ส่ง<br>
+    <span class="text-muted">💡 แนะนำใช้บนมือถือ เพราะกด "แชร์ไป LINE" จะเปิด LINE ให้เลือกแชทได้ทันที</span>
+  </div>
+
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="mainToast" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex"><div class="toast-body fw-500"></div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let currentData = null;
+let allClasses = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  document.getElementById('selDate').value = todayISO();
+
+  try {
+    allClasses = await apiFetch('/api/classes');
+    populateClassDropdown();
+
+    if (currentUser?.role === 'teacher' && currentUser?.assigned_level && currentUser?.assigned_room) {
+      const sel = document.getElementById('selClass');
+      sel.value = `${currentUser.assigned_level}_${currentUser.assigned_room}`;
+      sel.disabled = true;
+      syncHiddenInputs();
+      loadSummary();
+    }
+  } catch (e) { showToast(e.message, 'danger'); }
+
+  // Sync template chip active state
+  document.querySelectorAll('.template-chip input').forEach(input => {
+    input.addEventListener('change', () => {
+      document.querySelectorAll('.template-chip').forEach(c => c.classList.remove('active'));
+      input.closest('.template-chip').classList.add('active');
+    });
+  });
+  document.querySelector('.template-chip input:checked')
+    .closest('.template-chip').classList.add('active');
+});
+
+function populateClassDropdown() {
+  const sel = document.getElementById('selClass');
+  sel.innerHTML = '<option value="">-- เลือกชั้น/ห้อง --</option>';
+  const grouped = {};
+  allClasses.forEach(c => {
+    if (!grouped[c.class_level]) grouped[c.class_level] = [];
+    grouped[c.class_level].push(c);
+  });
+  Object.keys(grouped).sort((a,b) => +a - +b).forEach(level => {
+    const og = document.createElement('optgroup');
+    og.label = `มัธยมศึกษาปีที่ ${level}`;
+    grouped[level].forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = `${c.class_level}_${c.room}`;
+      opt.textContent = `ม.${c.class_level}/${c.room}  (${c.count} คน)`;
+      og.appendChild(opt);
+    });
+    sel.appendChild(og);
+  });
+}
+
+function syncHiddenInputs() {
+  const val = document.getElementById('selClass').value;
+  if (val) {
+    const [level, room] = val.split('_');
+    document.getElementById('selLevel').value = level;
+    document.getElementById('selRoom').value = room;
+  }
+}
+
+async function loadSummary() {
+  const level = document.getElementById('selLevel').value;
+  const room = document.getElementById('selRoom').value;
+  const date = document.getElementById('selDate').value;
+  if (!level || !room || !date) return;
+
+  try {
+    currentData = await apiFetch(`/api/line-summary?level=${level}&room=${room}&date=${date}`);
+    updatePreview();
+  } catch (e) {
+    document.getElementById('previewBox').value = 'Error: ' + e.message;
+  }
+}
+
+function updatePreview() {
+  if (!currentData) {
+    document.getElementById('previewBox').value = '— เลือกชั้น/ห้องและวันที่ —';
+    return;
+  }
+  const template = document.querySelector('input[name="template"]:checked').value;
+  const emoji = document.getElementById('optEmoji').checked;
+  const showReason = document.getElementById('optReason').checked;
+  const includeLink = document.getElementById('optParentLink').checked;
+
+  const text = buildMessage(currentData, template, { emoji, showReason, includeLink });
+  document.getElementById('previewBox').value = text;
+  document.getElementById('charCount').textContent = text.length + ' ตัวอักษร';
+}
+
+function buildMessage(d, template, opts) {
+  const e = (s, fallback='') => opts.emoji ? s : fallback;
+  const lines = [];
+  const dateText = formatThaiDateFull(d.date);
+
+  lines.push(`${e('📅 ','')}สรุปประจำวัน — ม.${d.level}/${d.room}`);
+  lines.push(dateText);
+  lines.push(`${e('🏫 ','')}${d.school_name}`);
+  lines.push('');
+
+  if (!d.attendance_checked) {
+    lines.push(`${e('⚠️ ','')}ยังไม่ได้เช็คชื่อในวันนี้`);
+    if (includeLink && opts.includeLink) {
+      lines.push('');
+      lines.push(`ดูข้อมูลลูก → ${d.parent_url}`);
+    }
+    return lines.join('\n');
+  }
+
+  if (template === 'short') {
+    lines.push(`${e('✅ ','')}มา: ${d.present.length} คน`);
+    lines.push(`${e('❌ ','')}ขาด: ${d.absent.length} คน`);
+    lines.push(`${e('⏰ ','')}สาย: ${d.late.length} คน`);
+    if (d.leave.length) lines.push(`${e('🏃 ','')}ลา: ${d.leave.length} คน`);
+    if (d.activity.length) lines.push(`${e('👥 ','')}ไปกิจกรรม: ${d.activity.length} คน`);
+  }
+  else if (template === 'full') {
+    lines.push(`${e('✅ ','')}มาเรียน ${d.present.length} คน  |  ${e('❌ ','')}ขาด ${d.absent.length}  |  ${e('⏰ ','')}สาย ${d.late.length}  |  ${e('🏃 ','')}ลา ${d.leave.length}`);
+    if (d.activity.length) lines.push(`${e('👥 ','')}ไปกิจกรรม: ${d.activity.length} คน`);
+    lines.push('');
+    if (d.absent.length) {
+      lines.push(`${e('❌ ','')}ขาดเรียน:`);
+      d.absent.forEach(s => {
+        const note = opts.showReason && s.note ? ` (${s.note})` : '';
+        lines.push(`  • ${s.name}${note}`);
+      });
+      lines.push('');
+    }
+    if (d.late.length) {
+      lines.push(`${e('⏰ ','')}มาสาย (ต้องบำเพ็ญประโยชน์ตอนเย็น):`);
+      d.late.forEach(s => {
+        const status = s.made_up ? ' ✓ แก้แล้ว' : '';
+        const note = opts.showReason && s.note ? ` (${s.note})` : '';
+        lines.push(`  • ${s.name}${note}${status}`);
+      });
+      lines.push('');
+    }
+    if (d.leave.length) {
+      lines.push(`${e('🏃 ','')}ลา:`);
+      d.leave.forEach(s => {
+        const note = opts.showReason && s.note ? ` (${s.note})` : '';
+        lines.push(`  • ${s.name}${note}`);
+      });
+      lines.push('');
+    }
+    if (d.activity.length) {
+      lines.push(`${e('👥 ','')}ไปกิจกรรม:`);
+      d.activity.forEach(s => {
+        const note = opts.showReason && s.note ? ` (${s.note})` : '';
+        lines.push(`  • ${s.name}${note}`);
+      });
+      lines.push('');
+    }
+  }
+  else if (template === 'issues') {
+    const issues = [...d.absent, ...d.late, ...d.leave];
+    if (issues.length === 0) {
+      lines.push(`${e('🎉 ','')}นักเรียนมาครบทุกคน — ไม่มีรายการต้องแจ้ง`);
+    } else {
+      if (d.absent.length) {
+        lines.push(`${e('❌ ','')}ขาดเรียน ${d.absent.length} คน:`);
+        d.absent.forEach(s => {
+          const note = opts.showReason && s.note ? ` (${s.note})` : '';
+          lines.push(`  • ${s.name}${note}`);
+        });
+      }
+      if (d.late.length) {
+        if (d.absent.length) lines.push('');
+        lines.push(`${e('⏰ ','')}มาสาย ${d.late.length} คน (ต้องบำเพ็ญประโยชน์ตอนเย็น):`);
+        d.late.forEach(s => {
+          const status = s.made_up ? ' ✓' : '';
+          lines.push(`  • ${s.name}${status}`);
+        });
+      }
+      if (d.leave.length) {
+        lines.push('');
+        lines.push(`${e('🏃 ','')}ลา ${d.leave.length} คน:`);
+        d.leave.forEach(s => {
+          const note = opts.showReason && s.note ? ` (${s.note})` : '';
+          lines.push(`  • ${s.name}${note}`);
+        });
+      }
+    }
+  }
+  else if (template === 'uniform') {
+    if (d.uniform_violations.length === 0) {
+      lines.push(`${e('🎉 ','')}ตรวจเครื่องแต่งกายแล้ว — ไม่มีรายการบกพร่อง`);
+    } else {
+      lines.push(`${e('👕 ','')}สรุปการตรวจเครื่องแต่งกาย`);
+      lines.push(`พบ ${d.uniform_violations.length} คนที่ผิดระเบียบ:`);
+      lines.push('');
+      d.uniform_violations.forEach(s => {
+        lines.push(`• ${s.name}  (รวม ${s.total_deduction} คะแนน)`);
+        s.violations.forEach(v => {
+          lines.push(`    - ${v.reason} (${v.points})`);
+        });
+      });
+    }
+  }
+
+  if (opts.includeLink) {
+    lines.push('');
+    lines.push(`${e('📱 ','')}ดูข้อมูลลูกของท่าน → ${d.parent_url}`);
+  }
+
+  return lines.join('\n');
+}
+
+function copyToClipboard() {
+  const text = document.getElementById('previewBox').value;
+  if (!text) { showToast('ไม่มีข้อความให้คัดลอก', 'warning'); return; }
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('✅ คัดลอกแล้ว — ไปวางในกลุ่ม LINE');
+  }).catch(() => {
+    // Fallback: select all + manual copy
+    const ta = document.getElementById('previewBox');
+    ta.select(); ta.setSelectionRange(0, 99999);
+    document.execCommand('copy');
+    showToast('คัดลอกแล้ว');
+  });
+}
+
+function shareLINE() {
+  const text = document.getElementById('previewBox').value;
+  if (!text) { showToast('ไม่มีข้อความ', 'warning'); return; }
+  // LINE share URL — เปิดแอป LINE ให้เลือก chat ส่ง
+  const url = 'https://line.me/R/share?text=' + encodeURIComponent(text);
+  window.open(url, '_blank');
+}
+</script>
+</body>
+</html>

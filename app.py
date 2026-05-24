@@ -1177,6 +1177,93 @@ def api_late_undo_makeup(attendance_id):
         audit_log(con, 'late_undo_makeup', 'attendance', attendance_id, None)
     return jsonify(success=True, message='ยกเลิกการบำเพ็ญแล้ว')
 
+@app.get('/api/line-summary')
+@login_required
+def api_line_summary():
+    """ดึงข้อมูลสำหรับสร้างข้อความสรุปรายวันส่งใน LINE กลุ่มผู้ปกครอง"""
+    u = current_user()
+    level = request.args.get('level')
+    room = request.args.get('room')
+    date = request.args.get('date', today_iso())
+    if not level or not room:
+        return jsonify(error='ต้องระบุชั้น/ห้อง'), 400
+
+    # Enforce assigned class for teachers
+    if u['role'] == 'teacher' and u.get('assigned_level'):
+        if int(level) != u['assigned_level'] or (u.get('assigned_room') and int(room) != u['assigned_room']):
+            return jsonify(error='ไม่มีสิทธิ์เข้าถึงห้องนี้'), 403
+
+    settings = get_settings()
+    with get_db() as con:
+        # นักเรียนทั้งหมดในห้อง
+        students = con.execute("""
+            SELECT id, number, name FROM students
+            WHERE class_level=? AND room=?
+            ORDER BY number, name
+        """, (int(level), int(room))).fetchall()
+
+        # Attendance ของวันนั้น
+        att_rows = con.execute("""
+            SELECT a.student_id, a.status, a.note,
+                   mk.id AS makeup_id
+            FROM attendance a
+            LEFT JOIN behavior_logs mk ON mk.source='makeup' AND mk.source_id=a.id
+            WHERE a.date=? AND a.student_id IN (
+                SELECT id FROM students WHERE class_level=? AND room=?
+            )
+        """, (date, int(level), int(room))).fetchall()
+        att_map = {r['student_id']: dict(r) for r in att_rows}
+
+        # Uniform check ของวันนั้น
+        uniform_rows = con.execute("""
+            SELECT student_id, reason, points
+            FROM behavior_logs
+            WHERE source='uniform' AND date=? AND student_id IN (
+                SELECT id FROM students WHERE class_level=? AND room=?
+            )
+            ORDER BY student_id
+        """, (date, int(level), int(room))).fetchall()
+        uniform_map = {}
+        for r in uniform_rows:
+            uniform_map.setdefault(r['student_id'], []).append({'reason': r['reason'], 'points': r['points']})
+
+    # Categorize students
+    present, absent, late, leave, activity, unmarked = [], [], [], [], [], []
+    for s in students:
+        att = att_map.get(s['id'])
+        if not att:
+            unmarked.append(dict(s))
+            continue
+        info = dict(s, note=att.get('note'), made_up=bool(att.get('makeup_id')))
+        if att['status'] == 'present': present.append(info)
+        elif att['status'] == 'absent': absent.append(info)
+        elif att['status'] == 'late': late.append(info)
+        elif att['status'] == 'leave': leave.append(info)
+        elif att['status'] == 'activity': activity.append(info)
+
+    # Uniform violations
+    uniform_violations = []
+    for sid, items in uniform_map.items():
+        s = next((dict(x) for x in students if x['id'] == sid), None)
+        if s:
+            s['violations'] = items
+            s['total_deduction'] = sum(i['points'] for i in items)
+            uniform_violations.append(s)
+
+    parent_url = f"{request.host_url.rstrip('/')}/parent.html"
+
+    return jsonify(
+        school_name=settings.get('school_name', 'โรงเรียน'),
+        date=date,
+        level=int(level), room=int(room),
+        total=len(students),
+        present=present, absent=absent, late=late,
+        leave=leave, activity=activity, unmarked=unmarked,
+        uniform_violations=uniform_violations,
+        parent_url=parent_url,
+        attendance_checked=len(att_rows) > 0
+    )
+
 @app.get('/api/late/pending')
 @login_required
 def api_late_pending():
