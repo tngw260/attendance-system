@@ -306,35 +306,40 @@ def init_db():
         for k, v in DEFAULT_SETTINGS.items():
             con.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', (k, v))
 
-        # Default behavior rules (seed only if table empty)
-        n = con.execute('SELECT COUNT(*) AS n FROM behavior_rules').fetchone()['n']
-        if n == 0:
-            defaults = [
-                ('มาสาย',                    -1, 'การมาเรียน',     10),
-                ('ขาดเรียนไม่มีเหตุผล',      -2, 'การมาเรียน',     20),
-                ('หนีเรียน',                -10, 'การมาเรียน',     30),
-                ('ไม่ส่งงาน/การบ้าน',        -3, 'การเรียน',       40),
-                ('ทุจริตการสอบ',            -20, 'การเรียน',       50),
-                ('ไม่ใส่เครื่องแบบให้ถูกต้อง', -5, 'การแต่งกาย',     60),
-                ('ทรงผมผิดระเบียบ',          -5, 'การแต่งกาย',     65),
-                ('เล็บยาว/ทาเล็บ',           -3, 'การแต่งกาย',     67),
-                ('รองเท้า/ถุงเท้าผิดระเบียบ', -3, 'การแต่งกาย',     68),
-                ('เครื่องประดับเกินจำเป็น',   -3, 'การแต่งกาย',     69),
-                ('ใช้โทรศัพท์ในห้องเรียน',    -5, 'ระเบียบวินัย',   80),
-                ('พูดจาไม่สุภาพ',            -5, 'ระเบียบวินัย',   90),
-                ('ทะเลาะวิวาท',             -20, 'ระเบียบวินัย',  100),
-                ('ทำร้ายร่างกายผู้อื่น',     -30, 'ระเบียบวินัย',  110),
-                ('ทำลายทรัพย์สินโรงเรียน',  -20, 'ระเบียบวินัย',  120),
-                ('สูบบุหรี่/บุหรี่ไฟฟ้า',   -30, 'สารเสพติด',     130),
-                ('เสพ/ครอบครองสารเสพติด',   -50, 'สารเสพติด',     140),
-                ('ลักทรัพย์',               -30, 'ระเบียบวินัย',  150),
-                ('ช่วยเหลือกิจกรรมส่วนรวม',  +5, 'ความดี',        200),
-                ('ทำคุณงามความดี',           +5, 'ความดี',        210),
-            ]
-            con.executemany(
-                'INSERT INTO behavior_rules (name, points, category, sort_order) VALUES (?,?,?,?)',
-                defaults
-            )
+        # Default behavior rules — auto add missing entries (ใช้ name เป็น key ไม่ซ้ำ)
+        defaults = [
+            ('มาสาย',                    -1, 'การมาเรียน',     10),
+            ('ขาดเรียนไม่มีเหตุผล',      -2, 'การมาเรียน',     20),
+            ('หนีเรียน',                -10, 'การมาเรียน',     30),
+            ('ไม่ส่งงาน/การบ้าน',        -3, 'การเรียน',       40),
+            ('ทุจริตการสอบ',            -20, 'การเรียน',       50),
+            ('ไม่ใส่เครื่องแบบให้ถูกต้อง', -5, 'การแต่งกาย',     60),
+            ('ทรงผมผิดระเบียบ',          -5, 'การแต่งกาย',     65),
+            ('เล็บยาว/ทาเล็บ',           -3, 'การแต่งกาย',     67),
+            ('รองเท้า/ถุงเท้าผิดระเบียบ', -3, 'การแต่งกาย',     68),
+            ('เครื่องประดับเกินจำเป็น',   -3, 'การแต่งกาย',     69),
+            ('ใช้โทรศัพท์ในห้องเรียน',    -5, 'ระเบียบวินัย',   80),
+            ('พูดจาไม่สุภาพ',            -5, 'ระเบียบวินัย',   90),
+            ('ทะเลาะวิวาท',             -20, 'ระเบียบวินัย',  100),
+            ('ทำร้ายร่างกายผู้อื่น',     -30, 'ระเบียบวินัย',  110),
+            ('ทำลายทรัพย์สินโรงเรียน',  -20, 'ระเบียบวินัย',  120),
+            ('สูบบุหรี่/บุหรี่ไฟฟ้า',   -30, 'สารเสพติด',     130),
+            ('เสพ/ครอบครองสารเสพติด',   -50, 'สารเสพติด',     140),
+            ('ลักทรัพย์',               -30, 'ระเบียบวินัย',  150),
+            ('ช่วยเหลือกิจกรรมส่วนรวม',  +5, 'ความดี',        200),
+            ('ทำคุณงามความดี',           +5, 'ความดี',        210),
+        ]
+        existing_names = {r['name'] for r in con.execute('SELECT name FROM behavior_rules').fetchall()}
+        added = 0
+        for name, points, category, sort_order in defaults:
+            if name not in existing_names:
+                con.execute(
+                    'INSERT INTO behavior_rules (name, points, category, sort_order) VALUES (?,?,?,?)',
+                    (name, points, category, sort_order)
+                )
+                added += 1
+        if added:
+            print(f'  [Init] เพิ่มกฎเริ่มต้น {added} รายการ')
 
         # Default admin account
         admin = con.execute('SELECT id FROM users WHERE username=?', ('admin',)).fetchone()
@@ -921,15 +926,32 @@ UNIFORM_CATEGORIES = ['การแต่งกาย']
 @login_required
 def api_uniform_rules():
     """รายการพฤติกรรมที่ใช้ในการตรวจเครื่องแต่งกาย (กรองจาก behavior_rules)"""
-    cats = request.args.get('categories', ','.join(UNIFORM_CATEGORIES)).split(',')
+    cats_param = request.args.get('categories', ','.join(UNIFORM_CATEGORIES))
+    cats = [c.strip() for c in cats_param.split(',') if c.strip()]
+    if not cats:
+        return jsonify([])
     placeholders = ','.join('?' * len(cats))
     with get_db() as con:
         rows = con.execute(
             f"""SELECT id, name, points, category FROM behavior_rules
                 WHERE active=1 AND category IN ({placeholders})
-                ORDER BY sort_order, id""",
+                ORDER BY category, sort_order, id""",
             cats
         ).fetchall()
+    return jsonify(rows_to_list(rows))
+
+@app.get('/api/uniform-check/categories')
+@login_required
+def api_uniform_categories():
+    """รายการหมวดทั้งหมดที่มีใน behavior_rules พร้อมจำนวน rules ในแต่ละหมวด"""
+    with get_db() as con:
+        rows = con.execute("""
+            SELECT category, COUNT(*) AS count
+            FROM behavior_rules
+            WHERE active=1 AND category IS NOT NULL AND category != ''
+            GROUP BY category
+            ORDER BY MIN(sort_order), category
+        """).fetchall()
     return jsonify(rows_to_list(rows))
 
 @app.get('/api/uniform-check')

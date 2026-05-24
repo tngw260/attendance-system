@@ -42,6 +42,21 @@
       padding: 12px; z-index: 50;
       box-shadow: 0 -4px 12px rgba(0,0,0,.1);
     }
+    /* Category chip checkboxes */
+    .cat-chip {
+      display: inline-flex; align-items: center; gap: .4rem;
+      padding: 6px 12px;
+      border: 2px solid #dee2e6; border-radius: 20px;
+      cursor: pointer; user-select: none;
+      transition: all .15s;
+      font-size: .9rem;
+    }
+    .cat-chip input { margin: 0; cursor: pointer; }
+    .cat-chip.active {
+      background: #d1f7e0; border-color: #198754; color: #0d4d2a;
+      font-weight: 600;
+    }
+    .cat-chip:hover { border-color: #198754; }
   </style>
 </head>
 <body>
@@ -81,7 +96,7 @@
   <!-- Filter -->
   <div class="card mb-3">
     <div class="card-body py-3">
-      <div class="row g-2 align-items-end">
+      <div class="row g-2 align-items-end mb-3">
         <div class="col-sm-5">
           <label class="form-label fw-600 mb-1">ชั้น/ห้อง</label>
           <select id="selClass" class="form-select" onchange="syncHiddenInputs()">
@@ -101,11 +116,23 @@
         <input type="hidden" id="selLevel">
         <input type="hidden" id="selRoom">
       </div>
+
+      <!-- Categories selection -->
+      <div>
+        <label class="form-label fw-600 mb-2">
+          <i class="bi bi-list-check me-1"></i>เลือกหมวดที่จะตรวจ
+          <small class="text-muted">(ติ๊กได้หลายหมวด)</small>
+        </label>
+        <div id="categoryCheckboxes" class="d-flex flex-wrap gap-2">
+          <div class="text-muted small"><div class="spinner-border spinner-border-sm me-1"></div>กำลังโหลด...</div>
+        </div>
+        <div class="mt-2 small text-muted">
+          <i class="bi bi-info-circle me-1"></i>เพิ่ม/แก้ไขรายการได้ที่
+          <a href="/behavior-rules.html"><strong>คะแนนความประพฤติ → จัดการพฤติกรรม</strong></a>
+        </div>
+      </div>
     </div>
   </div>
-
-  <!-- Rules legend -->
-  <div id="rulesLegend" class="alert alert-info py-2 small" style="display:none;"></div>
 
   <!-- Student table -->
   <div id="checkArea">
@@ -144,15 +171,16 @@
 let allRules = [];
 let allClasses = [];
 
+const DEFAULT_CATEGORIES = ['การแต่งกาย']; // default ติ๊กเฉพาะหมวดนี้
+
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
   document.getElementById('selDate').value = todayISO();
 
   try {
-    allRules = await apiFetch('/api/uniform-check/rules');
     allClasses = await apiFetch('/api/classes');
     populateClassDropdown();
-    showLegend();
+    await loadCategories();
 
     // Teacher: auto select assigned class
     if (currentUser?.role === 'teacher' && currentUser?.assigned_level && currentUser?.assigned_room) {
@@ -160,10 +188,44 @@ document.addEventListener('DOMContentLoaded', async () => {
       sel.value = `${currentUser.assigned_level}_${currentUser.assigned_room}`;
       sel.disabled = true;
       syncHiddenInputs();
-      loadCheck();
+      // ไม่ autoload — ให้ user เลือกหมวดก่อน
     }
   } catch (e) { showToast(e.message, 'danger'); }
 });
+
+async function loadCategories() {
+  try {
+    const cats = await apiFetch('/api/uniform-check/categories');
+    const wrap = document.getElementById('categoryCheckboxes');
+    if (!cats.length) {
+      wrap.innerHTML = `<div class="alert alert-warning small mb-0 w-100">
+        ยังไม่มีรายการพฤติกรรม — ไปเพิ่มที่
+        <a href="/behavior-rules.html"><strong>จัดการพฤติกรรม</strong></a></div>`;
+      return;
+    }
+    wrap.innerHTML = cats.map(c => {
+      const checked = DEFAULT_CATEGORIES.includes(c.category) ? 'checked' : '';
+      const safeName = c.category.replace(/"/g, '&quot;');
+      return `
+        <label class="cat-chip" data-cat="${safeName}">
+          <input type="checkbox" value="${safeName}" ${checked} onchange="this.parentElement.classList.toggle('active', this.checked)">
+          ${c.category} <small class="text-muted">(${c.count})</small>
+        </label>`;
+    }).join('');
+    // sync active class
+    wrap.querySelectorAll('input').forEach(input => {
+      input.parentElement.classList.toggle('active', input.checked);
+    });
+  } catch (e) {
+    document.getElementById('categoryCheckboxes').innerHTML =
+      `<div class="alert alert-danger small mb-0 w-100">${e.message}</div>`;
+  }
+}
+
+function getSelectedCategories() {
+  return Array.from(document.querySelectorAll('#categoryCheckboxes input:checked'))
+    .map(i => i.value);
+}
 
 function populateClassDropdown() {
   const sel = document.getElementById('selClass');
@@ -198,30 +260,18 @@ function syncHiddenInputs() {
   }
 }
 
-function showLegend() {
-  if (!allRules.length) {
-    document.getElementById('rulesLegend').innerHTML =
-      '<i class="bi bi-exclamation-triangle me-1"></i>ยังไม่มีรายการตรวจ (หมวด "การแต่งกาย") — ' +
-      '<a href="/behavior-rules.html">เพิ่มที่หน้าจัดการพฤติกรรม</a>';
-    document.getElementById('rulesLegend').style.display = '';
-    return;
-  }
-  let html = '<i class="bi bi-list-check me-1"></i><strong>รายการตรวจ:</strong> ';
-  html += allRules.map(r => `${r.name} (${r.points})`).join(' • ');
-  document.getElementById('rulesLegend').innerHTML = html;
-  document.getElementById('rulesLegend').style.display = '';
-}
-
 async function loadCheck() {
   const level = document.getElementById('selLevel').value;
   const room = document.getElementById('selRoom').value;
   const date = document.getElementById('selDate').value;
+  const cats = getSelectedCategories();
+
   if (!level || !room || !date) {
     showToast('เลือกชั้น/ห้อง/วันที่ก่อน', 'warning');
     return;
   }
-  if (!allRules.length) {
-    showToast('ไม่มีรายการตรวจ — เพิ่มในหน้าจัดการพฤติกรรม (หมวด "การแต่งกาย")', 'warning');
+  if (!cats.length) {
+    showToast('เลือกอย่างน้อย 1 หมวดที่จะตรวจ', 'warning');
     return;
   }
 
@@ -229,6 +279,13 @@ async function loadCheck() {
     '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
 
   try {
+    // โหลด rules ตามหมวดที่เลือก (อาจเลือกหลายหมวด)
+    allRules = await apiFetch('/api/uniform-check/rules?categories=' + encodeURIComponent(cats.join(',')));
+    if (!allRules.length) {
+      document.getElementById('checkArea').innerHTML =
+        '<div class="alert alert-warning">ไม่มีรายการพฤติกรรมในหมวดที่เลือก</div>';
+      return;
+    }
     const d = await apiFetch(`/api/uniform-check?level=${level}&room=${room}&date=${date}`);
     renderTable(d);
   } catch (e) {
