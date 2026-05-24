@@ -51,29 +51,17 @@
   <div class="card mb-4">
     <div class="card-body">
       <div class="row g-3 align-items-end">
+        <div class="col-sm-5">
+          <label class="form-label fw-600">ชั้น/ห้อง</label>
+          <select id="selClass" class="form-select">
+            <option value="">-- เลือกชั้น/ห้อง --</option>
+          </select>
+        </div>
         <div class="col-sm-4">
-          <label class="form-label fw-600">ชั้นมัธยมศึกษาปีที่</label>
-          <select id="selLevel" class="form-select">
-            <option value="">-- เลือกชั้น --</option>
-            <option value="1">ม.1</option>
-            <option value="2">ม.2</option>
-            <option value="3">ม.3</option>
-            <option value="4">ม.4</option>
-            <option value="5">ม.5</option>
-            <option value="6">ม.6</option>
-          </select>
-        </div>
-        <div class="col-sm-3">
-          <label class="form-label fw-600">ห้อง</label>
-          <select id="selRoom" class="form-select">
-            <option value="">-- เลือกห้อง --</option>
-          </select>
-        </div>
-        <div class="col-sm-3">
           <label class="form-label fw-600">วันที่</label>
           <input type="date" id="selDate" class="form-control" value="">
         </div>
-        <div class="col-sm-2">
+        <div class="col-sm-3">
           <label class="form-label fw-600">&nbsp;</label>
           <div class="d-flex gap-1">
             <button id="btnLoad" class="btn btn-primary fw-bold flex-grow-1" onclick="loadAttendance()">
@@ -84,6 +72,9 @@
             </button>
           </div>
         </div>
+        <!-- Hidden inputs ที่ JS อ้างถึง -->
+        <input type="hidden" id="selLevel">
+        <input type="hidden" id="selRoom">
       </div>
     </div>
   </div>

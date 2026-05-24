@@ -82,29 +82,24 @@
   <div class="card mb-3">
     <div class="card-body py-3">
       <div class="row g-2 align-items-end">
-        <div class="col-sm-3">
-          <label class="form-label fw-600 mb-1">ชั้น</label>
-          <select id="selLevel" class="form-select" onchange="updateRooms()">
-            <option value="">-</option>
-            <option value="1">ม.1</option><option value="2">ม.2</option>
-            <option value="3">ม.3</option><option value="4">ม.4</option>
-            <option value="5">ม.5</option><option value="6">ม.6</option>
+        <div class="col-sm-5">
+          <label class="form-label fw-600 mb-1">ชั้น/ห้อง</label>
+          <select id="selClass" class="form-select" onchange="syncHiddenInputs()">
+            <option value="">-- เลือกชั้น/ห้อง --</option>
           </select>
         </div>
-        <div class="col-sm-3">
-          <label class="form-label fw-600 mb-1">ห้อง</label>
-          <select id="selRoom" class="form-select"><option value="">-</option></select>
-        </div>
-        <div class="col-sm-3">
+        <div class="col-sm-4">
           <label class="form-label fw-600 mb-1">วันที่</label>
           <input type="date" id="selDate" class="form-control">
         </div>
         <div class="col-sm-3">
           <label class="form-label fw-600 mb-1">&nbsp;</label>
           <button class="btn btn-primary w-100" onclick="loadCheck()">
-            <i class="bi bi-search me-1"></i>โหลดรายชื่อ
+            <i class="bi bi-search me-1"></i>โหลด
           </button>
         </div>
+        <input type="hidden" id="selLevel">
+        <input type="hidden" id="selRoom">
       </div>
     </div>
   </div>
@@ -153,35 +148,54 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
   document.getElementById('selDate').value = todayISO();
 
-  // Teacher with assigned class — lock filter
-  if (currentUser?.role === 'teacher' && currentUser?.assigned_level) {
-    document.getElementById('selLevel').value = currentUser.assigned_level;
-    document.getElementById('selLevel').disabled = true;
-  }
-
   try {
     allRules = await apiFetch('/api/uniform-check/rules');
     allClasses = await apiFetch('/api/classes');
-    updateRooms();
-    if (currentUser?.assigned_room) {
-      document.getElementById('selRoom').value = currentUser.assigned_room;
-      document.getElementById('selRoom').disabled = true;
-    }
+    populateClassDropdown();
     showLegend();
-    if (currentUser?.assigned_level && currentUser?.assigned_room) {
+
+    // Teacher: auto select assigned class
+    if (currentUser?.role === 'teacher' && currentUser?.assigned_level && currentUser?.assigned_room) {
+      const sel = document.getElementById('selClass');
+      sel.value = `${currentUser.assigned_level}_${currentUser.assigned_room}`;
+      sel.disabled = true;
+      syncHiddenInputs();
       loadCheck();
     }
   } catch (e) { showToast(e.message, 'danger'); }
 });
 
-function updateRooms() {
-  const level = document.getElementById('selLevel').value;
-  const rooms = allClasses.filter(c => String(c.class_level) === level).map(c => c.room);
-  const sel = document.getElementById('selRoom');
-  sel.innerHTML = '<option value="">-</option>';
-  [...new Set(rooms)].sort((a,b) => a-b).forEach(r => {
-    sel.innerHTML += `<option value="${r}">ห้อง ${r}</option>`;
+function populateClassDropdown() {
+  const sel = document.getElementById('selClass');
+  sel.innerHTML = '<option value="">-- เลือกชั้น/ห้อง --</option>';
+  const grouped = {};
+  allClasses.forEach(c => {
+    if (!grouped[c.class_level]) grouped[c.class_level] = [];
+    grouped[c.class_level].push(c);
   });
+  Object.keys(grouped).sort((a,b) => +a - +b).forEach(level => {
+    const og = document.createElement('optgroup');
+    og.label = `มัธยมศึกษาปีที่ ${level}`;
+    grouped[level].forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = `${c.class_level}_${c.room}`;
+      opt.textContent = `ม.${c.class_level}/${c.room}  (${c.count} คน)`;
+      og.appendChild(opt);
+    });
+    sel.appendChild(og);
+  });
+}
+
+function syncHiddenInputs() {
+  const val = document.getElementById('selClass').value;
+  if (val) {
+    const [level, room] = val.split('_');
+    document.getElementById('selLevel').value = level;
+    document.getElementById('selRoom').value = room;
+  } else {
+    document.getElementById('selLevel').value = '';
+    document.getElementById('selRoom').value = '';
+  }
 }
 
 function showLegend() {

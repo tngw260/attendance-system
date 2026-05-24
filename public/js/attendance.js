@@ -3,46 +3,60 @@ let currentStudents = [];
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
   document.getElementById('selDate').value = todayISO();
-  await loadRooms();
+  await loadClassDropdown();
 
   // Pre-fill from URL params
   const params = new URLSearchParams(location.search);
-  if (params.get('level')) {
-    document.getElementById('selLevel').value = params.get('level');
-    await onLevelChange();
-    if (params.get('room')) {
-      document.getElementById('selRoom').value = params.get('room');
-    }
+  if (params.get('level') && params.get('room')) {
+    document.getElementById('selClass').value = `${params.get('level')}_${params.get('room')}`;
+    syncHiddenInputs();
     loadAttendance();
   }
 
-  document.getElementById('selLevel').addEventListener('change', onLevelChange);
+  document.getElementById('selClass').addEventListener('change', syncHiddenInputs);
 });
 
-async function loadRooms() {
+async function loadClassDropdown() {
   try {
     const classes = await apiFetch('/api/classes');
-    updateRoomDropdown(classes, document.getElementById('selLevel').value);
     window._allClasses = classes;
+    const sel = document.getElementById('selClass');
+    sel.innerHTML = '<option value="">-- เลือกชั้น/ห้อง --</option>';
+    // Group by level
+    const grouped = {};
+    classes.forEach(c => {
+      if (!grouped[c.class_level]) grouped[c.class_level] = [];
+      grouped[c.class_level].push(c);
+    });
+    Object.keys(grouped).sort((a,b) => +a - +b).forEach(level => {
+      const group = document.createElement('optgroup');
+      group.label = `มัธยมศึกษาปีที่ ${level}`;
+      grouped[level].forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = `${c.class_level}_${c.room}`;
+        opt.textContent = `ม.${c.class_level}/${c.room}  (${c.count} คน)`;
+        group.appendChild(opt);
+      });
+      sel.appendChild(group);
+    });
+    // Auto select first option if only one class
+    if (classes.length === 1) {
+      sel.value = `${classes[0].class_level}_${classes[0].room}`;
+      syncHiddenInputs();
+    }
   } catch {}
 }
 
-async function onLevelChange() {
-  const level = document.getElementById('selLevel').value;
-  updateRoomDropdown(window._allClasses || [], level);
-}
-
-function updateRoomDropdown(classes, level) {
-  const sel = document.getElementById('selRoom');
-  const rooms = classes.filter(c => String(c.class_level) === String(level));
-  sel.innerHTML = '<option value="">-- เลือกห้อง --</option>';
-  rooms.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c.room;
-    opt.textContent = `ห้อง ${c.room}  (${c.count} คน)`;
-    sel.appendChild(opt);
-  });
-  if (rooms.length === 1) sel.value = rooms[0].room;
+function syncHiddenInputs() {
+  const val = document.getElementById('selClass').value;
+  if (val) {
+    const [level, room] = val.split('_');
+    document.getElementById('selLevel').value = level;
+    document.getElementById('selRoom').value = room;
+  } else {
+    document.getElementById('selLevel').value = '';
+    document.getElementById('selRoom').value = '';
+  }
 }
 
 async function loadAttendance() {
