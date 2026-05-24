@@ -290,6 +290,18 @@ body {
   @page { size: A4; margin: 12mm; }
 }
 
+/* In-app browser fix: ให้ form input ตอบสนอง touch ได้ปกติ */
+input, select, textarea, button {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, .05);
+  touch-action: manipulation;
+}
+select, input[type="date"], input[type="text"], input[type="number"] {
+  font-size: 16px; /* ป้องกัน iOS zoom ตอน focus */
+}
+@media (min-width: 768px) {
+  select, input { font-size: 1rem; }
+}
+
 /* Wider 5-col grid for dashboard stats */
 @media (min-width: 992px) {
   .col-lg-2-4 { flex: 0 0 auto; width: 20%; }

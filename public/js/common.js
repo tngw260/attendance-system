@@ -223,21 +223,14 @@ function upgradeBehaviorMenu() {
     else openMenu();
   };
 
-  // ใช้ทั้ง click และ touchend สำหรับ in-app browsers
+  // ใช้แค่ click event — ใน mobile browser, click ถูก trigger หลังจาก touchend อยู่แล้ว
+  // ห้ามใส่ touchend ที่ document เพราะจะ interfere กับ native <select> บน Android WebView
   toggle.addEventListener('click', toggleMenu);
-  toggle.addEventListener('touchend', (e) => {
-    // Prevent double-firing on touch devices
-    e.preventDefault();
-    toggleMenu(e);
-  }, { passive: false });
 
-  // ปิดเมื่อ tap ข้างนอก
+  // ปิดเมื่อ click ข้างนอก (ไม่ใช้ touchend เพื่อไม่ block native input)
   document.addEventListener('click', (e) => {
     if (!li.contains(e.target)) closeMenu();
   });
-  document.addEventListener('touchend', (e) => {
-    if (!li.contains(e.target)) closeMenu();
-  }, { passive: true });
 }
 
 // In-app browser detection (LINE, Facebook, Instagram, etc.)
@@ -260,7 +253,7 @@ function showInAppBrowserBanner() {
   const banner = document.createElement('div');
   banner.id = 'inAppBanner';
   banner.style.cssText = `
-    position: sticky; top: 0; z-index: 1050;
+    position: relative; z-index: 1;
     background: #fff3cd; border-bottom: 2px solid #ffc107;
     padding: 10px 16px; font-size: .88rem;
     display: flex; justify-content: space-between; align-items: center; gap: 8px;
