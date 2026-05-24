@@ -6,6 +6,58 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupDragDrop();
 });
 
+let addStudentModal;
+
+function openAddStudent() {
+  if (!addStudentModal) {
+    addStudentModal = new bootstrap.Modal('#addStudentModal');
+    // Pre-fill class/room for teachers who have an assigned class
+    if (currentUser?.role === 'teacher' && currentUser?.assigned_level) {
+      const f = document.forms['addStudentForm'] || document.getElementById('addStudentForm');
+      f.class_level.value = currentUser.assigned_level;
+      f.class_level.disabled = true;
+      if (currentUser.assigned_room) {
+        f.room.value = currentUser.assigned_room;
+        f.room.disabled = true;
+      }
+    }
+    document.getElementById('addStudentForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const res = await apiFetch('/api/students', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: fd.get('name'),
+            class_level: fd.get('class_level'),
+            room: fd.get('room'),
+            number: fd.get('number') || null,
+            student_code: fd.get('student_code') || null,
+            gender: fd.get('gender') || null
+          })
+        });
+        showToast(res.message);
+        loadStudents();
+
+        if (document.getElementById('keepOpen').checked) {
+          // reset only some fields, keep class/room/number for fast multi-add
+          const next = +(fd.get('number') || 0) + 1;
+          e.target.name.value = '';
+          e.target.student_code.value = '';
+          e.target.gender.value = '';
+          if (next > 0) e.target.number.value = next;
+          e.target.name.focus();
+        } else {
+          addStudentModal.hide();
+          e.target.reset();
+        }
+      } catch (err) { showToast(err.message, 'danger'); }
+    });
+  }
+  addStudentModal.show();
+  setTimeout(() => document.querySelector('#addStudentForm [name=name]').focus(), 300);
+}
+
 async function genParentCode(sid) {
   try {
     const res = await apiFetch(`/api/students/${sid}/parent-code`, { method: 'POST' });

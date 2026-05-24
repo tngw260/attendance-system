@@ -113,11 +113,16 @@
 
     <!-- Student list section -->
     <div class="col-lg-7">
-      <div class="d-flex justify-content-between align-items-center mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div class="section-title mb-0">รายชื่อนักเรียน</div>
-        <button class="btn btn-outline-danger btn-sm admin-only" onclick="clearAll()">
-          <i class="bi bi-trash me-1"></i>ลบทั้งหมด
-        </button>
+        <div class="d-flex gap-2">
+          <button class="btn btn-success btn-sm" onclick="openAddStudent()">
+            <i class="bi bi-person-plus-fill me-1"></i>เพิ่มทีละคน
+          </button>
+          <button class="btn btn-outline-danger btn-sm admin-only" onclick="clearAll()">
+            <i class="bi bi-trash me-1"></i>ลบทั้งหมด
+          </button>
+        </div>
       </div>
 
       <!-- Filters -->
@@ -148,6 +153,70 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- Add Student Modal -->
+<div class="modal fade" id="addStudentModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title"><i class="bi bi-person-plus-fill me-2"></i>เพิ่มนักเรียนใหม่</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="addStudentForm">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-600">ชื่อ-นามสกุล <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control form-control-lg" required
+              placeholder="เช่น เด็กชาย สมชาย ใจดี" autofocus>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-4">
+              <label class="form-label fw-600">ชั้น <span class="text-danger">*</span></label>
+              <select name="class_level" class="form-select" required>
+                <option value="">-</option>
+                <option value="1">ม.1</option><option value="2">ม.2</option>
+                <option value="3">ม.3</option><option value="4">ม.4</option>
+                <option value="5">ม.5</option><option value="6">ม.6</option>
+              </select>
+            </div>
+            <div class="col-4">
+              <label class="form-label fw-600">ห้อง <span class="text-danger">*</span></label>
+              <input type="number" name="room" class="form-control" required min="1" max="20" value="1">
+            </div>
+            <div class="col-4">
+              <label class="form-label fw-600">เลขที่</label>
+              <input type="number" name="number" class="form-control" min="1" max="60">
+            </div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-7">
+              <label class="form-label fw-600">รหัสนักเรียน</label>
+              <input type="text" name="student_code" class="form-control" placeholder="เช่น 10001">
+            </div>
+            <div class="col-5">
+              <label class="form-label fw-600">เพศ</label>
+              <select name="gender" class="form-select">
+                <option value="">-</option>
+                <option value="ชาย">ชาย</option>
+                <option value="หญิง">หญิง</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-check">
+            <input type="checkbox" id="keepOpen" class="form-check-input">
+            <label for="keepOpen" class="form-check-label small text-muted">เพิ่มต่อเลย (ไม่ปิดหน้านี้ — สำหรับเพิ่มหลายคนติดกัน)</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-plus-circle me-2"></i>เพิ่มนักเรียน
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 

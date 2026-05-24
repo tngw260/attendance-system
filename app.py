@@ -8,10 +8,29 @@ import json
 import shutil
 import zipfile
 import string
+import time
 from functools import wraps
+
+# ── TIMEZONE: ตั้งเป็นเวลาประเทศไทย (UTC+7) ──
+# จำเป็นบน cloud server (PythonAnywhere/Render ใช้ UTC เป็น default)
+os.environ['TZ'] = 'Asia/Bangkok'
+try:
+    time.tzset()  # POSIX only
+except AttributeError:
+    pass
+
 from flask import Flask, request, jsonify, send_from_directory, send_file, session, redirect
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+# ── TIMEZONE ──────────────────────────────────────────────
+# Force Asia/Bangkok for both Python datetime and SQLite's 'localtime' modifier.
+# PythonAnywhere servers default to UTC, so without this all timestamps are -7 hours off.
+os.environ['TZ'] = 'Asia/Bangkok'
+try:
+    time.tzset()  # POSIX (Linux/Mac) — not available on Windows
+except AttributeError:
+    pass
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 
@@ -726,7 +745,51 @@ def api_students_clear():
 def api_student_delete(sid):
     with get_db() as con:
         con.execute('DELETE FROM students WHERE id=?', (sid,))
+        audit_log(con, 'delete_student', 'student', sid, None)
     return jsonify(success=True)
+
+@app.post('/api/students')
+@login_required
+def api_student_create():
+    """เพิ่มนักเรียนทีละคน (admin หรือครูประจำชั้น)"""
+    u = current_user()
+    b = request.get_json() or {}
+    name = (b.get('name') or '').strip()
+    if not name:
+        return jsonify(success=False, message='กรอกชื่อนักเรียน'), 400
+
+    try:
+        level = int(b.get('class_level'))
+        room = int(b.get('room'))
+    except (TypeError, ValueError):
+        return jsonify(success=False, message='ชั้นและห้องไม่ถูกต้อง'), 400
+
+    if not (1 <= level <= 6) or room < 1:
+        return jsonify(success=False, message='ชั้นต้องเป็น 1-6, ห้องต้องเป็นเลขบวก'), 400
+
+    # ครูสร้างได้เฉพาะนักเรียนในห้องตัวเอง
+    if u['role'] == 'teacher' and u.get('assigned_level'):
+        if level != u['assigned_level'] or (u.get('assigned_room') and room != u['assigned_room']):
+            return jsonify(success=False, message='ไม่มีสิทธิ์เพิ่มในห้องนี้'), 403
+
+    number = b.get('number')
+    student_code = (b.get('student_code') or '').strip() or None
+    gender = (b.get('gender') or '').strip() or None
+    try:
+        number = int(number) if number else None
+    except (TypeError, ValueError):
+        number = None
+
+    with get_db() as con:
+        cur = con.execute(
+            'INSERT INTO students (number, student_code, name, class_level, room, gender) VALUES (?,?,?,?,?,?)',
+            (number, student_code, name, level, room, gender)
+        )
+        sid = cur.lastrowid
+        audit_log(con, 'create_student', 'student', sid,
+                  {'name': name, 'class': f'{level}/{room}'})
+
+    return jsonify(success=True, id=sid, message=f'เพิ่มนักเรียน "{name}" สำเร็จ')
 
 # ── ATTENDANCE ────────────────────────────────────────────
 
