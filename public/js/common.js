@@ -246,53 +246,89 @@ function detectInAppBrowser() {
 function showInAppBrowserBanner() {
   const inApp = detectInAppBrowser();
   if (!inApp) return;
-  // Don't annoy users every page — store dismissal in sessionStorage
-  if (sessionStorage.getItem('inAppBannerDismissed') === '1') return;
-  if (document.getElementById('inAppBanner')) return;
 
-  const banner = document.createElement('div');
-  banner.id = 'inAppBanner';
-  banner.style.cssText = `
-    position: relative; z-index: 1;
-    background: #fff3cd; border-bottom: 2px solid #ffc107;
-    padding: 10px 16px; font-size: .88rem;
-    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  // LINE: ลอง auto-redirect ไป external browser ผ่าน parameter พิเศษ
+  // (ทำครั้งเดียวต่อ session — ป้องกัน loop)
+  if (inApp === 'LINE' && !location.search.includes('openExternalBrowser') &&
+      !sessionStorage.getItem('lineExternalTried')) {
+    sessionStorage.setItem('lineExternalTried', '1');
+    const url = new URL(location.href);
+    url.searchParams.set('openExternalBrowser', '1');
+    location.replace(url.toString());
+    return;
+  }
+
+  // Auto-redirect ไม่สำเร็จ → แสดง full-screen overlay พร้อมปุ่มใหญ่
+  if (sessionStorage.getItem('inAppOverlayDismissed') === '1') return;
+  if (document.getElementById('inAppOverlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'inAppOverlay';
+  overlay.style.cssText = `
+    position: fixed; inset: 0; z-index: 99999;
+    background: rgba(0,0,0,.85);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
   `;
-  banner.innerHTML = `
-    <div>
-      <i class="bi bi-exclamation-triangle text-warning me-1"></i>
-      <strong>คุณกำลังเปิดผ่าน ${inApp}</strong> — เพื่อให้ใช้งานได้ครบ
-      <a href="javascript:void(0)" onclick="openExternal()" class="fw-bold text-decoration-underline ms-1">
-        แตะที่นี่เพื่อเปิดในเบราว์เซอร์
-      </a>
+  overlay.innerHTML = `
+    <div style="background: white; border-radius: 16px; max-width: 420px; width: 100%;
+                padding: 28px 24px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.3);">
+      <i class="bi bi-exclamation-triangle-fill text-warning" style="font-size: 4rem;"></i>
+      <h4 class="fw-bold mt-3 mb-2">เปิดในเบราว์เซอร์ภายนอก</h4>
+      <p class="text-muted mb-3">
+        ระบบนี้ใช้งานไม่ได้ใน <strong>${inApp}</strong><br>
+        กรุณาเปิดใน <strong>Chrome / Safari / Samsung Internet</strong>
+      </p>
+      <div class="d-grid gap-2 mb-3">
+        <button onclick="openExternal()" class="btn btn-primary btn-lg fw-bold">
+          <i class="bi bi-box-arrow-up-right me-2"></i>เปิดในเบราว์เซอร์ภายนอก
+        </button>
+        <button onclick="copyUrlAndShow()" class="btn btn-outline-secondary">
+          <i class="bi bi-clipboard me-2"></i>คัดลอกลิงก์
+        </button>
+      </div>
+      <details class="text-start small">
+        <summary class="text-muted">วิธีอื่นในการเปิด ▾</summary>
+        <ol class="mt-2 ps-3">
+          <li>แตะปุ่ม <strong>⋮ (3 จุด)</strong> มุมขวาบน/ล่างของหน้านี้</li>
+          <li>เลือก <strong>"เปิดในเบราว์เซอร์"</strong> หรือ <strong>"Open in browser"</strong></li>
+        </ol>
+      </details>
+      <hr>
+      <button onclick="dismissInAppOverlay()" class="btn btn-sm btn-link text-muted">
+        ปิดและใช้งานต่อใน ${inApp} (อาจมีบางอย่างใช้ไม่ได้)
+      </button>
     </div>
-    <button onclick="dismissInAppBanner()" class="btn-close" aria-label="ปิด"
-      style="font-size: .7rem;"></button>
   `;
-  document.body.prepend(banner);
+  document.body.appendChild(overlay);
 }
 
-function dismissInAppBanner() {
-  sessionStorage.setItem('inAppBannerDismissed', '1');
-  document.getElementById('inAppBanner')?.remove();
+function dismissInAppOverlay() {
+  sessionStorage.setItem('inAppOverlayDismissed', '1');
+  document.getElementById('inAppOverlay')?.remove();
 }
 
 function openExternal() {
-  const url = location.href;
   const inApp = detectInAppBrowser();
+  const url = location.href.replace(/[?&]openExternalBrowser=1/, '');
   if (inApp === 'LINE') {
-    // LINE: append ?openExternalBrowser=1
     const sep = url.includes('?') ? '&' : '?';
     location.href = url + sep + 'openExternalBrowser=1';
   } else {
-    // Try copying URL + show alert
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(() => {
-        alert('คัดลอกลิงก์แล้ว — เปิด Safari/Chrome แล้ววางลิงก์ในแถบที่อยู่');
-      });
-    } else {
-      alert('กรุณาเปิดลิงก์นี้ใน Safari หรือ Chrome:\n\n' + url);
-    }
+    copyUrlAndShow();
+  }
+}
+
+function copyUrlAndShow() {
+  const url = location.href.replace(/[?&]openExternalBrowser=1/, '');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => {
+      alert('✅ คัดลอกลิงก์แล้ว\n\nเปิด Chrome/Safari แล้ววางในแถบที่อยู่');
+    }).catch(() => {
+      prompt('กดค้าง URL ด้านล่างเพื่อคัดลอก:', url);
+    });
+  } else {
+    prompt('กดค้าง URL ด้านล่างเพื่อคัดลอก:', url);
   }
 }
 
