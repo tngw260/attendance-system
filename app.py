@@ -177,6 +177,7 @@ def init_db():
                 source      TEXT DEFAULT 'manual'
                                 CHECK (source IN ('manual','attendance','makeup','uniform')),
                 source_id   INTEGER,
+                note        TEXT,
                 recorded_by INTEGER REFERENCES users(id),
                 created_at  TEXT DEFAULT (datetime('now','localtime'))
             );
@@ -240,6 +241,11 @@ def init_db():
             con.execute('ALTER TABLE students ADD COLUMN parent_code TEXT')
             con.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_stu_pcode ON students(parent_code)')
 
+        # Migrate: behavior_logs - add note column
+        bcols = [r['name'] for r in con.execute('PRAGMA table_info(behavior_logs)').fetchall()]
+        if 'note' not in bcols:
+            con.execute('ALTER TABLE behavior_logs ADD COLUMN note TEXT')
+
         # Migrate: attendance - allow 'activity' status (rebuild if old CHECK constraint)
         try:
             con.execute("INSERT INTO attendance (student_id, date, status) VALUES (-9999, '0000-01-01', 'activity')")
@@ -283,6 +289,7 @@ def init_db():
                         source      TEXT DEFAULT 'manual'
                                        CHECK (source IN ('manual','attendance','makeup','uniform')),
                         source_id   INTEGER,
+                        note        TEXT,
                         recorded_by INTEGER REFERENCES users(id),
                         created_at  TEXT DEFAULT (datetime('now','localtime'))
                     );
@@ -948,25 +955,40 @@ def api_uniform_get():
             ORDER BY number, name
         """, (int(level), int(room))).fetchall()
 
-        # ดึง uniform records ของวันนั้น สำหรับนักเรียนทั้งห้อง
         student_ids = [s['id'] for s in students]
         marks = {}
+        notes = {}
+        att = {}
         if student_ids:
             ph = ','.join('?' * len(student_ids))
+            # Uniform marks (รายการที่ตรวจ)
             rows = con.execute(
-                f"""SELECT student_id, source_id, reason, points
+                f"""SELECT student_id, source_id, reason, points, note
                     FROM behavior_logs
                     WHERE source='uniform' AND date=? AND student_id IN ({ph})""",
                 [date] + student_ids
             ).fetchall()
             for r in rows:
                 marks.setdefault(r['student_id'], []).append(dict(r))
+                if r['note']:
+                    notes[r['student_id']] = r['note']  # use last non-empty note
+            # Attendance สำหรับวันนั้น
+            arows = con.execute(
+                f"""SELECT student_id, status, note
+                    FROM attendance
+                    WHERE date=? AND student_id IN ({ph})""",
+                [date] + student_ids
+            ).fetchall()
+            for r in arows:
+                att[r['student_id']] = {'status': r['status'], 'note': r['note']}
 
     result = []
     for s in students:
         d = dict(s)
         d['marked_rule_ids'] = [m['source_id'] for m in marks.get(s['id'], [])]
         d['marked_total'] = sum(m['points'] for m in marks.get(s['id'], []))
+        d['note'] = notes.get(s['id'], '')
+        d['attendance'] = att.get(s['id'])  # None ถ้ายังไม่เช็คชื่อ
         result.append(d)
 
     return jsonify(students=result, date=date)
@@ -1033,13 +1055,14 @@ def api_uniform_save():
         for rec in records:
             sid = rec['student_id']
             rule_ids = rec.get('rule_ids') or []
+            note = (rec.get('note') or '').strip() or None
             for rid in rule_ids:
                 rule = rules.get(int(rid))
                 if not rule: continue
                 con.execute(
-                    """INSERT INTO behavior_logs (student_id, date, points, reason, source, source_id, recorded_by)
-                       VALUES (?, ?, ?, ?, 'uniform', ?, ?)""",
-                    (sid, date, rule['points'], rule['name'], rule['id'], u['id'])
+                    """INSERT INTO behavior_logs (student_id, date, points, reason, source, source_id, note, recorded_by)
+                       VALUES (?, ?, ?, ?, 'uniform', ?, ?, ?)""",
+                    (sid, date, rule['points'], rule['name'], rule['id'], note, u['id'])
                 )
                 count += 1
                 total_deduction += rule['points']

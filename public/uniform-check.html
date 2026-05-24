@@ -25,8 +25,17 @@
       margin-top: 4px;
     }
     .marked-row { background: #fff3cd; }
+    .absent-row  { background: #f8d7da; opacity: .6; }
+    .leave-row   { background: #d1ecf1; opacity: .7; }
     .check-cell { text-align: center; padding: 2px !important; }
     .form-check-input { width: 1.3rem; height: 1.3rem; cursor: pointer; }
+    .form-check-input:disabled { cursor: not-allowed; opacity: .3; }
+    .note-input {
+      width: 100%; min-width: 140px;
+      border: 1px solid #ced4da; border-radius: 4px;
+      padding: 3px 6px; font-size: .82rem;
+    }
+    .note-input:focus { outline: none; border-color: #198754; box-shadow: 0 0 0 .15rem rgba(25,135,84,.15); }
     .sticky-bar {
       position: fixed; bottom: 70px; left: 0; right: 0;
       background: white; border-top: 2px solid #198754;
@@ -220,10 +229,16 @@ function renderTable(d) {
     return;
   }
 
+  // Count absent/leave for summary
+  const absentCount = d.students.filter(s => s.attendance && (s.attendance.status === 'absent' || s.attendance.status === 'leave')).length;
+
   let html = `<div class="card">
-    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
       <span><i class="bi bi-people me-2"></i>ตรวจเครื่องแต่งกาย — ${formatThaiDateFull(d.date)}</span>
-      <span>${d.students.length} คน</span>
+      <span>
+        <span class="badge bg-light text-dark me-1">${d.students.length} คน</span>
+        ${absentCount > 0 ? `<span class="badge bg-warning text-dark">ไม่อยู่ ${absentCount} คน</span>` : ''}
+      </span>
     </div>
     <div class="table-responsive">
       <table class="table table-bordered uniform-table mb-0" style="font-size:.9rem;">
@@ -234,25 +249,58 @@ function renderTable(d) {
   allRules.forEach(r => {
     html += `<th class="rule-col text-center" style="width:46px;">${r.name}<span class="rule-points">${r.points}</span></th>`;
   });
-  html += `<th style="width:80px;" class="text-center">รวม</th></tr></thead><tbody>`;
+  html += `<th style="width:80px;" class="text-center">รวม</th>
+           <th style="min-width:180px;">หมายเหตุ</th>
+           </tr></thead><tbody>`;
+
+  const STATUS_BADGE = {
+    absent:   { label: 'ขาด',       cls: 'bg-danger' },
+    leave:    { label: 'ลา',        cls: 'bg-info' },
+    late:     { label: 'มาสาย',     cls: 'bg-warning text-dark' },
+    activity: { label: 'ไปกิจกรรม', style: 'background:#8e44ad;color:white;' }
+  };
 
   d.students.forEach(s => {
     const marked = s.marked_rule_ids || [];
-    const rowClass = marked.length ? 'marked-row' : '';
+    const att = s.attendance;
+    const isAbsent = att && (att.status === 'absent' || att.status === 'leave' || att.status === 'activity');
+
+    let rowClass = '';
+    if (att?.status === 'absent') rowClass = 'absent-row';
+    else if (att?.status === 'leave' || att?.status === 'activity') rowClass = 'leave-row';
+    else if (marked.length) rowClass = 'marked-row';
+
+    let statusBadge = '';
+    if (att?.status && att.status !== 'present') {
+      const cfg = STATUS_BADGE[att.status] || { label: att.status, cls: 'bg-secondary' };
+      statusBadge = cfg.style
+        ? `<span class="badge" style="${cfg.style}">${cfg.label}</span>`
+        : `<span class="badge ${cfg.cls}">${cfg.label}</span>`;
+    }
+
     html += `<tr class="${rowClass}" data-id="${s.id}">
       <td class="text-center">${s.number ?? '-'}</td>
-      <td><span class="fw-500">${s.name}</span>
-        ${s.student_code ? `<small class="text-muted ms-1">${s.student_code}</small>` : ''}
+      <td>
+        <div class="fw-500">${s.name} ${statusBadge}</div>
+        ${s.student_code ? `<small class="text-muted">${s.student_code}</small>` : ''}
       </td>`;
+
     allRules.forEach(r => {
       const checked = marked.includes(r.id);
       html += `<td class="check-cell">
         <input type="checkbox" class="form-check-input rule-check"
           data-rule-id="${r.id}" data-points="${r.points}"
-          ${checked ? 'checked' : ''} onchange="updateRow(this); updateTotals();">
+          ${checked ? 'checked' : ''} ${isAbsent ? 'disabled' : ''}
+          onchange="updateRow(this); updateTotals();">
       </td>`;
     });
     html += `<td class="text-center"><span class="badge bg-danger row-total">${s.marked_total || 0}</span></td>
+      <td>
+        <input type="text" class="note-input student-note"
+          placeholder="${isAbsent ? '(ไม่อยู่)' : 'เพิ่มหมายเหตุ...'}"
+          value="${(s.note || '').replace(/"/g,'&quot;')}"
+          ${isAbsent ? 'disabled' : ''}>
+      </td>
     </tr>`;
   });
 
@@ -287,7 +335,8 @@ async function saveCheck() {
     const sid = +row.dataset.id;
     const ruleIds = Array.from(row.querySelectorAll('.rule-check:checked'))
       .map(c => +c.dataset.ruleId);
-    records.push({ student_id: sid, rule_ids: ruleIds });
+    const note = row.querySelector('.student-note')?.value.trim() || '';
+    records.push({ student_id: sid, rule_ids: ruleIds, note });
   });
 
   try {
