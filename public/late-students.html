@@ -185,6 +185,8 @@ async function updatePendingBadge() {
     if (d.rows.length > 0) {
       badge.textContent = d.rows.length;
       badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
     }
   } catch {}
 }
@@ -398,6 +400,7 @@ async function markMakeup(attId) {
     const res = await apiFetch(`/api/late/${attId}/makeup`, { method: 'POST' });
     showToast(res.message);
     load();
+    updatePendingBadge();
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
@@ -407,6 +410,7 @@ async function undoMakeup(attId) {
     await apiFetch(`/api/late/${attId}/makeup`, { method: 'DELETE' });
     showToast('ยกเลิกแล้ว');
     load();
+    updatePendingBadge();
   } catch (e) { showToast(e.message, 'danger'); }
 }
 </script>

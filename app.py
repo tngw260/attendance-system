@@ -1180,10 +1180,9 @@ def api_late_undo_makeup(attendance_id):
 @app.get('/api/late/pending')
 @login_required
 def api_late_pending():
-    """รายชื่อนักเรียนที่ค้างบำเพ็ญประโยชน์ (มาสายแต่ยังไม่ได้บำเพ็ญ) — ทุกวัน"""
+    """รายชื่อนักเรียนที่ค้างบำเพ็ญประโยชน์ (มาสายแต่ยังไม่ได้บำเพ็ญ) — ทุกวัน รวมวันนี้"""
     u = current_user()
     where, params, _, _ = user_class_filter(u)
-    # Optional: filter ตั้งแต่วันที่ X (default = 60 วันย้อนหลัง)
     from_date = request.args.get('from')
     if not from_date:
         from_date = (datetime.date.today() - datetime.timedelta(days=60)).isoformat()
@@ -1196,7 +1195,7 @@ def api_late_pending():
             JOIN students s ON s.id = a.student_id
             LEFT JOIN behavior_logs mk ON mk.source='makeup' AND mk.source_id=a.id
             WHERE a.status='late' AND mk.id IS NULL
-              AND a.date >= ? AND a.date < ?
+              AND a.date >= ? AND a.date <= ?
               {where}
             ORDER BY a.date ASC, s.class_level, s.room, s.number, s.name
         """, [from_date, today_iso()] + params).fetchall()
