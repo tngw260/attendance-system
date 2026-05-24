@@ -175,7 +175,7 @@ def init_db():
                 points      INTEGER NOT NULL,
                 reason      TEXT NOT NULL,
                 source      TEXT DEFAULT 'manual'
-                                CHECK (source IN ('manual','attendance','makeup')),
+                                CHECK (source IN ('manual','attendance','makeup','uniform')),
                 source_id   INTEGER,
                 recorded_by INTEGER REFERENCES users(id),
                 created_at  TEXT DEFAULT (datetime('now','localtime'))
@@ -267,9 +267,9 @@ def init_db():
                 """)
                 print("  [Migrate] อัพเดทตาราง attendance รองรับสถานะ 'activity'")
 
-        # Migrate: behavior_logs.source - allow 'makeup'
+        # Migrate: behavior_logs.source - allow 'makeup' + 'uniform'
         try:
-            con.execute("INSERT INTO behavior_logs (student_id, date, points, reason, source) VALUES (-9999, '0000-01-01', 0, '_t', 'makeup')")
+            con.execute("INSERT INTO behavior_logs (student_id, date, points, reason, source) VALUES (-9999, '0000-01-01', 0, '_t', 'uniform')")
             con.execute("DELETE FROM behavior_logs WHERE student_id=-9999")
         except sqlite3.IntegrityError as e:
             if 'CHECK' in str(e) or 'check' in str(e).lower():
@@ -281,7 +281,7 @@ def init_db():
                         points      INTEGER NOT NULL,
                         reason      TEXT NOT NULL,
                         source      TEXT DEFAULT 'manual'
-                                       CHECK (source IN ('manual','attendance','makeup')),
+                                       CHECK (source IN ('manual','attendance','makeup','uniform')),
                         source_id   INTEGER,
                         recorded_by INTEGER REFERENCES users(id),
                         created_at  TEXT DEFAULT (datetime('now','localtime'))
@@ -293,7 +293,7 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_bhv_student ON behavior_logs(student_id);
                     CREATE INDEX IF NOT EXISTS idx_bhv_source  ON behavior_logs(source, source_id);
                 """)
-                print("  [Migrate] อัพเดท behavior_logs รองรับ source='makeup'")
+                print("  [Migrate] อัพเดท behavior_logs รองรับ source='uniform'")
 
         # Default settings
         for k, v in DEFAULT_SETTINGS.items():
@@ -309,7 +309,10 @@ def init_db():
                 ('ไม่ส่งงาน/การบ้าน',        -3, 'การเรียน',       40),
                 ('ทุจริตการสอบ',            -20, 'การเรียน',       50),
                 ('ไม่ใส่เครื่องแบบให้ถูกต้อง', -5, 'การแต่งกาย',     60),
-                ('ทรงผมผิดระเบียบ',          -5, 'การแต่งกาย',     70),
+                ('ทรงผมผิดระเบียบ',          -5, 'การแต่งกาย',     65),
+                ('เล็บยาว/ทาเล็บ',           -3, 'การแต่งกาย',     67),
+                ('รองเท้า/ถุงเท้าผิดระเบียบ', -3, 'การแต่งกาย',     68),
+                ('เครื่องประดับเกินจำเป็น',   -3, 'การแต่งกาย',     69),
                 ('ใช้โทรศัพท์ในห้องเรียน',    -5, 'ระเบียบวินัย',   80),
                 ('พูดจาไม่สุภาพ',            -5, 'ระเบียบวินัย',   90),
                 ('ทะเลาะวิวาท',             -20, 'ระเบียบวินัย',  100),
@@ -901,6 +904,151 @@ def api_attendance_post():
             apply_attendance_behavior(con, r['student_id'], att_id, date, r['status'], settings, uid)
 
     return jsonify(success=True, message=f"บันทึกการเช็คชื่อ {len(records)} คน สำเร็จ")
+
+# ── UNIFORM CHECK (ตรวจเครื่องแต่งกาย) ────────────────────
+
+# Default categories used by uniform check page. ใช้ behavior_rules ที่หมวด 'การแต่งกาย' เป็นหลัก
+UNIFORM_CATEGORIES = ['การแต่งกาย']
+
+@app.get('/api/uniform-check/rules')
+@login_required
+def api_uniform_rules():
+    """รายการพฤติกรรมที่ใช้ในการตรวจเครื่องแต่งกาย (กรองจาก behavior_rules)"""
+    cats = request.args.get('categories', ','.join(UNIFORM_CATEGORIES)).split(',')
+    placeholders = ','.join('?' * len(cats))
+    with get_db() as con:
+        rows = con.execute(
+            f"""SELECT id, name, points, category FROM behavior_rules
+                WHERE active=1 AND category IN ({placeholders})
+                ORDER BY sort_order, id""",
+            cats
+        ).fetchall()
+    return jsonify(rows_to_list(rows))
+
+@app.get('/api/uniform-check')
+@login_required
+def api_uniform_get():
+    """ดึงรายชื่อนักเรียน + รายการที่ตรวจไปแล้วในวันนั้น"""
+    u = current_user()
+    level = request.args.get('level')
+    room = request.args.get('room')
+    date = request.args.get('date', today_iso())
+    if not level or not room:
+        return jsonify(error='ต้องระบุชั้น/ห้อง'), 400
+
+    # Enforce assigned class for teachers
+    if u['role'] == 'teacher' and u.get('assigned_level'):
+        if int(level) != u['assigned_level'] or (u.get('assigned_room') and int(room) != u['assigned_room']):
+            return jsonify(error='ไม่มีสิทธิ์เข้าถึงห้องนี้'), 403
+
+    with get_db() as con:
+        students = con.execute("""
+            SELECT id, number, student_code, name, gender
+            FROM students WHERE class_level=? AND room=?
+            ORDER BY number, name
+        """, (int(level), int(room))).fetchall()
+
+        # ดึง uniform records ของวันนั้น สำหรับนักเรียนทั้งห้อง
+        student_ids = [s['id'] for s in students]
+        marks = {}
+        if student_ids:
+            ph = ','.join('?' * len(student_ids))
+            rows = con.execute(
+                f"""SELECT student_id, source_id, reason, points
+                    FROM behavior_logs
+                    WHERE source='uniform' AND date=? AND student_id IN ({ph})""",
+                [date] + student_ids
+            ).fetchall()
+            for r in rows:
+                marks.setdefault(r['student_id'], []).append(dict(r))
+
+    result = []
+    for s in students:
+        d = dict(s)
+        d['marked_rule_ids'] = [m['source_id'] for m in marks.get(s['id'], [])]
+        d['marked_total'] = sum(m['points'] for m in marks.get(s['id'], []))
+        result.append(d)
+
+    return jsonify(students=result, date=date)
+
+@app.post('/api/uniform-check')
+@login_required
+def api_uniform_save():
+    """บันทึกผลการตรวจเครื่องแต่งกาย
+    Body: {
+      date: 'YYYY-MM-DD',
+      records: [{student_id, rule_ids: [1, 2, ...]}, ...]
+    }
+    Idempotent: ลบ uniform records เดิมของวันนั้น/นักเรียนนั้น ก่อน insert ใหม่
+    """
+    u = current_user()
+    b = request.get_json() or {}
+    date = b.get('date')
+    records = b.get('records', [])
+    if not date or not isinstance(records, list):
+        return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+
+    if not records:
+        return jsonify(success=True, count=0, total_deduction=0, message='ไม่มีรายการ')
+
+    # Verify access for teachers
+    sid_list = [r.get('student_id') for r in records if r.get('student_id')]
+    if not sid_list:
+        return jsonify(success=False, message='ไม่มีนักเรียน'), 400
+
+    with get_db() as con:
+        ph = ','.join('?' * len(sid_list))
+        students = {s['id']: dict(s) for s in con.execute(
+            f'SELECT * FROM students WHERE id IN ({ph})', sid_list
+        ).fetchall()}
+
+        for sid in sid_list:
+            s = students.get(sid)
+            if not s or not can_access_student(u, s):
+                return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+
+        # Get all rule_ids referenced
+        all_rule_ids = set()
+        for rec in records:
+            for rid in (rec.get('rule_ids') or []):
+                all_rule_ids.add(int(rid))
+
+        rules = {}
+        if all_rule_ids:
+            ph = ','.join('?' * len(all_rule_ids))
+            for r in con.execute(
+                f'SELECT id, name, points FROM behavior_rules WHERE id IN ({ph})',
+                list(all_rule_ids)
+            ).fetchall():
+                rules[r['id']] = dict(r)
+
+        # Clear existing uniform records for these students on this date
+        con.execute(
+            f"DELETE FROM behavior_logs WHERE source='uniform' AND date=? AND student_id IN ({','.join('?' * len(sid_list))})",
+            [date] + sid_list
+        )
+
+        count = 0
+        total_deduction = 0
+        for rec in records:
+            sid = rec['student_id']
+            rule_ids = rec.get('rule_ids') or []
+            for rid in rule_ids:
+                rule = rules.get(int(rid))
+                if not rule: continue
+                con.execute(
+                    """INSERT INTO behavior_logs (student_id, date, points, reason, source, source_id, recorded_by)
+                       VALUES (?, ?, ?, ?, 'uniform', ?, ?)""",
+                    (sid, date, rule['points'], rule['name'], rule['id'], u['id'])
+                )
+                count += 1
+                total_deduction += rule['points']
+
+        audit_log(con, 'uniform_check', 'student', None,
+                  {'date': date, 'students': len(sid_list), 'marks': count, 'total': total_deduction})
+
+    return jsonify(success=True, count=count, total_deduction=total_deduction,
+                   message=f'บันทึกการตรวจ {len(sid_list)} คน — รวมหัก {total_deduction} คะแนน')
 
 # ── LATE STUDENTS + MAKEUP (บำเพ็ญประโยชน์แก้มาสาย) ──────
 

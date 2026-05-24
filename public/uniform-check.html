@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ตรวจเครื่องแต่งกาย</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    .uniform-table th, .uniform-table td { vertical-align: middle; }
+    .rule-col {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      white-space: nowrap;
+      padding: 8px 4px !important;
+      font-size: .82rem;
+    }
+    .rule-points {
+      font-size: .7rem;
+      color: #dc3545;
+      writing-mode: horizontal-tb;
+      display: block;
+      transform: rotate(180deg);
+      margin-top: 4px;
+    }
+    .marked-row { background: #fff3cd; }
+    .check-cell { text-align: center; padding: 2px !important; }
+    .form-check-input { width: 1.3rem; height: 1.3rem; cursor: pointer; }
+    .sticky-bar {
+      position: fixed; bottom: 70px; left: 0; right: 0;
+      background: white; border-top: 2px solid #198754;
+      padding: 12px; z-index: 50;
+      box-shadow: 0 -4px 12px rgba(0,0,0,.1);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+        <li class="nav-item"><a class="nav-link" href="/attendance.html"><i class="bi bi-check2-square me-1"></i>เช็คชื่อ</a></li>
+        <li class="nav-item"><a class="nav-link" href="/late-students.html"><i class="bi bi-clock-history me-1"></i>มาสาย</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/uniform-check.html"><i class="bi bi-person-vcard me-1"></i>ตรวจเครื่องแต่งกาย</a></li>
+        <li class="nav-item"><a class="nav-link" href="/students.html"><i class="bi bi-people me-1"></i>นักเรียน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/report.html"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/behavior-report.html"><i class="bi bi-award me-1"></i>คะแนน</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/users.html"><i class="bi bi-shield-lock me-1"></i>ผู้ใช้</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/settings.html"><i class="bi bi-gear me-1"></i>ตั้งค่า</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header">
+  <div class="container">
+    <h1><i class="bi bi-person-vcard me-2"></i>ตรวจเครื่องแต่งกาย</h1>
+    <div class="subtitle">ติ๊กรายการที่นักเรียนผิดระเบียบ — ระบบจะหักคะแนนความประพฤติอัตโนมัติ</div>
+  </div>
+</div>
+
+<div class="container pb-5" style="padding-bottom: 140px !important;">
+
+  <!-- Filter -->
+  <div class="card mb-3">
+    <div class="card-body py-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-3">
+          <label class="form-label fw-600 mb-1">ชั้น</label>
+          <select id="selLevel" class="form-select" onchange="updateRooms()">
+            <option value="">-</option>
+            <option value="1">ม.1</option><option value="2">ม.2</option>
+            <option value="3">ม.3</option><option value="4">ม.4</option>
+            <option value="5">ม.5</option><option value="6">ม.6</option>
+          </select>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label fw-600 mb-1">ห้อง</label>
+          <select id="selRoom" class="form-select"><option value="">-</option></select>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label fw-600 mb-1">วันที่</label>
+          <input type="date" id="selDate" class="form-control">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label fw-600 mb-1">&nbsp;</label>
+          <button class="btn btn-primary w-100" onclick="loadCheck()">
+            <i class="bi bi-search me-1"></i>โหลดรายชื่อ
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rules legend -->
+  <div id="rulesLegend" class="alert alert-info py-2 small" style="display:none;"></div>
+
+  <!-- Student table -->
+  <div id="checkArea">
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-person-vcard fs-1 d-block mb-2"></i>
+      เลือกชั้น/ห้อง แล้วกด "โหลดรายชื่อ"
+    </div>
+  </div>
+
+</div>
+
+<!-- Sticky save bar -->
+<div id="saveBar" class="sticky-bar" style="display:none;">
+  <div class="container d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <span class="badge bg-warning text-dark me-2" id="markedCount">0 รายการ</span>
+      <span class="text-danger fw-bold" id="totalPoints">0 คะแนน</span>
+    </div>
+    <button class="btn btn-success btn-lg" onclick="saveCheck()">
+      <i class="bi bi-save me-2"></i>บันทึกผลตรวจ
+    </button>
+  </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 9999;">
+  <div id="mainToast" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex"><div class="toast-body fw-500"></div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let allRules = [];
+let allClasses = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  document.getElementById('selDate').value = todayISO();
+
+  // Teacher with assigned class — lock filter
+  if (currentUser?.role === 'teacher' && currentUser?.assigned_level) {
+    document.getElementById('selLevel').value = currentUser.assigned_level;
+    document.getElementById('selLevel').disabled = true;
+  }
+
+  try {
+    allRules = await apiFetch('/api/uniform-check/rules');
+    allClasses = await apiFetch('/api/classes');
+    updateRooms();
+    if (currentUser?.assigned_room) {
+      document.getElementById('selRoom').value = currentUser.assigned_room;
+      document.getElementById('selRoom').disabled = true;
+    }
+    showLegend();
+    if (currentUser?.assigned_level && currentUser?.assigned_room) {
+      loadCheck();
+    }
+  } catch (e) { showToast(e.message, 'danger'); }
+});
+
+function updateRooms() {
+  const level = document.getElementById('selLevel').value;
+  const rooms = allClasses.filter(c => String(c.class_level) === level).map(c => c.room);
+  const sel = document.getElementById('selRoom');
+  sel.innerHTML = '<option value="">-</option>';
+  [...new Set(rooms)].sort((a,b) => a-b).forEach(r => {
+    sel.innerHTML += `<option value="${r}">ห้อง ${r}</option>`;
+  });
+}
+
+function showLegend() {
+  if (!allRules.length) {
+    document.getElementById('rulesLegend').innerHTML =
+      '<i class="bi bi-exclamation-triangle me-1"></i>ยังไม่มีรายการตรวจ (หมวด "การแต่งกาย") — ' +
+      '<a href="/behavior-rules.html">เพิ่มที่หน้าจัดการพฤติกรรม</a>';
+    document.getElementById('rulesLegend').style.display = '';
+    return;
+  }
+  let html = '<i class="bi bi-list-check me-1"></i><strong>รายการตรวจ:</strong> ';
+  html += allRules.map(r => `${r.name} (${r.points})`).join(' • ');
+  document.getElementById('rulesLegend').innerHTML = html;
+  document.getElementById('rulesLegend').style.display = '';
+}
+
+async function loadCheck() {
+  const level = document.getElementById('selLevel').value;
+  const room = document.getElementById('selRoom').value;
+  const date = document.getElementById('selDate').value;
+  if (!level || !room || !date) {
+    showToast('เลือกชั้น/ห้อง/วันที่ก่อน', 'warning');
+    return;
+  }
+  if (!allRules.length) {
+    showToast('ไม่มีรายการตรวจ — เพิ่มในหน้าจัดการพฤติกรรม (หมวด "การแต่งกาย")', 'warning');
+    return;
+  }
+
+  document.getElementById('checkArea').innerHTML =
+    '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+  try {
+    const d = await apiFetch(`/api/uniform-check?level=${level}&room=${room}&date=${date}`);
+    renderTable(d);
+  } catch (e) {
+    document.getElementById('checkArea').innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+function renderTable(d) {
+  if (!d.students.length) {
+    document.getElementById('checkArea').innerHTML =
+      '<div class="alert alert-warning">ห้องนี้ไม่มีนักเรียน</div>';
+    return;
+  }
+
+  let html = `<div class="card">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-people me-2"></i>ตรวจเครื่องแต่งกาย — ${formatThaiDateFull(d.date)}</span>
+      <span>${d.students.length} คน</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-bordered uniform-table mb-0" style="font-size:.9rem;">
+        <thead class="table-light">
+          <tr>
+            <th style="width:50px;" class="text-center">เลขที่</th>
+            <th>ชื่อ-นามสกุล</th>`;
+  allRules.forEach(r => {
+    html += `<th class="rule-col text-center" style="width:46px;">${r.name}<span class="rule-points">${r.points}</span></th>`;
+  });
+  html += `<th style="width:80px;" class="text-center">รวม</th></tr></thead><tbody>`;
+
+  d.students.forEach(s => {
+    const marked = s.marked_rule_ids || [];
+    const rowClass = marked.length ? 'marked-row' : '';
+    html += `<tr class="${rowClass}" data-id="${s.id}">
+      <td class="text-center">${s.number ?? '-'}</td>
+      <td><span class="fw-500">${s.name}</span>
+        ${s.student_code ? `<small class="text-muted ms-1">${s.student_code}</small>` : ''}
+      </td>`;
+    allRules.forEach(r => {
+      const checked = marked.includes(r.id);
+      html += `<td class="check-cell">
+        <input type="checkbox" class="form-check-input rule-check"
+          data-rule-id="${r.id}" data-points="${r.points}"
+          ${checked ? 'checked' : ''} onchange="updateRow(this); updateTotals();">
+      </td>`;
+    });
+    html += `<td class="text-center"><span class="badge bg-danger row-total">${s.marked_total || 0}</span></td>
+    </tr>`;
+  });
+
+  html += `</tbody></table></div></div>`;
+  document.getElementById('checkArea').innerHTML = html;
+  document.getElementById('saveBar').style.display = '';
+  updateTotals();
+}
+
+function updateRow(checkbox) {
+  const row = checkbox.closest('tr');
+  const checks = row.querySelectorAll('.rule-check:checked');
+  let sum = 0;
+  checks.forEach(c => sum += +c.dataset.points);
+  row.querySelector('.row-total').textContent = sum;
+  row.classList.toggle('marked-row', checks.length > 0);
+}
+
+function updateTotals() {
+  const allChecks = document.querySelectorAll('.rule-check:checked');
+  let total = 0;
+  allChecks.forEach(c => total += +c.dataset.points);
+  document.getElementById('markedCount').textContent = allChecks.length + ' รายการ';
+  document.getElementById('totalPoints').textContent = total + ' คะแนน';
+}
+
+async function saveCheck() {
+  const date = document.getElementById('selDate').value;
+  const rows = document.querySelectorAll('tbody tr[data-id]');
+  const records = [];
+  rows.forEach(row => {
+    const sid = +row.dataset.id;
+    const ruleIds = Array.from(row.querySelectorAll('.rule-check:checked'))
+      .map(c => +c.dataset.ruleId);
+    records.push({ student_id: sid, rule_ids: ruleIds });
+  });
+
+  try {
+    const res = await apiFetch('/api/uniform-check', {
+      method: 'POST',
+      body: JSON.stringify({ date, records })
+    });
+    showToast(res.message);
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+</script>
+</body>
+</html>
