@@ -1177,6 +1177,31 @@ def api_late_undo_makeup(attendance_id):
         audit_log(con, 'late_undo_makeup', 'attendance', attendance_id, None)
     return jsonify(success=True, message='ยกเลิกการบำเพ็ญแล้ว')
 
+@app.get('/api/late/pending')
+@login_required
+def api_late_pending():
+    """รายชื่อนักเรียนที่ค้างบำเพ็ญประโยชน์ (มาสายแต่ยังไม่ได้บำเพ็ญ) — ทุกวัน"""
+    u = current_user()
+    where, params, _, _ = user_class_filter(u)
+    # Optional: filter ตั้งแต่วันที่ X (default = 60 วันย้อนหลัง)
+    from_date = request.args.get('from')
+    if not from_date:
+        from_date = (datetime.date.today() - datetime.timedelta(days=60)).isoformat()
+
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT a.id AS attendance_id, a.date, a.note,
+                   s.id, s.number, s.student_code, s.name, s.class_level, s.room
+            FROM attendance a
+            JOIN students s ON s.id = a.student_id
+            LEFT JOIN behavior_logs mk ON mk.source='makeup' AND mk.source_id=a.id
+            WHERE a.status='late' AND mk.id IS NULL
+              AND a.date >= ? AND a.date < ?
+              {where}
+            ORDER BY a.date ASC, s.class_level, s.room, s.number, s.name
+        """, [from_date, today_iso()] + params).fetchall()
+    return jsonify(rows=rows_to_list(rows), from_date=from_date, until=today_iso())
+
 @app.get('/api/late/summary')
 @login_required
 def api_late_summary():
