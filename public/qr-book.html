@@ -9,30 +9,82 @@
   <link href="/css/style.css" rel="stylesheet">
   <style>
     .controls { background: #f0f4fb; padding: 12px; border-bottom: 2px solid var(--primary); }
-    .qr-page { max-width: 794px; margin: 16px auto; background: white;
-               padding: 16mm; box-shadow: 0 2px 12px rgba(0,0,0,.1); }
-    .qr-header { text-align: center; margin-bottom: 16px;
-                 border-bottom: 2px solid #000; padding-bottom: 8px; }
-    .qr-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+
+    /* ===== A4 page — ใช้ printable area (เผื่อ printer hardware margin) ===== */
+    .qr-page {
+      width: 190mm;            /* 210 - margin ซ้าย/ขวา 10mm */
+      height: 277mm;           /* 297 - margin บน/ล่าง 10mm */
+      margin: 8mm auto;
+      background: white;
+      padding: 0;
+      box-sizing: border-box;
+      box-shadow: 0 2px 12px rgba(0,0,0,.1);
+      page-break-after: always;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .qr-page:last-child { page-break-after: auto; }
+
+    .qr-header {
+      text-align: center;
+      margin-bottom: 3mm;
+      border-bottom: 0.5mm solid #000;
+      padding-bottom: 1.5mm;
+      flex-shrink: 0;
+    }
+    .qr-header h4 { margin: 0; font-size: 12pt; font-weight: 700; line-height: 1.1; }
+    .qr-header h5 { margin: 0.5mm 0 0 0; font-size: 10pt; font-weight: 600; line-height: 1.1; }
+
+    .qr-grid {
+      display: grid;
+      gap: 2mm;
+      flex: 1;
+      align-content: start;
+    }
     .qr-card {
-      border: 1.5px dashed #999;
-      border-radius: 8px;
-      padding: 10px;
+      border: 0.3mm dashed #999;
+      border-radius: 2mm;
+      padding: 1.5mm 1mm;
       text-align: center;
       display: flex; flex-direction: column;
       align-items: center;
+      justify-content: center;
       page-break-inside: avoid;
+      break-inside: avoid;
+      box-sizing: border-box;
+      overflow: hidden;
     }
-    .qr-card img { width: 140px; height: 140px; }
-    .qr-card .num { font-weight: bold; font-size: 1rem; }
-    .qr-card .name { font-size: .85rem; margin-top: 2px; min-height: 2.4em; line-height: 1.2; }
-    .qr-card .code { font-size: .7rem; color: #888; font-family: monospace; }
+    .qr-card .qrimg {
+      display: block;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+    .qr-card .num { font-weight: bold; font-size: 9pt; margin-top: 0.8mm; line-height: 1; }
+    .qr-card .name {
+      font-size: 7.5pt;
+      margin-top: 0.5mm;
+      line-height: 1.1;
+      max-height: 20pt;
+      overflow: hidden;
+      word-break: break-word;
+    }
+    .qr-card .code { font-size: 6.5pt; color: #888; font-family: monospace; line-height: 1; }
+
     @media print {
-      body { background: white; }
+      body { background: white; margin: 0; }
       .no-print, nav { display: none !important; }
-      .qr-page { box-shadow: none; margin: 0; padding: 8mm; max-width: 100%; }
-      .qr-card { page-break-inside: avoid; }
-      @page { size: A4; margin: 8mm; }
+      /* ใช้ @page margin จัดการขอบกระดาษ + .qr-page ใช้พื้นที่ภายในเต็ม */
+      .qr-page {
+        box-shadow: none;
+        margin: 0;
+        width: 100% !important;
+        height: 100% !important;
+        padding: 0 !important;
+        page-break-after: always;
+      }
+      .qr-page:last-child { page-break-after: auto; }
+      @page { size: A4; margin: 10mm; }
     }
   </style>
 </head>
@@ -52,9 +104,9 @@
         <option value="">-- เลือกห้อง --</option>
       </select>
       <select id="qrSize" class="form-select form-select-sm" style="width:auto;">
-        <option value="120">QR เล็ก (15 ใบ/หน้า)</option>
-        <option value="140" selected>QR กลาง (12 ใบ/หน้า)</option>
-        <option value="180">QR ใหญ่ (6 ใบ/หน้า)</option>
+        <option value="25">QR เล็ก 25mm (5×6 = 30 ใบ/หน้า)</option>
+        <option value="35" selected>QR กลาง 35mm (3×4 = 12 ใบ/หน้า)</option>
+        <option value="50">QR ใหญ่ 50mm (2×3 = 6 ใบ/หน้า)</option>
       </select>
       <button class="btn btn-sm btn-primary" onclick="loadQR()">
         <i class="bi bi-arrow-clockwise me-1"></i>โหลด
@@ -115,8 +167,14 @@ async function loadQR() {
   const val = document.getElementById('selClass').value;
   if (!val) { alert('เลือกห้องก่อน'); return; }
   const [level, room] = val.split('_');
-  const size = +document.getElementById('qrSize').value;
-  const cols = size <= 120 ? 5 : (size >= 180 ? 2 : 3);
+  const sizeMm = +document.getElementById('qrSize').value;
+  // จำนวน cols/rows + ขนาด row (mm) — คำนวณให้พอดี A4 (พื้นที่ใช้งาน ~277mm)
+  // A4: 297 - padding 16 - header 14 - gaps = ~265mm ให้ rows
+  let cols, rows, rowMm;
+  if (sizeMm <= 25)      { cols = 5; rows = 6; rowMm = 38; }  // 6×38=228
+  else if (sizeMm >= 50) { cols = 2; rows = 3; rowMm = 78; }  // 3×78=234
+  else                   { cols = 3; rows = 4; rowMm = 58; }  // 4×58=232
+  const perPage = cols * rows;
 
   document.getElementById('content').innerHTML =
     '<div class="qr-page"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>';
@@ -128,7 +186,7 @@ async function loadQR() {
         '<div class="qr-page"><div class="alert alert-warning">ห้องนี้ไม่มีนักเรียน</div></div>';
       return;
     }
-    renderBook(students, level, room, size, cols);
+    renderBook(students, level, room, sizeMm, cols, perPage, rowMm);
     document.getElementById('printBtn').disabled = false;
   } catch (e) {
     document.getElementById('content').innerHTML =
@@ -136,27 +194,30 @@ async function loadQR() {
   }
 }
 
-function renderBook(students, level, room, size, cols) {
-  const perPage = cols === 5 ? 15 : (cols === 2 ? 6 : 12);
+function renderBook(students, level, room, sizeMm, cols, perPage, rowMm) {
   const pages = [];
   for (let i = 0; i < students.length; i += perPage) {
     pages.push(students.slice(i, i + perPage));
   }
 
+  // px request to API server (4x mm for good resolution)
+  const qrPx = sizeMm * 4;
+  const rows = perPage / cols;
+
   let html = '';
   pages.forEach((page, pi) => {
     html += `<div class="qr-page">
       <div class="qr-header">
-        <h4 class="mb-1">โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</h4>
-        <h5 class="mb-0">สมุด QR สำหรับเช็คชื่อ — ม.${level}/${room}
+        <h4>โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</h4>
+        <h5>สมุด QR สำหรับเช็คชื่อ — ม.${level}/${room}
           <small class="text-muted">(หน้า ${pi+1}/${pages.length})</small>
         </h5>
       </div>
-      <div class="qr-grid" style="grid-template-columns: repeat(${cols}, 1fr);">`;
+      <div class="qr-grid" style="grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, ${rowMm}mm);">`;
     page.forEach(s => {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=2&data=${s.id}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx}x${qrPx}&margin=2&data=${s.id}`;
       html += `<div class="qr-card">
-        <img src="${qrUrl}" alt="QR ${s.id}" style="width:${size}px;height:${size}px;">
+        <img class="qrimg" src="${qrUrl}" alt="QR ${s.id}" style="width:${sizeMm}mm;height:${sizeMm}mm;">
         <div class="num">${s.number ?? '-'}</div>
         <div class="name">${s.name}</div>
         <div class="code">${s.student_code || ''}</div>

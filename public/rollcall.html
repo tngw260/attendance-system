@@ -8,33 +8,43 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="/css/style.css" rel="stylesheet">
   <style>
-    body { background: white; }
+    body { background: #f6f8fb; }
     .print-controls { padding: 1rem; background: #f0f4fb; border-bottom: 2px solid var(--primary); }
+
+    /* A4 landscape: 297 × 210 mm */
     .rollcall-sheet {
-      max-width: 794px; margin: 1rem auto; background: white;
-      padding: 24px 32px; box-shadow: 0 2px 12px rgba(0,0,0,.1);
+      width: 297mm;
+      min-height: 210mm;
+      margin: 1rem auto;
+      background: white;
+      padding: 8mm 10mm;
+      box-sizing: border-box;
+      box-shadow: 0 2px 12px rgba(0,0,0,.1);
     }
-    .rc-header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 16px; }
-    .rc-header h2 { margin: 0; font-size: 1.4rem; font-weight: 700; }
-    .rc-header h3 { margin: 2px 0; font-size: 1.1rem; font-weight: 600; }
-    .rc-meta { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: .95rem; }
+    .rc-header { text-align: center; border-bottom: 0.5mm solid #000; padding-bottom: 2mm; margin-bottom: 3mm; }
+    .rc-header h2 { margin: 0; font-size: 14pt; font-weight: 700; }
+    .rc-header h3 { margin: 1mm 0; font-size: 12pt; font-weight: 600; }
+    .rc-meta { display: flex; justify-content: space-between; margin-bottom: 3mm; font-size: 10pt; }
     .rc-meta input[type=text] {
-      border: none; border-bottom: 1px dotted #555; padding: 0 4px; width: 180px;
+      border: none; border-bottom: 0.3mm dotted #555; padding: 0 1mm; width: 50mm;
     }
-    table.rc-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+    table.rc-table { width: 100%; border-collapse: collapse; font-size: 9pt; table-layout: fixed; }
     table.rc-table th, table.rc-table td {
-      border: 1px solid #555; padding: 5px 8px; vertical-align: middle;
+      border: 0.2mm solid #555; padding: 1mm 1mm; vertical-align: middle;
     }
-    table.rc-table th { background: #e9ecef; text-align: center; }
-    .check-cell { width: 32px; height: 28px; text-align: center; }
-    .sig-section { margin-top: 32px; display: flex; justify-content: space-around; }
-    .sig-section .sig { text-align: center; min-width: 220px; }
-    .sig-line { border-bottom: 1px dotted #555; height: 32px; margin-bottom: 4px; }
+    table.rc-table th { background: #e9ecef; text-align: center; font-size: 8pt; }
+    .col-no   { width: 9mm; }
+    .col-name { width: 55mm; }
+    .check-cell { text-align: center; height: 6mm; padding: 0 !important; font-size: 8pt; }
+    .sig-section { margin-top: 8mm; display: flex; justify-content: space-around; }
+    .sig-section .sig { text-align: center; min-width: 60mm; font-size: 10pt; }
+    .sig-line { border-bottom: 0.3mm dotted #555; height: 10mm; margin-bottom: 1mm; }
+
     @media print {
-      body { margin: 0; }
+      body { background: white; margin: 0; }
       .print-controls, nav { display: none !important; }
-      .rollcall-sheet { margin: 0; padding: 12mm 16mm; box-shadow: none; max-width: 100%; }
-      @page { size: A4; margin: 0; }
+      .rollcall-sheet { margin: 0; box-shadow: none; }
+      @page { size: A4 landscape; margin: 0; }
     }
   </style>
 </head>
@@ -115,8 +125,8 @@ function render(d) {
     let cells = '';
     for (let i = 0; i < 25; i++) cells += '<td class="check-cell"></td>';
     rows += `<tr>
-      <td class="text-center">${s.number ?? ''}</td>
-      <td>${s.name}</td>
+      <td class="col-no text-center">${s.number ?? ''}</td>
+      <td class="col-name">${s.name}</td>
       ${cells}
     </tr>`;
   });
