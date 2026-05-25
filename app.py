@@ -2239,6 +2239,24 @@ def api_students_search():
 
 # ── PHOTO UPLOAD ──────────────────────────────────────────
 
+@app.delete('/api/students/<int:sid>/photo')
+@login_required
+def api_student_photo_delete(sid):
+    u = current_user()
+    with get_db() as con:
+        student = con.execute('SELECT * FROM students WHERE id=?', (sid,)).fetchone()
+        if not student: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if not can_access_student(u, student):
+            return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+        if student['photo']:
+            try:
+                os.remove(os.path.join(PHOTOS_DIR, student['photo']))
+            except OSError:
+                pass
+        con.execute('UPDATE students SET photo=NULL WHERE id=?', (sid,))
+        audit_log(con, 'delete_photo', 'student', sid, None)
+    return jsonify(success=True, message='ลบรูปแล้ว')
+
 @app.post('/api/students/<int:sid>/photo')
 @login_required
 def api_student_photo(sid):

@@ -58,6 +58,92 @@ function openAddStudent() {
   setTimeout(() => document.querySelector('#addStudentForm [name=name]').focus(), 300);
 }
 
+function openPhotoUpload(sid, name, currentPhoto) {
+  const modal = document.getElementById('photoModal') || (() => {
+    const div = document.createElement('div');
+    div.id = 'photoModal';
+    div.className = 'modal fade';
+    div.innerHTML = `<div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content"><div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-camera me-2"></i>อัพโหลดรูปนักเรียน</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div><div class="modal-body text-center" id="photoBody"></div></div></div>`;
+    document.body.appendChild(div);
+    return div;
+  })();
+
+  const currentImg = currentPhoto
+    ? `<img src="/photos/${currentPhoto}?t=${Date.now()}" id="photoPreview"
+         style="max-width:200px;max-height:260px;border-radius:8px;border:1px solid #ddd;object-fit:cover;">`
+    : `<div id="photoPreview" class="d-flex align-items-center justify-content-center bg-light"
+         style="width:200px;height:260px;border-radius:8px;margin:auto;border:1px dashed #aaa;color:#aaa;">
+         <i class="bi bi-person fs-1"></i>
+       </div>`;
+
+  document.getElementById('photoBody').innerHTML = `
+    <div class="fw-bold mb-1">${name}</div>
+    <div class="text-muted small mb-3">ขนาดแนะนำ 240×320 px (~50-200 KB)</div>
+    <div class="mb-3 d-flex justify-content-center">${currentImg}</div>
+    <input type="file" id="photoFile" class="form-control mb-2" accept="image/*"
+      onchange="previewPhoto(this)">
+    <div class="d-grid gap-2">
+      <button class="btn btn-primary" onclick="doUploadPhoto(${sid})">
+        <i class="bi bi-cloud-upload me-2"></i>อัพโหลด
+      </button>
+      ${currentPhoto ? `<button class="btn btn-outline-danger btn-sm" onclick="doDeletePhoto(${sid})">
+        <i class="bi bi-trash me-1"></i>ลบรูป
+      </button>` : ''}
+    </div>
+  `;
+  new bootstrap.Modal(modal).show();
+}
+
+function previewPhoto(input) {
+  const f = input.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = document.getElementById('photoPreview');
+    if (img.tagName === 'IMG') img.src = e.target.result;
+    else {
+      img.outerHTML = `<img id="photoPreview" src="${e.target.result}"
+        style="max-width:200px;max-height:260px;border-radius:8px;border:1px solid #ddd;object-fit:cover;">`;
+    }
+  };
+  reader.readAsDataURL(f);
+}
+
+async function doUploadPhoto(sid) {
+  const f = document.getElementById('photoFile').files[0];
+  if (!f) { showToast('เลือกไฟล์ก่อน', 'warning'); return; }
+  if (f.size > 5 * 1024 * 1024) {
+    showToast('ไฟล์ใหญ่เกิน 5 MB', 'danger'); return;
+  }
+  const fd = new FormData();
+  fd.append('file', f);
+  try {
+    const r = await fetch(`/api/students/${sid}/photo`, {
+      method: 'POST', body: fd, credentials: 'same-origin'
+    });
+    const d = await r.json();
+    if (d.success) {
+      showToast(d.message);
+      bootstrap.Modal.getInstance(document.getElementById('photoModal')).hide();
+      loadStudents();
+    } else { showToast(d.message, 'danger'); }
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function doDeletePhoto(sid) {
+  if (!confirm('ลบรูปนักเรียน?')) return;
+  try {
+    await apiFetch(`/api/students/${sid}/photo`, { method: 'DELETE' });
+    showToast('ลบรูปแล้ว');
+    bootstrap.Modal.getInstance(document.getElementById('photoModal')).hide();
+    loadStudents();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
 async function genParentCode(sid) {
   try {
     const res = await apiFetch(`/api/students/${sid}/parent-code`, { method: 'POST' });
@@ -321,6 +407,7 @@ function renderTable(students) {
               <thead class="table-light">
                 <tr>
                   <th style="width:3rem;">เลขที่</th>
+                  <th style="width:3rem;">รูป</th>
                   <th style="width:7rem;">รหัส</th>
                   <th>ชื่อ-นามสกุล</th>
                   <th style="width:4rem;">เพศ</th>
@@ -340,8 +427,19 @@ function renderTable(students) {
           : `<button class="btn btn-sm btn-outline-primary" onclick="genParentCode(${s.id})" title="สร้างรหัสผู้ปกครอง">
               <i class="bi bi-plus-circle"></i> สร้างรหัส
             </button>`;
+        const photoCell = s.photo
+          ? `<img src="/photos/${s.photo}" loading="lazy"
+               style="width:32px;height:32px;border-radius:50%;object-fit:cover;cursor:pointer;"
+               onclick="openPhotoUpload(${s.id}, '${s.name.replace(/'/g,"\\'")}', '${s.photo}')"
+               title="คลิกเพื่อแก้รูป">`
+          : `<button class="btn btn-sm btn-outline-secondary p-0" style="width:32px;height:32px;border-radius:50%;"
+               onclick="openPhotoUpload(${s.id}, '${s.name.replace(/'/g,"\\'")}', '')"
+               title="อัพโหลดรูป">
+              <i class="bi bi-camera" style="font-size:.85rem;"></i>
+             </button>`;
         html += `<tr>
           <td class="text-center">${s.number ?? ''}</td>
+          <td>${photoCell}</td>
           <td class="text-muted">${s.student_code ?? '-'}</td>
           <td>${s.name}</td>
           <td>${s.gender ?? ''}</td>
