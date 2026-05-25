@@ -121,6 +121,7 @@ DEFAULT_SETTINGS = {
     'school_logo':       '',
     'director_name':     'นางสาวปัทมา จีนดี',
     'director_title':    'ผู้อำนวยการ',
+    'director_view_key': '',   # secret key สำหรับเข้าหน้า ผอ. (auto-gen ตอน init)
 }
 
 def init_db():
@@ -308,6 +309,13 @@ def init_db():
         # Default settings
         for k, v in DEFAULT_SETTINGS.items():
             con.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', (k, v))
+
+        # Auto-gen director_view_key ถ้ายังว่าง
+        cur = con.execute("SELECT value FROM settings WHERE key='director_view_key'").fetchone()
+        if cur and not cur['value']:
+            key = secrets.token_urlsafe(12)  # ~16 chars random
+            con.execute("UPDATE settings SET value=? WHERE key='director_view_key'", (key,))
+            print(f"  [Init] สร้าง director_view_key: {key}")
 
         # Default behavior rules — auto add missing entries (ใช้ name เป็น key ไม่ซ้ำ)
         defaults = [
@@ -671,12 +679,26 @@ def api_public_theme():
 def api_settings_update():
     b = request.get_json() or {}
     allowed = set(DEFAULT_SETTINGS.keys())
+    # ป้องกัน director_view_key ถูกแก้ผ่าน UI (ต้องใช้ /director-key endpoint)
+    allowed.discard('director_view_key')
     with get_db() as con:
         for k, v in b.items():
             if k in allowed:
                 con.execute('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
                             (k, str(v)))
     return jsonify(success=True, message='บันทึกการตั้งค่าสำเร็จ')
+
+@app.post('/api/settings/director-key')
+@admin_required
+def api_regen_director_key():
+    """สร้าง director_view_key ใหม่ (ลิงก์เก่าจะใช้ไม่ได้)"""
+    new_key = secrets.token_urlsafe(12)
+    with get_db() as con:
+        con.execute(
+            'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+            ('director_view_key', new_key))
+        audit_log(con, 'regen_director_key', 'settings', None, None)
+    return jsonify(success=True, key=new_key, message='สร้าง key ใหม่เรียบร้อย')
 
 # ── CLASSES ───────────────────────────────────────────────
 
@@ -1894,6 +1916,143 @@ def api_dashboard():
             'lowScores':     rows_to_list(low_scores),
             'alertThreshold': score_alert_threshold,
         }
+    )
+
+# ── DIRECTOR VIEW (public, key-protected, read-only) ──────
+
+@app.get('/api/director')
+def api_director():
+    """ภาพรวมโรงเรียนสำหรับ ผอ. — ไม่ต้อง login แต่ต้องมี key ที่ถูก"""
+    key = request.args.get('key', '').strip()
+    settings = get_settings()
+    expected = (settings.get('director_view_key') or '').strip()
+    if not expected or key != expected:
+        return jsonify(error='invalid key'), 403
+
+    today = today_iso()
+    today_d = datetime.date.today()
+    month_start = today_d.replace(day=1).isoformat()
+    start_score = int(settings.get('start_score', '100'))
+
+    # 14 วันย้อนหลัง
+    fourteen = (today_d - datetime.timedelta(days=13)).isoformat()
+
+    with get_db() as con:
+        total = con.execute('SELECT COUNT(*) AS n FROM students').fetchone()['n']
+
+        today_stats = con.execute("""
+            SELECT
+              COUNT(*) AS checked,
+              SUM(status='present')  AS present,
+              SUM(status='absent')   AS absent,
+              SUM(status='late')     AS late,
+              SUM(status='leave')    AS leave,
+              SUM(status='activity') AS activity
+            FROM attendance WHERE date=?
+        """, (today,)).fetchone()
+
+        month_stats = con.execute("""
+            SELECT
+              SUM(status='present')  AS present,
+              SUM(status='absent')   AS absent,
+              SUM(status='late')     AS late,
+              SUM(status='leave')    AS leave,
+              SUM(status='activity') AS activity,
+              COUNT(DISTINCT date)   AS days
+            FROM attendance WHERE date >= ?
+        """, (month_start,)).fetchone()
+
+        # ภาพรวมแนวโน้ม 14 วัน
+        trend = con.execute("""
+            SELECT date,
+                   SUM(status='present')  AS present,
+                   SUM(status='absent')   AS absent,
+                   SUM(status='late')     AS late,
+                   SUM(status='leave')    AS leave,
+                   SUM(status='activity') AS activity
+            FROM attendance
+            WHERE date >= ?
+            GROUP BY date ORDER BY date
+        """, (fourteen,)).fetchall()
+
+        # สรุปรายชั้น (ม.1-ม.6) สำหรับวันนี้
+        by_level = con.execute("""
+            SELECT s.class_level,
+                   COUNT(DISTINCT s.id) AS total,
+                   COUNT(DISTINCT CASE WHEN a.status='present'  THEN s.id END) AS present,
+                   COUNT(DISTINCT CASE WHEN a.status='absent'   THEN s.id END) AS absent,
+                   COUNT(DISTINCT CASE WHEN a.status='late'     THEN s.id END) AS late,
+                   COUNT(DISTINCT CASE WHEN a.status='leave'    THEN s.id END) AS leave,
+                   COUNT(DISTINCT a.student_id) AS checked
+            FROM students s
+            LEFT JOIN attendance a ON s.id=a.student_id AND a.date=?
+            GROUP BY s.class_level
+            ORDER BY s.class_level
+        """, (today,)).fetchall()
+
+        # คะแนนความประพฤติเฉลี่ย
+        score_stats = con.execute(f"""
+            SELECT
+              COUNT(s.id) AS total_students,
+              SUM(CASE WHEN bl_sum.delta < 0 THEN 1 ELSE 0 END) AS deducted,
+              COALESCE(AVG({start_score} + COALESCE(bl_sum.delta, 0)), {start_score}) AS avg_score,
+              COALESCE(MIN({start_score} + COALESCE(bl_sum.delta, 0)), {start_score}) AS min_score
+            FROM students s
+            LEFT JOIN (
+              SELECT student_id, SUM(points) AS delta
+              FROM behavior_logs GROUP BY student_id
+            ) bl_sum ON bl_sum.student_id = s.id
+        """).fetchone()
+
+        # นักเรียนคะแนนต่ำที่สุด 5 คน
+        low_scores = con.execute(f"""
+            SELECT s.number, s.name, s.class_level, s.room,
+                   {start_score} + COALESCE(bl_sum.delta, 0) AS score
+            FROM students s
+            JOIN (
+              SELECT student_id, SUM(points) AS delta
+              FROM behavior_logs GROUP BY student_id
+            ) bl_sum ON bl_sum.student_id = s.id
+            WHERE bl_sum.delta < 0
+            ORDER BY score ASC LIMIT 5
+        """).fetchall()
+
+        # นักเรียนขาดบ่อย (เกินกำหนด) เดือนนี้
+        alert_threshold = int(settings.get('alert_threshold', '5'))
+        frequent_absent = con.execute("""
+            SELECT s.number, s.name, s.class_level, s.room,
+                   COUNT(*) AS absent_count
+            FROM students s
+            JOIN attendance a ON s.id=a.student_id
+            WHERE a.status='absent' AND a.date >= ?
+            GROUP BY s.id
+            HAVING absent_count >= ?
+            ORDER BY absent_count DESC LIMIT 10
+        """, (month_start, alert_threshold)).fetchall()
+
+    return jsonify(
+        schoolName=settings.get('school_name', ''),
+        schoolLogo=settings.get('school_logo', ''),
+        themeColor=settings.get('theme_color', '#1a5276'),
+        directorName=settings.get('director_name', ''),
+        directorTitle=settings.get('director_title', ''),
+        date=today,
+        total=total,
+        today=dict(today_stats),
+        monthStats=dict(month_stats),
+        monthStart=month_start,
+        trend=rows_to_list(trend),
+        byLevel=rows_to_list(by_level),
+        behavior={
+            'startScore':    start_score,
+            'avgScore':      round(score_stats['avg_score'] or start_score, 1),
+            'minScore':      score_stats['min_score'] or start_score,
+            'deductedCount': score_stats['deducted'] or 0,
+            'totalStudents': score_stats['total_students'] or 0,
+            'lowScores':     rows_to_list(low_scores),
+        },
+        frequentAbsent=rows_to_list(frequent_absent),
+        alertThreshold=alert_threshold,
     )
 
 # ── REPORT ────────────────────────────────────────────────

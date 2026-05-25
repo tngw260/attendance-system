@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ภาพรวมโรงเรียน — สำหรับท่านผู้อำนวยการ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #d4a017;
+      --primary: #1a5276;
+      --primary-light: #2980b9;
+    }
+    body {
+      font-family: 'Sarabun', system-ui, -apple-system, sans-serif;
+      background: #f5f7fa;
+      color: #2c3e50;
+      padding-bottom: 60px;
+    }
+
+    /* HERO */
+    .dir-hero {
+      background: linear-gradient(135deg, #1a3a5c 0%, #2980b9 60%, #d4a017 130%);
+      color: white;
+      padding: 3rem 0 2.5rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,.2);
+    }
+    .dir-hero::before {
+      content: '';
+      position: absolute;
+      top: -30%; right: -10%;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(255,255,255,.1), transparent 70%);
+      pointer-events: none;
+    }
+    .dir-hero .container { position: relative; z-index: 1; }
+    .dir-hero .school-logo {
+      width: 70px; height: 70px;
+      border-radius: 50%;
+      background: white;
+      padding: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.25);
+      margin-right: 1rem;
+    }
+    .dir-hero h1 {
+      font-size: 1.9rem;
+      font-weight: 800;
+      margin: 0;
+      letter-spacing: -.01em;
+    }
+    .dir-hero .subtitle {
+      font-size: 1.05rem;
+      opacity: .9;
+      margin-top: .3rem;
+    }
+    .dir-badge {
+      display: inline-block;
+      background: rgba(212, 160, 23, .25);
+      border: 1px solid rgba(212, 160, 23, .5);
+      color: #ffe9b3;
+      padding: .3rem 1rem;
+      border-radius: 50px;
+      font-size: .85rem;
+      font-weight: 600;
+      margin-top: 1rem;
+    }
+    .dir-date {
+      font-size: 1.05rem;
+      opacity: .95;
+      margin-top: .5rem;
+    }
+
+    /* SECTION */
+    .dir-section { margin-bottom: 2.5rem; }
+    .dir-section-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 1rem;
+      padding-bottom: .5rem;
+      border-bottom: 3px solid var(--gold);
+      display: inline-flex;
+      align-items: center;
+    }
+
+    /* STAT CARD */
+    .stat-card {
+      background: white;
+      border-radius: 14px;
+      padding: 1.5rem 1.25rem;
+      text-align: center;
+      box-shadow: 0 3px 14px rgba(0,0,0,.07);
+      border-top: 4px solid var(--primary);
+      transition: transform .2s, box-shadow .2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,.13);
+    }
+    .stat-card .icon {
+      font-size: 2.5rem;
+      opacity: .25;
+      position: absolute;
+      top: .5rem; right: .8rem;
+    }
+    .stat-card .num {
+      font-size: 2.8rem;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--primary);
+    }
+    .stat-card .label {
+      font-size: .95rem;
+      color: #6c757d;
+      margin-top: .35rem;
+      font-weight: 500;
+    }
+    .stat-card.s-total   { border-color: #1a3a5c; }
+    .stat-card.s-total   .num { color: #1a3a5c; }
+    .stat-card.s-present { border-color: #198754; }
+    .stat-card.s-present .num { color: #198754; }
+    .stat-card.s-absent  { border-color: #dc3545; }
+    .stat-card.s-absent  .num { color: #dc3545; }
+    .stat-card.s-late    { border-color: #fd7e14; }
+    .stat-card.s-late    .num { color: #fd7e14; }
+    .stat-card.s-leave   { border-color: #0dcaf0; }
+    .stat-card.s-leave   .num { color: #0aa3c2; }
+
+    /* CARD */
+    .info-card {
+      background: white;
+      border-radius: 14px;
+      padding: 1.5rem;
+      box-shadow: 0 3px 14px rgba(0,0,0,.07);
+      height: 100%;
+    }
+    .info-card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #2c3e50;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+    }
+
+    /* LEVEL CARDS */
+    .level-row {
+      background: #f8f9fb;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: .75rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      border-left: 4px solid var(--primary);
+    }
+    .level-row .level-name {
+      font-weight: 700;
+      font-size: 1.05rem;
+      min-width: 70px;
+      color: var(--primary);
+    }
+    .level-row .level-bar {
+      flex: 1;
+      height: 12px;
+      background: #e9ecef;
+      border-radius: 50px;
+      overflow: hidden;
+      position: relative;
+    }
+    .level-row .level-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #198754, #20c997);
+      border-radius: 50px;
+      transition: width .6s ease;
+    }
+    .level-row .level-stats {
+      font-size: .85rem;
+      color: #6c757d;
+      min-width: 130px;
+      text-align: right;
+    }
+    .level-row .level-pct {
+      font-weight: 700;
+      color: var(--primary);
+      min-width: 50px;
+      text-align: right;
+    }
+
+    /* STUDENT LIST */
+    .stu-list-item {
+      padding: .75rem 1rem;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .stu-list-item:last-child { border-bottom: none; }
+    .stu-list-item .num-circle {
+      width: 32px; height: 32px;
+      background: var(--primary);
+      color: white;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700;
+      font-size: .85rem;
+      flex-shrink: 0;
+    }
+    .stu-list-item .stu-name {
+      flex: 1;
+      font-weight: 600;
+    }
+    .stu-list-item .stu-meta {
+      font-size: .82rem;
+      color: #6c757d;
+    }
+    .stu-list-item .stu-badge {
+      font-size: .85rem;
+      font-weight: 700;
+      padding: .25rem .65rem;
+      border-radius: 50px;
+    }
+
+    /* SIGNATURE FOOTER */
+    .signature-box {
+      background: white;
+      border-radius: 14px;
+      padding: 2rem 1.5rem 1.5rem;
+      box-shadow: 0 3px 14px rgba(0,0,0,.07);
+      text-align: center;
+      margin-top: 2rem;
+      border-top: 4px solid var(--gold);
+    }
+    .signature-box .sig-line {
+      width: 220px;
+      border-bottom: 1px dotted #999;
+      margin: 2rem auto 1rem;
+    }
+    .signature-box .sig-name {
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+    .signature-box .sig-title {
+      color: #6c757d;
+      font-size: .95rem;
+      margin-top: .25rem;
+    }
+    .read-only-note {
+      display: inline-block;
+      background: #fff3cd;
+      color: #856404;
+      padding: .4rem 1rem;
+      border-radius: 50px;
+      font-size: .85rem;
+      margin-bottom: 1rem;
+    }
+
+    @media (max-width: 767px) {
+      .dir-hero { padding: 2rem 0 1.5rem; text-align: center; }
+      .dir-hero h1 { font-size: 1.4rem; }
+      .dir-hero .school-logo { margin: 0 auto 1rem; display: block; }
+      .stat-card .num { font-size: 2.2rem; }
+    }
+
+    /* PRINT */
+    @media print {
+      body { background: white; }
+      .no-print { display: none !important; }
+      .dir-hero { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .stat-card, .info-card { box-shadow: none; border: 1px solid #ddd; }
+      @page { size: A4; margin: 12mm; }
+    }
+
+    /* Loading state */
+    #loadingScreen {
+      position: fixed; inset: 0;
+      background: white; z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+      gap: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loadingScreen">
+  <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
+  <div class="text-muted">กำลังโหลดข้อมูลโรงเรียน...</div>
+</div>
+
+<!-- HERO -->
+<div class="dir-hero">
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-md-9">
+        <div class="d-flex align-items-center flex-wrap">
+          <img id="schoolLogo" class="school-logo" src="" style="display:none;" alt="">
+          <div>
+            <h1 id="schoolName">โรงเรียน</h1>
+            <div class="subtitle">รายงานสรุปภาพรวมประจำวัน</div>
+            <div class="dir-date" id="todayDate">-</div>
+            <div class="dir-badge">
+              <i class="bi bi-person-badge me-1"></i>
+              สำหรับท่านผู้อำนวยการ <span id="directorBadgeName"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3 text-md-end mt-3 mt-md-0">
+        <button class="btn btn-light no-print" onclick="window.print()">
+          <i class="bi bi-printer-fill me-1"></i>พิมพ์รายงาน
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- READ-ONLY NOTICE -->
+  <div class="text-center">
+    <div class="read-only-note no-print">
+      <i class="bi bi-eye-fill me-1"></i>
+      หน้านี้สำหรับดูเท่านั้น — ไม่สามารถแก้ไขข้อมูลได้
+    </div>
+  </div>
+
+  <!-- ===== TODAY OVERVIEW ===== -->
+  <div class="dir-section">
+    <div class="dir-section-title">
+      <i class="bi bi-calendar-check me-2"></i>ภาพรวมการมาเรียนวันนี้
+    </div>
+    <div class="row g-3">
+      <div class="col-6 col-md-4 col-lg col-lg-2-4">
+        <div class="stat-card s-total">
+          <i class="bi bi-people-fill icon"></i>
+          <div class="num" id="cTotal">-</div>
+          <div class="label">นักเรียนทั้งหมด</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-lg col-lg-2-4">
+        <div class="stat-card s-present">
+          <i class="bi bi-check-circle-fill icon"></i>
+          <div class="num" id="cPresent">-</div>
+          <div class="label">มาเรียน</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-lg col-lg-2-4">
+        <div class="stat-card s-absent">
+          <i class="bi bi-x-circle-fill icon"></i>
+          <div class="num" id="cAbsent">-</div>
+          <div class="label">ขาดเรียน</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-lg col-lg-2-4">
+        <div class="stat-card s-late">
+          <i class="bi bi-clock-fill icon"></i>
+          <div class="num" id="cLate">-</div>
+          <div class="label">มาสาย</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-lg col-lg-2-4">
+        <div class="stat-card s-leave">
+          <i class="bi bi-calendar-minus-fill icon"></i>
+          <div class="num" id="cLeave">-</div>
+          <div class="label">ลา</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TREND CHART + LEVEL ===== -->
+  <div class="dir-section">
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <div class="info-card">
+          <div class="info-card-title">
+            <i class="bi bi-graph-up me-2 text-primary"></i>แนวโน้มการมาเรียน 14 วัน
+          </div>
+          <canvas id="trendChart" style="max-height:280px;"></canvas>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="info-card">
+          <div class="info-card-title">
+            <i class="bi bi-bar-chart-fill me-2 text-primary"></i>สรุปรายระดับชั้น (วันนี้)
+          </div>
+          <div id="levelList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MONTHLY SUMMARY ===== -->
+  <div class="dir-section">
+    <div class="dir-section-title">
+      <i class="bi bi-calendar-month me-2"></i>สรุปประจำเดือนนี้
+    </div>
+    <div class="row g-3">
+      <div class="col-6 col-md-3">
+        <div class="stat-card s-present">
+          <div class="num" id="mPresent">-</div>
+          <div class="label">มาเรียน (ครั้ง)</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card s-absent">
+          <div class="num" id="mAbsent">-</div>
+          <div class="label">ขาดเรียน (ครั้ง)</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card s-late">
+          <div class="num" id="mLate">-</div>
+          <div class="label">มาสาย (ครั้ง)</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card s-total">
+          <div class="num" id="mDays">-</div>
+          <div class="label">วันที่บันทึก</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== BEHAVIOR ===== -->
+  <div class="dir-section">
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="info-card">
+          <div class="info-card-title">
+            <i class="bi bi-award-fill me-2 text-warning"></i>คะแนนความประพฤติ
+          </div>
+          <div class="row g-3 text-center">
+            <div class="col-6">
+              <div style="background:linear-gradient(135deg,#d4edda,#c3e6cb); border-radius:10px; padding:1.25rem .5rem;">
+                <div style="font-size:2.6rem;font-weight:800;color:#155724;line-height:1;" id="bAvg">-</div>
+                <div class="small text-muted mt-2">คะแนนเฉลี่ย</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div style="background:linear-gradient(135deg,#fff3cd,#ffeeba); border-radius:10px; padding:1.25rem .5rem;">
+                <div style="font-size:2.6rem;font-weight:800;color:#856404;line-height:1;" id="bMin">-</div>
+                <div class="small text-muted mt-2">คะแนนต่ำสุด</div>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="d-flex justify-content-around pt-2 border-top">
+                <div>
+                  <div style="font-size:1.4rem;font-weight:700;color:#dc3545;" id="bDeducted">-</div>
+                  <div class="small text-muted">นักเรียนถูกหัก</div>
+                </div>
+                <div>
+                  <div style="font-size:1.4rem;font-weight:700;color:#198754;" id="bGood">-</div>
+                  <div class="small text-muted">รักษาคะแนนเต็ม</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-7">
+        <div class="info-card">
+          <div class="info-card-title">
+            <i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>
+            นักเรียนคะแนนต่ำ (5 อันดับแรก)
+          </div>
+          <div id="lowList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== FREQUENT ABSENT ===== -->
+  <div class="dir-section" id="absentSection" style="display:none;">
+    <div class="dir-section-title">
+      <i class="bi bi-exclamation-octagon-fill me-2"></i>
+      นักเรียนที่ขาดเรียนบ่อย (ต้องดูแลเป็นพิเศษ)
+    </div>
+    <div class="info-card">
+      <div id="absentList"></div>
+    </div>
+  </div>
+
+  <!-- ===== SIGNATURE ===== -->
+  <div class="signature-box">
+    <div class="text-muted small">
+      รายงานนี้สร้างโดยระบบเช็คชื่อนักเรียนอัตโนมัติ<br>
+      <span id="reportDate">-</span>
+    </div>
+    <div class="sig-line"></div>
+    <div class="sig-name">( <span id="sigName">-</span> )</div>
+    <div class="sig-title" id="sigTitle">ผู้อำนวยการ</div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const key = params.get('key');
+
+const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+function formatThaiDate(iso) {
+  if (!iso) return '-';
+  const [y, m, d] = iso.split('-');
+  return `${+d} ${THAI_MONTHS[+m-1]} ${+y+543}`;
+}
+function formatThaiDateFull(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  const days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  return `วัน${days[d.getDay()]}ที่ ${formatThaiDate(iso)}`;
+}
+
+async function load() {
+  if (!key) {
+    document.body.innerHTML = `
+      <div class="container py-5">
+        <div class="alert alert-danger text-center">
+          <h4><i class="bi bi-shield-exclamation"></i> ไม่พบรหัสเข้าหน้า</h4>
+          <p>กรุณาใช้ลิงก์ที่ได้รับจากผู้ดูแลระบบ</p>
+        </div>
+      </div>`;
+    return;
+  }
+
+  try {
+    const r = await fetch('/api/director?key=' + encodeURIComponent(key));
+    if (!r.ok) {
+      document.body.innerHTML = `
+        <div class="container py-5">
+          <div class="alert alert-danger text-center">
+            <h4><i class="bi bi-shield-x"></i> รหัสไม่ถูกต้อง</h4>
+            <p>ลิงก์นี้ใช้ไม่ได้ — กรุณาขอลิงก์ใหม่จากผู้ดูแลระบบ</p>
+          </div>
+        </div>`;
+      return;
+    }
+    const d = await r.json();
+    render(d);
+    document.getElementById('loadingScreen').style.display = 'none';
+  } catch (e) {
+    document.body.innerHTML = `<div class="container py-5"><div class="alert alert-danger">ผิดพลาด: ${e.message}</div></div>`;
+  }
+}
+
+function render(d) {
+  // Hero
+  if (d.schoolLogo) {
+    const img = document.getElementById('schoolLogo');
+    img.src = d.schoolLogo;
+    img.style.display = '';
+  }
+  document.getElementById('schoolName').textContent = d.schoolName || 'โรงเรียน';
+  document.getElementById('todayDate').innerHTML =
+    '<i class="bi bi-calendar3 me-1"></i>' + formatThaiDateFull(d.date);
+  document.getElementById('directorBadgeName').textContent = d.directorName || '';
+  document.getElementById('sigName').textContent = d.directorName || '';
+  document.getElementById('sigTitle').textContent = d.directorTitle || 'ผู้อำนวยการ';
+  document.getElementById('reportDate').textContent = formatThaiDateFull(d.date);
+
+  // Today stats
+  const t = d.today || {};
+  document.getElementById('cTotal').textContent   = d.total;
+  document.getElementById('cPresent').textContent = t.present || 0;
+  document.getElementById('cAbsent').textContent  = t.absent  || 0;
+  document.getElementById('cLate').textContent    = t.late    || 0;
+  document.getElementById('cLeave').textContent   = t.leave   || 0;
+
+  // Month
+  const m = d.monthStats || {};
+  document.getElementById('mPresent').textContent = m.present || 0;
+  document.getElementById('mAbsent').textContent  = m.absent  || 0;
+  document.getElementById('mLate').textContent    = m.late    || 0;
+  document.getElementById('mDays').textContent    = m.days    || 0;
+
+  // Behavior
+  const b = d.behavior || {};
+  document.getElementById('bAvg').textContent  = b.avgScore || '-';
+  document.getElementById('bMin').textContent  = b.minScore || '-';
+  document.getElementById('bDeducted').textContent = b.deductedCount || 0;
+  document.getElementById('bGood').textContent = (b.totalStudents || 0) - (b.deductedCount || 0);
+
+  // Levels
+  const levelHtml = (d.byLevel || []).map(l => {
+    const pct = l.total > 0 ? Math.round((l.present / l.total) * 100) : 0;
+    return `
+      <div class="level-row">
+        <div class="level-name">ม.${l.class_level}</div>
+        <div class="level-bar"><div class="level-fill" style="width:${pct}%"></div></div>
+        <div class="level-pct">${pct}%</div>
+        <div class="level-stats">${l.present || 0}/${l.total} คน</div>
+      </div>`;
+  }).join('') || '<div class="text-muted text-center py-3">ยังไม่มีข้อมูล</div>';
+  document.getElementById('levelList').innerHTML = levelHtml;
+
+  // Low scores
+  const lowHtml = (b.lowScores || []).map((s, i) => `
+    <div class="stu-list-item">
+      <div class="num-circle">${i+1}</div>
+      <div class="flex-grow-1">
+        <div class="stu-name">${s.name}</div>
+        <div class="stu-meta">ม.${s.class_level}/${s.room} • เลขที่ ${s.number || '-'}</div>
+      </div>
+      <div class="stu-badge" style="background:#f8d7da;color:#721c24;">
+        ${s.score} คะแนน
+      </div>
+    </div>`).join('') || '<div class="text-muted text-center py-3"><i class="bi bi-check-circle text-success me-1"></i>ยังไม่มีนักเรียนที่ถูกหักคะแนน</div>';
+  document.getElementById('lowList').innerHTML = lowHtml;
+
+  // Frequent absent
+  if (d.frequentAbsent && d.frequentAbsent.length > 0) {
+    document.getElementById('absentSection').style.display = '';
+    document.getElementById('absentList').innerHTML = d.frequentAbsent.map((s, i) => `
+      <div class="stu-list-item">
+        <div class="num-circle" style="background:#dc3545;">${i+1}</div>
+        <div class="flex-grow-1">
+          <div class="stu-name">${s.name}</div>
+          <div class="stu-meta">ม.${s.class_level}/${s.room} • เลขที่ ${s.number || '-'}</div>
+        </div>
+        <div class="stu-badge" style="background:#dc3545;color:white;">
+          ขาด ${s.absent_count} ครั้ง
+        </div>
+      </div>`).join('');
+  }
+
+  // Trend chart
+  drawTrend(d.trend || []);
+}
+
+function drawTrend(trend) {
+  const labels = trend.map(t => {
+    const [y,m,day] = t.date.split('-');
+    return `${+day}/${+m}`;
+  });
+  new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'มา', data: trend.map(t => t.present || 0),
+          borderColor: '#198754', backgroundColor: 'rgba(25,135,84,.1)',
+          fill: true, tension: .35, borderWidth: 2.5 },
+        { label: 'ขาด', data: trend.map(t => t.absent || 0),
+          borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,.1)',
+          fill: true, tension: .35, borderWidth: 2 },
+        { label: 'มาสาย', data: trend.map(t => t.late || 0),
+          borderColor: '#fd7e14', backgroundColor: 'rgba(253,126,20,.1)',
+          fill: true, tension: .35, borderWidth: 2 },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+}
+
+/* 5-col grid */
+const style = document.createElement('style');
+style.textContent = `@media (min-width: 992px) { .col-lg-2-4 { flex: 0 0 auto; width: 20%; } }`;
+document.head.appendChild(style);
+
+load();
+</script>
+</body>
+</html>

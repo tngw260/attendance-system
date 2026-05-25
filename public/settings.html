@@ -154,6 +154,34 @@
         </div>
       </div>
 
+      <!-- ลิงก์สำหรับ ผอ. -->
+      <div class="col-12">
+        <div class="card border-warning">
+          <div class="card-header bg-warning"><i class="bi bi-eye-fill me-2"></i>ลิงก์สำหรับท่านผู้อำนวยการ (ดูอย่างเดียว)</div>
+          <div class="card-body">
+            <p class="text-muted small mb-2">
+              ส่งลิงก์ด้านล่างให้ท่าน ผอ. — ท่านจะดูภาพรวมโรงเรียนได้โดย
+              <b>ไม่ต้องล็อกอิน</b> และ <b>แก้ไขอะไรไม่ได้</b>
+            </p>
+            <div class="input-group">
+              <input type="text" id="directorLink" class="form-control" readonly
+                style="font-family:monospace; font-size:.85rem;">
+              <button class="btn btn-primary" type="button" onclick="copyDirectorLink()">
+                <i class="bi bi-clipboard me-1"></i>คัดลอกลิงก์
+              </button>
+              <a id="openDirectorLink" href="#" target="_blank" class="btn btn-outline-info">
+                <i class="bi bi-box-arrow-up-right me-1"></i>เปิดดู
+              </a>
+            </div>
+            <div class="mt-2">
+              <a href="#" onclick="regenDirectorKey(event)" class="text-danger small">
+                <i class="bi bi-arrow-clockwise me-1"></i>สร้าง key ใหม่ (ลิงก์เก่าจะใช้ไม่ได้)
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="col-12">
         <button type="submit" class="btn btn-success btn-lg w-100 fw-bold">
           <i class="bi bi-save2-fill me-2"></i>บันทึกการตั้งค่า
@@ -188,8 +216,40 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('currentLogo').innerHTML =
         `<img src="${s.school_logo}" style="max-height:80px; border:1px solid #ddd; border-radius:6px; padding:4px;">`;
     }
+    updateDirectorLink(s.director_view_key);
   } catch (e) { showToast(e.message, 'danger'); }
 });
+
+function updateDirectorLink(key) {
+  if (!key) {
+    document.getElementById('directorLink').value = '(ยังไม่มี key — กดสร้างใหม่)';
+    return;
+  }
+  const url = `${location.origin}/director.html?key=${encodeURIComponent(key)}`;
+  document.getElementById('directorLink').value = url;
+  document.getElementById('openDirectorLink').href = url;
+}
+
+function copyDirectorLink() {
+  const inp = document.getElementById('directorLink');
+  inp.select();
+  navigator.clipboard.writeText(inp.value).then(() => {
+    showToast('คัดลอกลิงก์แล้ว ส่งให้ ผอ. ได้เลย', 'success');
+  }).catch(() => {
+    document.execCommand('copy');
+    showToast('คัดลอกแล้ว');
+  });
+}
+
+async function regenDirectorKey(e) {
+  e.preventDefault();
+  if (!confirm('สร้าง key ใหม่จะทำให้ลิงก์เก่าใช้ไม่ได้ ดำเนินการต่อ?')) return;
+  try {
+    const r = await apiFetch('/api/settings/director-key', { method: 'POST' });
+    updateDirectorLink(r.key);
+    showToast('สร้าง key ใหม่เรียบร้อย — กรุณาส่งลิงก์ใหม่ให้ ผอ.', 'success');
+  } catch (err) { showToast(err.message, 'danger'); }
+}
 
 async function uploadLogo() {
   const f = document.getElementById('logoFile').files[0];
