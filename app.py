@@ -1098,6 +1098,83 @@ def api_uniform_save():
 
 # ── LATE STUDENTS + MAKEUP (บำเพ็ญประโยชน์แก้มาสาย) ──────
 
+@app.post('/api/attendance/scan')
+@login_required
+def api_attendance_scan():
+    """สแกน QR เพื่อบันทึก attendance ของนักเรียน 1 คน
+    Body: { student_id: int, status: 'late' | 'present' | ..., date: 'YYYY-MM-DD' (optional, default=today) }
+    Return: { success, student: {name, class, room, number, photo}, was_already }
+    """
+    u = current_user()
+    b = request.get_json() or {}
+    sid = b.get('student_id')
+    status = b.get('status', 'late')
+    date = b.get('date', today_iso())
+
+    if not sid:
+        return jsonify(success=False, message='ไม่พบ student_id'), 400
+    if status not in ('present', 'absent', 'late', 'leave', 'activity'):
+        return jsonify(success=False, message='สถานะไม่ถูกต้อง'), 400
+
+    settings = get_settings()
+    try: sid = int(sid)
+    except (TypeError, ValueError):
+        return jsonify(success=False, message='student_id ไม่ถูกต้อง'), 400
+
+    with get_db() as con:
+        student = con.execute('SELECT * FROM students WHERE id=?', (sid,)).fetchone()
+        if not student:
+            return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+
+        # ครูที่มี assigned_room scan ได้เฉพาะห้องตัวเอง
+        if u['role'] == 'teacher' and u.get('assigned_level'):
+            if student['class_level'] != u['assigned_level']:
+                return jsonify(success=False, message='ไม่มีสิทธิ์เช็คชื่อห้องนี้'), 403
+            if u.get('assigned_room') and student['room'] != u['assigned_room']:
+                return jsonify(success=False, message='ไม่มีสิทธิ์เช็คชื่อห้องนี้'), 403
+
+        # ตรวจสอบว่ามี attendance ของวันนี้แล้วหรือยัง
+        existing = con.execute(
+            'SELECT id, status FROM attendance WHERE student_id=? AND date=?',
+            (sid, date)
+        ).fetchone()
+        was_already = existing is not None
+        previous_status = existing['status'] if existing else None
+
+        # Insert หรือ update
+        con.execute("""
+            INSERT INTO attendance (student_id, date, status, recorded_by)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(student_id, date) DO UPDATE SET
+              status=excluded.status,
+              recorded_by=excluded.recorded_by,
+              recorded_at=datetime('now','localtime')
+        """, (sid, date, status, u['id']))
+
+        att_id = con.execute('SELECT id FROM attendance WHERE student_id=? AND date=?',
+                             (sid, date)).fetchone()['id']
+        apply_attendance_behavior(con, sid, att_id, date, status, settings, u['id'])
+        audit_log(con, 'scan_attendance', 'student', sid,
+                  {'status': status, 'date': date, 'was_already': was_already})
+
+    return jsonify(
+        success=True,
+        student={
+            'id': student['id'],
+            'name': student['name'],
+            'number': student['number'],
+            'student_code': student['student_code'],
+            'class_level': student['class_level'],
+            'room': student['room'],
+            'photo': student['photo'],
+        },
+        date=date,
+        status=status,
+        was_already=was_already,
+        previous_status=previous_status,
+        message=f"บันทึก {student['name']} เป็น {status}"
+    )
+
 @app.get('/api/late')
 @login_required
 def api_late_list():

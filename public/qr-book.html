@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สมุด QR นักเรียน</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    .controls { background: #f0f4fb; padding: 12px; border-bottom: 2px solid var(--primary); }
+    .qr-page { max-width: 794px; margin: 16px auto; background: white;
+               padding: 16mm; box-shadow: 0 2px 12px rgba(0,0,0,.1); }
+    .qr-header { text-align: center; margin-bottom: 16px;
+                 border-bottom: 2px solid #000; padding-bottom: 8px; }
+    .qr-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .qr-card {
+      border: 1.5px dashed #999;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+      display: flex; flex-direction: column;
+      align-items: center;
+      page-break-inside: avoid;
+    }
+    .qr-card img { width: 140px; height: 140px; }
+    .qr-card .num { font-weight: bold; font-size: 1rem; }
+    .qr-card .name { font-size: .85rem; margin-top: 2px; min-height: 2.4em; line-height: 1.2; }
+    .qr-card .code { font-size: .7rem; color: #888; font-family: monospace; }
+    @media print {
+      body { background: white; }
+      .no-print, nav { display: none !important; }
+      .qr-page { box-shadow: none; margin: 0; padding: 8mm; max-width: 100%; }
+      .qr-card { page-break-inside: avoid; }
+      @page { size: A4; margin: 8mm; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <div id="userBadge" class="d-flex align-items-center"></div>
+  </div>
+</nav>
+
+<div class="controls no-print">
+  <div class="container d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <select id="selClass" class="form-select form-select-sm" style="width:auto;">
+        <option value="">-- เลือกห้อง --</option>
+      </select>
+      <select id="qrSize" class="form-select form-select-sm" style="width:auto;">
+        <option value="120">QR เล็ก (15 ใบ/หน้า)</option>
+        <option value="140" selected>QR กลาง (12 ใบ/หน้า)</option>
+        <option value="180">QR ใหญ่ (6 ใบ/หน้า)</option>
+      </select>
+      <button class="btn btn-sm btn-primary" onclick="loadQR()">
+        <i class="bi bi-arrow-clockwise me-1"></i>โหลด
+      </button>
+    </div>
+    <button class="btn btn-sm btn-success" onclick="window.print()" id="printBtn" disabled>
+      <i class="bi bi-printer-fill me-1"></i>พิมพ์
+    </button>
+  </div>
+</div>
+
+<div id="content">
+  <div class="qr-page">
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-qr-code fs-1 d-block mb-2"></i>
+      เลือกห้องแล้วกด "โหลด" เพื่อสร้างสมุด QR
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let allClasses = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  try {
+    allClasses = await apiFetch('/api/classes');
+    const sel = document.getElementById('selClass');
+    sel.innerHTML = '<option value="">-- เลือกห้อง --</option>';
+    const grouped = {};
+    allClasses.forEach(c => {
+      if (!grouped[c.class_level]) grouped[c.class_level] = [];
+      grouped[c.class_level].push(c);
+    });
+    Object.keys(grouped).sort((a,b) => +a - +b).forEach(level => {
+      const og = document.createElement('optgroup');
+      og.label = `มัธยมศึกษาปีที่ ${level}`;
+      grouped[level].forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = `${c.class_level}_${c.room}`;
+        opt.textContent = `ม.${c.class_level}/${c.room}  (${c.count} คน)`;
+        og.appendChild(opt);
+      });
+      sel.appendChild(og);
+    });
+    // Teacher auto-select
+    if (currentUser?.role === 'teacher' && currentUser?.assigned_level && currentUser?.assigned_room) {
+      sel.value = `${currentUser.assigned_level}_${currentUser.assigned_room}`;
+      sel.disabled = true;
+      loadQR();
+    }
+  } catch (e) { alert(e.message); }
+});
+
+async function loadQR() {
+  const val = document.getElementById('selClass').value;
+  if (!val) { alert('เลือกห้องก่อน'); return; }
+  const [level, room] = val.split('_');
+  const size = +document.getElementById('qrSize').value;
+  const cols = size <= 120 ? 5 : (size >= 180 ? 2 : 3);
+
+  document.getElementById('content').innerHTML =
+    '<div class="qr-page"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>';
+
+  try {
+    const students = await apiFetch(`/api/students?level=${level}&room=${room}`);
+    if (!students.length) {
+      document.getElementById('content').innerHTML =
+        '<div class="qr-page"><div class="alert alert-warning">ห้องนี้ไม่มีนักเรียน</div></div>';
+      return;
+    }
+    renderBook(students, level, room, size, cols);
+    document.getElementById('printBtn').disabled = false;
+  } catch (e) {
+    document.getElementById('content').innerHTML =
+      `<div class="qr-page"><div class="alert alert-danger">${e.message}</div></div>`;
+  }
+}
+
+function renderBook(students, level, room, size, cols) {
+  const perPage = cols === 5 ? 15 : (cols === 2 ? 6 : 12);
+  const pages = [];
+  for (let i = 0; i < students.length; i += perPage) {
+    pages.push(students.slice(i, i + perPage));
+  }
+
+  let html = '';
+  pages.forEach((page, pi) => {
+    html += `<div class="qr-page">
+      <div class="qr-header">
+        <h4 class="mb-1">โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</h4>
+        <h5 class="mb-0">สมุด QR สำหรับเช็คชื่อ — ม.${level}/${room}
+          <small class="text-muted">(หน้า ${pi+1}/${pages.length})</small>
+        </h5>
+      </div>
+      <div class="qr-grid" style="grid-template-columns: repeat(${cols}, 1fr);">`;
+    page.forEach(s => {
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=2&data=${s.id}`;
+      html += `<div class="qr-card">
+        <img src="${qrUrl}" alt="QR ${s.id}" style="width:${size}px;height:${size}px;">
+        <div class="num">${s.number ?? '-'}</div>
+        <div class="name">${s.name}</div>
+        <div class="code">${s.student_code || ''}</div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+  document.getElementById('content').innerHTML = html;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สแกน QR เช็คชื่อ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    body { background: #1a1a1a; color: white; }
+    #reader {
+      width: 100%; max-width: 500px; margin: 0 auto;
+      border-radius: 12px; overflow: hidden;
+      background: black;
+    }
+    #reader video { width: 100% !important; }
+    .scan-status {
+      padding: 12px 16px; border-radius: 10px;
+      background: rgba(255,255,255,.1);
+      margin-bottom: 12px;
+    }
+    .recent-scan {
+      background: rgba(255,255,255,.1);
+      padding: 12px; border-radius: 10px;
+      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .recent-scan.was-already { opacity: .6; border-left: 3px solid #ffc107; }
+    .recent-scan.success { border-left: 3px solid #198754; }
+    .recent-scan.error { background: #842029; border-left: 3px solid #dc3545; }
+    .status-pill {
+      display: inline-block; padding: 4px 12px;
+      border-radius: 20px; font-size: .85rem; font-weight: 600;
+    }
+    .status-late { background: #ffc107; color: #333; }
+    .status-present { background: #198754; color: white; }
+    .status-absent { background: #dc3545; color: white; }
+    .status-leave { background: #0dcaf0; color: white; }
+    .status-activity { background: #8e44ad; color: white; }
+    .nav-link, .navbar-brand { color: white !important; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark" style="background:#222;">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <div id="userBadge" class="d-flex align-items-center"></div>
+  </div>
+</nav>
+
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-qr-code-scan me-2"></i>สแกน QR เช็คชื่อ</h4>
+    <div class="d-flex gap-2">
+      <a href="/qr-book.html" class="btn btn-sm btn-outline-light" title="พิมพ์สมุด QR">
+        <i class="bi bi-printer me-1"></i>สมุด QR
+      </a>
+      <a href="/qr-cards.html" class="btn btn-sm btn-outline-light" title="พิมพ์บัตรนักเรียน">
+        <i class="bi bi-credit-card-2-front me-1"></i>บัตรนักเรียน
+      </a>
+      <a href="/" class="btn btn-sm btn-outline-light">
+        <i class="bi bi-arrow-left me-1"></i>กลับ
+      </a>
+    </div>
+  </div>
+
+  <!-- Status selector -->
+  <div class="scan-status">
+    <label class="fw-600 small mb-2">บันทึกเป็นสถานะ:</label>
+    <div class="btn-group w-100" role="group">
+      <input type="radio" class="btn-check" name="scanStatus" id="sLate" value="late" checked>
+      <label class="btn btn-outline-warning" for="sLate"><i class="bi bi-clock me-1"></i>มาสาย</label>
+
+      <input type="radio" class="btn-check" name="scanStatus" id="sPresent" value="present">
+      <label class="btn btn-outline-success" for="sPresent"><i class="bi bi-check-circle me-1"></i>มา</label>
+
+      <input type="radio" class="btn-check" name="scanStatus" id="sAbsent" value="absent">
+      <label class="btn btn-outline-danger" for="sAbsent"><i class="bi bi-x-circle me-1"></i>ขาด</label>
+    </div>
+    <div class="small text-warning mt-2" id="dateInfo">
+      <i class="bi bi-calendar3 me-1"></i><span id="dateText">-</span>
+    </div>
+  </div>
+
+  <!-- Camera -->
+  <div id="reader"></div>
+
+  <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
+    <div>
+      <span class="badge bg-success fs-6 me-1" id="scanCount">0</span>
+      <span class="text-light">สแกนแล้ว</span>
+    </div>
+    <button class="btn btn-sm btn-outline-light" onclick="toggleSound()" id="soundBtn">
+      <i class="bi bi-volume-up"></i> เสียง: เปิด
+    </button>
+  </div>
+
+  <!-- Recent scans -->
+  <h6 class="mt-3 text-light"><i class="bi bi-clock-history me-1"></i>ผลล่าสุด</h6>
+  <div id="recentScans">
+    <div class="text-muted small text-center py-3">— ยังไม่มีการสแกน —</div>
+  </div>
+</div>
+
+<!-- Audio for feedback -->
+<audio id="beepOk" preload="auto">
+  <source src="data:audio/wav;base64,UklGRkQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YSAAAACBAYEBgQGBAYEBgQGBAYEBgQGBAYEBgQGBAYEBgQGBAYEB" type="audio/wav">
+</audio>
+<audio id="beepErr" preload="auto">
+  <source src="data:audio/wav;base64,UklGRkQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YSAAAACBAYEBgQGBAYEBgQGBAYEBgQGBAYEBgQGBAYEBgQGBAYEB" type="audio/wav">
+</audio>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let scanner = null;
+let scanCount = 0;
+let lastScannedId = null;
+let lastScannedTime = 0;
+let soundOn = true;
+const SCAN_DEDUP_MS = 3000; // ห้ามสแกนคนเดิมซ้ำใน 3 วินาที
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  document.getElementById('dateText').textContent = formatThaiDateFull(todayISO());
+  startScanner();
+});
+
+function startScanner() {
+  scanner = new Html5Qrcode('reader');
+  scanner.start(
+    { facingMode: 'environment' }, // กล้องหลัง
+    {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
+    },
+    onScanSuccess,
+    () => {} // ignore scan failures
+  ).catch(err => {
+    document.getElementById('reader').innerHTML =
+      `<div class="alert alert-danger m-3">เปิดกล้องไม่ได้: ${err}<br>
+       กรุณาอนุญาตการใช้กล้องในเบราว์เซอร์</div>`;
+  });
+}
+
+async function onScanSuccess(decodedText) {
+  // Dedup — ห้ามสแกนคนเดิมซ้ำใน 3 วินาที
+  const now = Date.now();
+  if (decodedText === lastScannedId && now - lastScannedTime < SCAN_DEDUP_MS) return;
+  lastScannedId = decodedText;
+  lastScannedTime = now;
+
+  // Extract student_id — ยอมรับทั้ง "123" และ "https://.../scan?s=123"
+  let sid = decodedText.trim();
+  const match = sid.match(/[?&]s=(\d+)/);
+  if (match) sid = match[1];
+  sid = sid.replace(/\D/g, ''); // เก็บเฉพาะตัวเลข
+  if (!sid) {
+    addRecent({ name: 'QR ไม่ถูกต้อง', detail: decodedText.slice(0, 30) }, 'error');
+    playSound('err');
+    return;
+  }
+
+  const status = document.querySelector('input[name="scanStatus"]:checked').value;
+  try {
+    const res = await apiFetch('/api/attendance/scan', {
+      method: 'POST',
+      body: JSON.stringify({ student_id: +sid, status })
+    });
+    scanCount++;
+    document.getElementById('scanCount').textContent = scanCount;
+    addRecent({
+      name: res.student.name,
+      class: `ม.${res.student.class_level}/${res.student.room}`,
+      number: res.student.number,
+      photo: res.student.photo,
+      status: res.status,
+      wasAlready: res.was_already,
+      previousStatus: res.previous_status,
+    }, res.was_already ? 'was-already' : 'success');
+    playSound('ok');
+  } catch (e) {
+    addRecent({ name: e.message, detail: 'sid: ' + sid }, 'error');
+    playSound('err');
+  }
+}
+
+function addRecent(item, kind) {
+  const list = document.getElementById('recentScans');
+  if (list.firstElementChild?.classList?.contains('text-muted')) list.innerHTML = '';
+
+  const STATUS_LABEL = {
+    late: 'มาสาย', present: 'มา', absent: 'ขาด',
+    leave: 'ลา', activity: 'ไปกิจกรรม'
+  };
+
+  const photo = item.photo
+    ? `<img src="/photos/${item.photo}" style="width:42px;height:42px;border-radius:50%;object-fit:cover;">`
+    : `<i class="bi bi-person-circle fs-2"></i>`;
+
+  const statusBadge = item.status
+    ? `<span class="status-pill status-${item.status}">${STATUS_LABEL[item.status] || item.status}</span>`
+    : '';
+
+  const alreadyNote = item.wasAlready
+    ? `<small class="text-warning">⚠ เคยบันทึกเป็น ${STATUS_LABEL[item.previousStatus] || item.previousStatus} แล้ว — อัพเดทใหม่</small>`
+    : '';
+
+  const div = document.createElement('div');
+  div.className = `recent-scan ${kind}`;
+  div.innerHTML = `
+    ${kind !== 'error' ? photo : '<i class="bi bi-x-octagon fs-2 text-danger"></i>'}
+    <div class="flex-grow-1">
+      <div class="fw-bold">${item.name}</div>
+      <div class="small">
+        ${item.class ? item.class + (item.number ? ` • เลขที่ ${item.number}` : '') : (item.detail || '')}
+      </div>
+      ${alreadyNote}
+    </div>
+    <div>${statusBadge}</div>
+  `;
+  list.prepend(div);
+  // Keep only 20 latest
+  while (list.children.length > 20) list.lastElementChild.remove();
+}
+
+function playSound(type) {
+  if (!soundOn) return;
+  if (type === 'ok') {
+    beep(800, 100);
+  } else {
+    beep(300, 200);
+    setTimeout(() => beep(300, 200), 220);
+  }
+}
+
+function beep(freq, ms) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + ms / 1000);
+    setTimeout(() => { osc.stop(); ctx.close(); }, ms);
+  } catch {}
+}
+
+function toggleSound() {
+  soundOn = !soundOn;
+  document.getElementById('soundBtn').innerHTML = soundOn
+    ? '<i class="bi bi-volume-up"></i> เสียง: เปิด'
+    : '<i class="bi bi-volume-mute"></i> เสียง: ปิด';
+}
+</script>
+</body>
+</html>
