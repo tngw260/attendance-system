@@ -16,6 +16,7 @@
       margin: 16px auto;
       background: white;
       padding: 10mm 10mm;
+      box-sizing: border-box;
       box-shadow: 0 2px 12px rgba(0,0,0,.15);
       display: grid;
       grid-template-columns: repeat(2, 85.6mm);
@@ -23,7 +24,9 @@
       gap: 6mm 6mm;
       justify-content: center;
       align-content: start;
+      page-break-after: always;
     }
+    .card-page:last-child { page-break-after: auto; }
 
     /* ===== บัตร CR80 มาตรฐาน 85.6 × 54 mm ===== */
     .student-card {
@@ -216,14 +219,16 @@
 
     /* ===== Print ===== */
     @media print {
-      body { background: white; }
+      body { background: white; margin: 0; }
       .no-print, nav { display: none !important; }
       .card-page {
         box-shadow: none;
         margin: 0;
-        padding: 8mm;
+        padding: 10mm;
+        page-break-after: always;
       }
-      @page { size: A4; margin: 6mm; }
+      .card-page:last-child { page-break-after: auto; }
+      @page { size: A4; margin: 0; }
       .student-card { box-shadow: none; }
     }
 
