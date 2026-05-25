@@ -144,6 +144,63 @@
       padding-top: 0.3mm;
     }
 
+    /* ===== ด้านหลังบัตร ===== */
+    .student-card.back {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr auto;
+      padding: 2.5mm 3mm;
+      gap: 1mm 0;
+    }
+    .student-card.back .sc-back-body {
+      display: grid;
+      grid-template-columns: 1fr 20mm;
+      gap: 1.5mm 2mm;
+      font-size: 7pt;
+      line-height: 1.4;
+    }
+    .student-card.back .sc-back-body .emergency b {
+      font-weight: 600; opacity: .75;
+      display: inline-block; min-width: 18mm;
+    }
+    .student-card.back .sc-back-body .blank {
+      display: inline-block;
+      border-bottom: 0.3mm solid rgba(0,0,0,.5);
+      min-width: 25mm;
+      height: 3mm;
+    }
+    .student-card.back .pcode-block {
+      text-align: center;
+      font-size: 6.5pt;
+    }
+    .student-card.back .pcode-block .pcode-qr {
+      width: 18mm; height: 18mm; background: white;
+      padding: 0.5mm; border-radius: 1mm; margin: 0 auto;
+    }
+    .student-card.back .pcode-block .pcode-qr img { width: 100%; height: 100%; display: block; }
+    .student-card.back .pcode-block .pcode-text {
+      font-family: 'Courier New', monospace;
+      font-weight: 700; letter-spacing: 0.5pt;
+      font-size: 8pt; margin-top: 0.3mm;
+    }
+    .student-card.back .sc-footer {
+      font-size: 5.8pt;
+      line-height: 1.25;
+      text-align: center;
+      opacity: .8;
+      border-top: 0.3mm solid rgba(0,0,0,.2);
+      padding-top: 0.8mm;
+    }
+    .student-card.back .back-title {
+      font-weight: 700;
+      font-size: 8pt;
+      text-align: center;
+      border-bottom: 0.3mm solid rgba(0,0,0,.25);
+      padding-bottom: 0.8mm;
+    }
+    .student-card.back .back-title .year {
+      font-size: 6.5pt; font-weight: 500; opacity: .8;
+    }
+
     /* ===== ธีมพื้นหลัง ===== */
     .theme-green   { background: linear-gradient(135deg, #d1f4e0 0%, #74c69d 100%); }
     .theme-blue    { background: linear-gradient(135deg, #cfe8ff 0%, #4a90e2 100%); color:#0d1b2a;}
@@ -195,7 +252,15 @@
           <option value="">-- เลือกห้อง --</option>
         </select>
       </div>
-      <div class="col-md-3">
+      <div class="col-md-2">
+        <label class="form-label small fw-600 mb-1">ด้านที่พิมพ์</label>
+        <select id="selSide" class="form-select form-select-sm" onchange="loadCards()">
+          <option value="front" selected>ด้านหน้า</option>
+          <option value="back">ด้านหลัง</option>
+          <option value="both">ทั้งสองด้าน (สลับหน้า)</option>
+        </select>
+      </div>
+      <div class="col-md-2">
         <label class="form-label small fw-600 mb-1">ธีมพื้นหลัง</label>
         <select id="selTheme" class="form-select form-select-sm" onchange="applyTheme()">
           <option value="theme-school">ตามสีโรงเรียน</option>
@@ -208,9 +273,9 @@
           <option value="theme-white">ขาวเรียบ (ประหยัดหมึก)</option>
         </select>
       </div>
-      <div class="col-md-2">
-        <button class="btn btn-sm btn-primary w-100" onclick="loadCards()">
-          <i class="bi bi-arrow-clockwise me-1"></i>โหลด
+      <div class="col-md-1">
+        <button class="btn btn-sm btn-primary w-100" onclick="loadCards()" title="โหลด">
+          <i class="bi bi-arrow-clockwise"></i>
         </button>
       </div>
       <div class="col-md-2">
@@ -219,8 +284,8 @@
         </button>
       </div>
       <div class="col-md-2 small text-muted">
-        <i class="bi bi-info-circle"></i> ขนาด CR80<br>
-        <span class="text-secondary">85.6 × 54 mm (8 ใบ/A4)</span>
+        <i class="bi bi-info-circle"></i> CR80 85.6×54mm<br>
+        <span class="text-secondary">8 ใบ/A4</span>
       </div>
     </div>
   </div>
@@ -315,6 +380,7 @@ async function loadCards() {
 function renderCards(students, level, room) {
   const perPage = 8; // 2 col × 4 row CR80 บน A4
   const theme = document.getElementById('selTheme').value;
+  const side = document.getElementById('selSide').value;
   const pages = [];
   for (let i = 0; i < students.length; i += perPage) {
     pages.push(students.slice(i, i + perPage));
@@ -322,43 +388,107 @@ function renderCards(students, level, room) {
 
   let html = '';
   pages.forEach(page => {
-    html += `<div class="card-page">`;
-    page.forEach(s => {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data=${s.id}`;
-      const photoHtml = s.photo
-        ? `<img class="sc-photo" src="/photos/${s.photo}" alt="">`
-        : `<div class="sc-photo-placeholder"><i class="bi bi-person"></i></div>`;
-      const logoHtml = schoolLogo
-        ? `<img class="logo" src="${schoolLogo}" alt="">`
-        : `<div class="logo" style="background:rgba(0,0,0,.1);"></div>`;
-
-      html += `<div class="student-card ${theme}">
-        <div class="sc-head">
-          ${logoHtml}
-          <div class="titles">
-            <div class="school">${schoolName}</div>
-            <div class="badge-id">STUDENT ID CARD</div>
-          </div>
-        </div>
-        ${photoHtml}
-        <div class="sc-info">
-          <div class="name">${s.name}</div>
-          <div class="row-i"><b>ชั้น</b> ม.${s.class_level}/${s.room}</div>
-          <div class="row-i"><b>เลขที่</b> ${s.number ?? '-'}</div>
-          <div class="code">${s.student_code || ''}</div>
-        </div>
-        <div class="sc-qr"><img src="${qrUrl}" alt="QR"></div>
-        <div class="sc-sign">
-          <div class="box">
-            <div class="sig-line">(${directorName})</div>
-            <div>${directorTitle}</div>
-          </div>
-        </div>
-      </div>`;
-    });
-    html += `</div>`;
+    if (side === 'front' || side === 'both') {
+      html += renderPage(page, theme, 'front');
+    }
+    if (side === 'back' || side === 'both') {
+      html += renderPage(page, theme, 'back');
+    }
   });
   document.getElementById('content').innerHTML = html;
+}
+
+function renderPage(students, theme, side) {
+  let html = `<div class="card-page">`;
+  students.forEach(s => {
+    html += (side === 'front')
+      ? renderFront(s, theme)
+      : renderBack(s, theme);
+  });
+  html += `</div>`;
+  return html;
+}
+
+function renderFront(s, theme) {
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data=${s.id}`;
+  const photoHtml = s.photo
+    ? `<img class="sc-photo" src="/photos/${s.photo}" alt="">`
+    : `<div class="sc-photo-placeholder"><i class="bi bi-person"></i></div>`;
+  const logoHtml = schoolLogo
+    ? `<img class="logo" src="${schoolLogo}" alt="">`
+    : `<div class="logo" style="background:rgba(0,0,0,.1);"></div>`;
+
+  return `<div class="student-card ${theme}">
+    <div class="sc-head">
+      ${logoHtml}
+      <div class="titles">
+        <div class="school">${schoolName}</div>
+        <div class="badge-id">STUDENT ID CARD</div>
+      </div>
+    </div>
+    ${photoHtml}
+    <div class="sc-info">
+      <div class="name">${s.name}</div>
+      <div class="row-i"><b>ชั้น</b> ม.${s.class_level}/${s.room}</div>
+      <div class="row-i"><b>เลขที่</b> ${s.number ?? '-'}</div>
+      <div class="code">${s.student_code || ''}</div>
+    </div>
+    <div class="sc-qr"><img src="${qrUrl}" alt="QR"></div>
+    <div class="sc-sign">
+      <div class="box">
+        <div class="sig-line">(${directorName})</div>
+        <div>${directorTitle}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderBack(s, theme) {
+  const year = academicYearBE();
+  const pcode = s.parent_code || '------';
+  const parentUrl = `${location.origin}/parent.html?code=${s.parent_code || ''}`;
+  const pqrUrl = s.parent_code
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=0&data=${encodeURIComponent(parentUrl)}`
+    : '';
+
+  const pcodeBlock = s.parent_code
+    ? `<div class="pcode-block">
+         <div class="pcode-qr"><img src="${pqrUrl}" alt="QR"></div>
+         <div class="pcode-text">${pcode}</div>
+         <div style="font-size:5.5pt;opacity:.75;">รหัสผู้ปกครอง</div>
+       </div>`
+    : `<div class="pcode-block" style="display:flex;align-items:center;justify-content:center;font-size:6pt;opacity:.5;">
+         <div>(ยังไม่มี<br>รหัสผู้ปกครอง)</div>
+       </div>`;
+
+  return `<div class="student-card back ${theme}">
+    <div class="back-title">
+      บัตรประจำตัวนักเรียน
+      <div class="year">ปีการศึกษา ${year} • ${s.name}</div>
+    </div>
+    <div class="sc-back-body">
+      <div class="emergency">
+        <div><b>กรุ๊ปเลือด</b> <span class="blank"></span></div>
+        <div><b>โรคประจำตัว</b> <span class="blank" style="min-width:30mm;"></span></div>
+        <div><b>แพ้ยา/อาหาร</b> <span class="blank" style="min-width:30mm;"></span></div>
+        <div><b>เบอร์ผู้ปกครอง</b> <span class="blank" style="min-width:28mm;"></span></div>
+        <div><b>ที่อยู่ฉุกเฉิน</b> <span class="blank" style="min-width:30mm;"></span></div>
+      </div>
+      ${pcodeBlock}
+    </div>
+    <div class="sc-footer">
+      <i class="bi bi-info-circle"></i> หากพบบัตรนี้ กรุณาส่งคืน${schoolName} โทร. ___________
+      <br>* ผู้ปกครองสแกน QR เพื่อดูข้อมูลบุตรหลานได้ตลอด 24 ชม.
+    </div>
+  </div>`;
+}
+
+function academicYearBE() {
+  const d = new Date();
+  // ปีการศึกษาไทย: พ.ค. - มี.ค. → ถ้า ม.ค.-เม.ย. = ปีก่อน, พ.ค.+ = ปีปัจจุบัน
+  const m = d.getMonth() + 1;
+  const yearAD = (m >= 5) ? d.getFullYear() : d.getFullYear() - 1;
+  return yearAD + 543;
 }
 </script>
 </body>
