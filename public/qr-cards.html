@@ -3,49 +3,177 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>บัตรนักเรียน (QR)</title>
+  <title>บัตรนักเรียน (CR80)</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="/css/style.css" rel="stylesheet">
   <style>
+    /* ===== หน้า A4 ===== */
     .controls { background: #f0f4fb; padding: 12px; border-bottom: 2px solid var(--primary); }
-    .card-page { max-width: 794px; margin: 16px auto; background: white;
-                 padding: 12mm; box-shadow: 0 2px 12px rgba(0,0,0,.1);
-                 display: grid; grid-template-columns: repeat(2, 1fr); gap: 6mm; }
+    .card-page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 16px auto;
+      background: white;
+      padding: 10mm 10mm;
+      box-shadow: 0 2px 12px rgba(0,0,0,.15);
+      display: grid;
+      grid-template-columns: repeat(2, 85.6mm);
+      grid-auto-rows: 54mm;
+      gap: 6mm 6mm;
+      justify-content: center;
+      align-content: start;
+    }
+
+    /* ===== บัตร CR80 มาตรฐาน 85.6 × 54 mm ===== */
     .student-card {
-      border: 2px solid var(--primary, #1a5276);
-      border-radius: 10px;
-      padding: 10px;
-      display: flex; align-items: center; gap: 10px;
+      width: 85.6mm;
+      height: 54mm;
+      border-radius: 3mm;
+      padding: 2.5mm 3mm;
+      box-sizing: border-box;
+      display: grid;
+      grid-template-columns: 22mm 1fr 22mm;
+      grid-template-rows: auto 1fr auto;
+      gap: 1mm 2mm;
+      position: relative;
+      overflow: hidden;
       page-break-inside: avoid;
-      background: linear-gradient(135deg, #fff, #f8fafd);
-      min-height: 120px;
+      color: #1a1a1a;
+      font-size: 8pt;
+      line-height: 1.15;
+      border: 0.3mm solid rgba(0,0,0,.15);
+      box-shadow: 0 1px 2px rgba(0,0,0,.08);
     }
-    .student-card .logo {
-      width: 36px; height: 36px; border-radius: 50%;
-      position: absolute; top: 6px; right: 6px;
-      background: white; padding: 2px;
+
+    /* หัวบัตร (full width) */
+    .sc-head {
+      grid-column: 1 / 4;
+      display: flex;
+      align-items: center;
+      gap: 2mm;
+      border-bottom: 0.3mm solid rgba(0,0,0,.2);
+      padding-bottom: 1mm;
     }
-    .student-card-inner { position: relative; flex: 1; }
-    .student-card .school { font-size: .65rem; color: #666; text-transform: uppercase; }
-    .student-card .name { font-weight: bold; font-size: .95rem; line-height: 1.2; margin: 2px 0; }
-    .student-card .meta { font-size: .78rem; color: #555; }
-    .student-card .code { font-family: monospace; font-size: .75rem; color: #888; }
-    .student-card .photo {
-      width: 70px; height: 90px;
-      border: 1px solid #ccc; border-radius: 4px;
-      object-fit: cover; flex-shrink: 0;
-      background: #f0f0f0;
-    }
-    .student-card .qr {
-      width: 90px; height: 90px;
+    .sc-head .logo {
+      width: 7mm; height: 7mm; border-radius: 50%;
+      background: white; padding: 0.4mm;
+      object-fit: contain;
       flex-shrink: 0;
     }
+    .sc-head .titles { flex: 1; min-width: 0; }
+    .sc-head .school {
+      font-weight: 700;
+      font-size: 8.5pt;
+      line-height: 1.1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sc-head .badge-id {
+      font-size: 6.5pt;
+      letter-spacing: 0.3pt;
+      opacity: .85;
+    }
+
+    /* รูปนักเรียน */
+    .sc-photo {
+      width: 22mm; height: 28mm;
+      border-radius: 1.5mm;
+      object-fit: cover;
+      background: rgba(255,255,255,.7);
+      border: 0.3mm solid rgba(0,0,0,.2);
+    }
+    .sc-photo-placeholder {
+      width: 22mm; height: 28mm;
+      border-radius: 1.5mm;
+      background: rgba(255,255,255,.6);
+      border: 0.3mm dashed rgba(0,0,0,.3);
+      display: flex; align-items: center; justify-content: center;
+      color: rgba(0,0,0,.4); font-size: 14pt;
+    }
+
+    /* ข้อมูล */
+    .sc-info { min-width: 0; padding-top: 0.5mm; }
+    .sc-info .name {
+      font-size: 10pt; font-weight: 700; line-height: 1.15;
+      margin-bottom: 0.8mm;
+      word-wrap: break-word;
+    }
+    .sc-info .row-i {
+      font-size: 7.5pt; line-height: 1.3;
+      display: flex; gap: 1.5mm;
+    }
+    .sc-info .row-i b { font-weight: 600; opacity: .75; }
+    .sc-info .code {
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+      margin-top: 0.8mm;
+      letter-spacing: 0.4pt;
+      opacity: .8;
+    }
+
+    /* QR */
+    .sc-qr {
+      width: 22mm; height: 22mm;
+      background: white;
+      padding: 0.5mm;
+      border-radius: 1mm;
+      align-self: center;
+      justify-self: center;
+    }
+    .sc-qr img { width: 100%; height: 100%; display: block; }
+
+    /* ลายเซ็น ผอ. (full width) */
+    .sc-sign {
+      grid-column: 1 / 4;
+      display: flex;
+      justify-content: flex-end;
+      align-items: flex-end;
+      font-size: 6.5pt;
+      line-height: 1.2;
+      text-align: center;
+      padding-top: 0.5mm;
+    }
+    .sc-sign .box {
+      min-width: 32mm;
+    }
+    .sc-sign .sig-line {
+      border-top: 0.3mm dotted rgba(0,0,0,.55);
+      margin-top: 0.5mm;
+      padding-top: 0.3mm;
+    }
+
+    /* ===== ธีมพื้นหลัง ===== */
+    .theme-green   { background: linear-gradient(135deg, #d1f4e0 0%, #74c69d 100%); }
+    .theme-blue    { background: linear-gradient(135deg, #cfe8ff 0%, #4a90e2 100%); color:#0d1b2a;}
+    .theme-purple  { background: linear-gradient(135deg, #e9d8fd 0%, #9f7aea 100%); color:#1a1a2e;}
+    .theme-pink    { background: linear-gradient(135deg, #ffe0ec 0%, #ff6f91 100%); color:#3a0a1a;}
+    .theme-gold    { background: linear-gradient(135deg, #fff5cc 0%, #f6c453 100%); color:#3a2a05;}
+    .theme-dark    { background: linear-gradient(135deg, #2c3e50 0%, #1a1a1a 100%); color:#f5f5f5;}
+    .theme-dark .sc-head, .theme-dark .sc-sign .sig-line { border-color: rgba(255,255,255,.35); }
+    .theme-dark .sc-info .row-i b { opacity: .85; }
+    .theme-dark .sc-photo, .theme-dark .sc-photo-placeholder { border-color: rgba(255,255,255,.5); }
+    .theme-white   { background: #fff; border: 0.4mm solid #1a5276; }
+    .theme-school  { background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, var(--primary, #1a5276) 25%, white) 100%); }
+
+    /* ===== Print ===== */
     @media print {
       body { background: white; }
       .no-print, nav { display: none !important; }
-      .card-page { box-shadow: none; margin: 0; padding: 8mm; max-width: 100%; }
-      @page { size: A4; margin: 8mm; }
+      .card-page {
+        box-shadow: none;
+        margin: 0;
+        padding: 8mm;
+      }
+      @page { size: A4; margin: 6mm; }
+      .student-card { box-shadow: none; }
+    }
+
+    .theme-preview {
+      width: 26px; height: 18px;
+      border-radius: 3px; border: 1px solid #ccc;
+      display: inline-block; vertical-align: middle; margin-right: 4px;
     }
   </style>
 </head>
@@ -59,27 +187,51 @@
 </nav>
 
 <div class="controls no-print">
-  <div class="container d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <div class="d-flex gap-2 align-items-center flex-wrap">
-      <select id="selClass" class="form-select form-select-sm" style="width:auto;">
-        <option value="">-- เลือกห้อง --</option>
-      </select>
-      <button class="btn btn-sm btn-primary" onclick="loadCards()">
-        <i class="bi bi-arrow-clockwise me-1"></i>โหลด
-      </button>
-      <small class="text-muted">8 บัตร/หน้า — ตัดออกตามเส้นปะ</small>
+  <div class="container">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small fw-600 mb-1">ห้อง</label>
+        <select id="selClass" class="form-select form-select-sm">
+          <option value="">-- เลือกห้อง --</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-600 mb-1">ธีมพื้นหลัง</label>
+        <select id="selTheme" class="form-select form-select-sm" onchange="applyTheme()">
+          <option value="theme-school">ตามสีโรงเรียน</option>
+          <option value="theme-green" selected>เขียวพาสเทล</option>
+          <option value="theme-blue">ฟ้าน้ำทะเล</option>
+          <option value="theme-purple">ม่วงลาเวนเดอร์</option>
+          <option value="theme-pink">ชมพูพีช</option>
+          <option value="theme-gold">ทองอ่อน</option>
+          <option value="theme-dark">ดำหรู</option>
+          <option value="theme-white">ขาวเรียบ (ประหยัดหมึก)</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-sm btn-primary w-100" onclick="loadCards()">
+          <i class="bi bi-arrow-clockwise me-1"></i>โหลด
+        </button>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-sm btn-success w-100" onclick="window.print()" id="printBtn" disabled>
+          <i class="bi bi-printer-fill me-1"></i>พิมพ์
+        </button>
+      </div>
+      <div class="col-md-2 small text-muted">
+        <i class="bi bi-info-circle"></i> ขนาด CR80<br>
+        <span class="text-secondary">85.6 × 54 mm (8 ใบ/A4)</span>
+      </div>
     </div>
-    <button class="btn btn-sm btn-success" onclick="window.print()" id="printBtn" disabled>
-      <i class="bi bi-printer-fill me-1"></i>พิมพ์
-    </button>
   </div>
 </div>
 
 <div id="content">
-  <div class="card-page" style="grid-template-columns:1fr;">
+  <div class="card-page" style="grid-template-columns:1fr; min-height:auto;">
     <div class="text-center text-muted py-5">
       <i class="bi bi-credit-card-2-front fs-1 d-block mb-2"></i>
-      เลือกห้องแล้วกด "โหลด" เพื่อสร้างบัตรนักเรียน
+      เลือกห้อง + ธีม แล้วกด "โหลด" เพื่อสร้างบัตรนักเรียน<br>
+      <small>ขนาดมาตรฐาน CR80 (เท่ากับบัตรประชาชน/บัตรเครดิต)</small>
     </div>
   </div>
 </div>
@@ -89,12 +241,19 @@
 <script>
 let allClasses = [];
 let schoolLogo = '';
+let schoolName = 'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม';
+let directorName = 'นางสาวปัทมา จีนดี';
+let directorTitle = 'ผู้อำนวยการ';
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
   try {
     const theme = await (await fetch('/api/public/theme')).json();
     schoolLogo = theme.school_logo || '';
+    if (theme.school_name) schoolName = theme.school_name;
+    if (theme.director_name) directorName = theme.director_name;
+    if (theme.director_title) directorTitle = theme.director_title;
+
     allClasses = await apiFetch('/api/classes');
     const sel = document.getElementById('selClass');
     sel.innerHTML = '<option value="">-- เลือกห้อง --</option>';
@@ -122,12 +281,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (e) { alert(e.message); }
 });
 
+function applyTheme() {
+  const newTheme = document.getElementById('selTheme').value;
+  document.querySelectorAll('.student-card').forEach(c => {
+    // remove all theme-* classes
+    [...c.classList].filter(x => x.startsWith('theme-')).forEach(x => c.classList.remove(x));
+    c.classList.add(newTheme);
+  });
+}
+
 async function loadCards() {
   const val = document.getElementById('selClass').value;
   if (!val) { alert('เลือกห้องก่อน'); return; }
   const [level, room] = val.split('_');
   document.getElementById('content').innerHTML =
-    '<div class="card-page" style="grid-template-columns:1fr;"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>';
+    '<div class="card-page" style="grid-template-columns:1fr; min-height:auto;"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>';
 
   try {
     const students = await apiFetch(`/api/students?level=${level}&room=${room}`);
@@ -145,7 +313,8 @@ async function loadCards() {
 }
 
 function renderCards(students, level, room) {
-  const perPage = 8;
+  const perPage = 8; // 2 col × 4 row CR80 บน A4
+  const theme = document.getElementById('selTheme').value;
   const pages = [];
   for (let i = 0; i < students.length; i += perPage) {
     pages.push(students.slice(i, i + perPage));
@@ -155,25 +324,36 @@ function renderCards(students, level, room) {
   pages.forEach(page => {
     html += `<div class="card-page">`;
     page.forEach(s => {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=90x90&margin=1&data=${s.id}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data=${s.id}`;
       const photoHtml = s.photo
-        ? `<img class="photo" src="/photos/${s.photo}">`
-        : `<div class="photo d-flex align-items-center justify-content-center text-muted">
-             <i class="bi bi-person fs-1"></i>
-           </div>`;
+        ? `<img class="sc-photo" src="/photos/${s.photo}" alt="">`
+        : `<div class="sc-photo-placeholder"><i class="bi bi-person"></i></div>`;
       const logoHtml = schoolLogo
-        ? `<img class="logo" src="${schoolLogo}">`
-        : '';
-      html += `<div class="student-card">
-        ${photoHtml}
-        <div class="student-card-inner">
+        ? `<img class="logo" src="${schoolLogo}" alt="">`
+        : `<div class="logo" style="background:rgba(0,0,0,.1);"></div>`;
+
+      html += `<div class="student-card ${theme}">
+        <div class="sc-head">
           ${logoHtml}
-          <div class="school">โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</div>
+          <div class="titles">
+            <div class="school">${schoolName}</div>
+            <div class="badge-id">STUDENT ID CARD</div>
+          </div>
+        </div>
+        ${photoHtml}
+        <div class="sc-info">
           <div class="name">${s.name}</div>
-          <div class="meta">ม.${s.class_level}/${s.room} • เลขที่ ${s.number ?? '-'}</div>
+          <div class="row-i"><b>ชั้น</b> ม.${s.class_level}/${s.room}</div>
+          <div class="row-i"><b>เลขที่</b> ${s.number ?? '-'}</div>
           <div class="code">${s.student_code || ''}</div>
         </div>
-        <img class="qr" src="${qrUrl}">
+        <div class="sc-qr"><img src="${qrUrl}" alt="QR"></div>
+        <div class="sc-sign">
+          <div class="box">
+            <div class="sig-line">(${directorName})</div>
+            <div>${directorTitle}</div>
+          </div>
+        </div>
       </div>`;
     });
     html += `</div>`;

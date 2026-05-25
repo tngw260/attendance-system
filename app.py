@@ -119,6 +119,8 @@ DEFAULT_SETTINGS = {
     'school_name':       'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม',
     'theme_color':       '#1a5276',
     'school_logo':       '',
+    'director_name':     'นางสาวปัทมา จีนดี',
+    'director_title':    'ผู้อำนวยการ',
 }
 
 def init_db():
@@ -660,6 +662,8 @@ def api_public_theme():
         school_name=s.get('school_name'),
         school_logo=s.get('school_logo'),
         theme_color=s.get('theme_color'),
+        director_name=s.get('director_name'),
+        director_title=s.get('director_title'),
     )
 
 @app.put('/api/settings')

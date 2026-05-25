@@ -130,12 +130,25 @@
               <input type="color" name="theme_color" class="form-control form-control-color" style="height:42px;">
               <small class="text-muted">รีเฟรชหน้าเพื่อดูผล</small>
             </div>
-            <div class="mb-0">
+            <div class="mb-3">
               <label class="form-label fw-600">โลโก้โรงเรียน</label>
               <div id="currentLogo" class="mb-2"></div>
               <input type="file" id="logoFile" class="form-control" accept="image/*"
                 onchange="uploadLogo()">
               <small class="text-muted"><i class="bi bi-info-circle me-1"></i>เลือกไฟล์แล้วจะอัพโหลดอัตโนมัติ</small>
+            </div>
+            <hr>
+            <div class="mb-2">
+              <label class="form-label fw-600">
+                <i class="bi bi-person-badge me-1"></i>ชื่อผู้อำนวยการ
+              </label>
+              <input type="text" name="director_name" class="form-control"
+                placeholder="เช่น นางสาวปัทมา จีนดี">
+              <small class="text-muted">แสดงในบัตรนักเรียน + ใบเช็คชื่อ + รายงาน</small>
+            </div>
+            <div class="mb-0">
+              <label class="form-label fw-600">ตำแหน่ง ผอ.</label>
+              <input type="text" name="director_title" class="form-control" placeholder="ผู้อำนวยการ">
             </div>
           </div>
         </div>
