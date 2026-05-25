@@ -126,8 +126,9 @@ function renderStudents(students, level, room, date) {
     }).join('');
 
     const scoreColor = s.score >= 80 ? 'success' : s.score >= 60 ? 'warning' : 'danger';
+    const statusAttr = s.status || '';
     html += `
-      <div class="student-row status-${s.status}" data-id="${s.id}" data-status="${s.status}">
+      <div class="student-row ${s.status ? 'status-'+s.status : 'status-none'}" data-id="${s.id}" data-status="${statusAttr}">
         <div class="student-num">${s.number ?? ''}</div>
         <div class="flex-grow-1">
           <div class="student-name">${s.name}</div>
@@ -180,14 +181,20 @@ function renderStudents(students, level, room, date) {
 function updateCounters() {
   const sec = document.getElementById('studentSection');
   const rows = sec.querySelectorAll('.student-row');
-  let counts = { present: 0, absent: 0, late: 0, leave: 0, activity: 0 };
-  rows.forEach(r => { if (counts[r.dataset.status] !== undefined) counts[r.dataset.status]++; });
+  let counts = { present: 0, absent: 0, late: 0, leave: 0, activity: 0, none: 0 };
+  rows.forEach(r => {
+    const st = r.dataset.status;
+    if (!st) counts.none++;
+    else if (counts[st] !== undefined) counts[st]++;
+  });
   document.getElementById('cntPresent').textContent  = counts.present;
   document.getElementById('cntAbsent').textContent   = counts.absent;
   document.getElementById('cntLate').textContent     = counts.late;
   document.getElementById('cntLeave').textContent    = counts.leave;
   const elAct = document.getElementById('cntActivity');
   if (elAct) elAct.textContent = counts.activity;
+  const elNone = document.getElementById('cntNone');
+  if (elNone) elNone.textContent = counts.none;
 }
 
 function setAll(status) {
@@ -219,12 +226,19 @@ async function saveAttendance() {
 
   const rows    = document.querySelectorAll('.student-row');
   const records = [];
+  let skipped = 0;
   rows.forEach(row => {
+    const status = row.dataset.status;
+    if (!status) { skipped++; return; }  // ข้ามคนที่ยังไม่เลือก
     const note = row.querySelector('.note-input')?.value.trim() || null;
-    records.push({ student_id: +row.dataset.id, status: row.dataset.status, note });
+    records.push({ student_id: +row.dataset.id, status, note });
   });
 
-  if (records.length === 0) { showToast('ไม่มีข้อมูลให้บันทึก', 'warning'); return; }
+  if (records.length === 0) { showToast('ยังไม่ได้เลือกสถานะนักเรียนคนใดเลย', 'warning'); return; }
+  if (skipped > 0) {
+    const ok = confirm(`มีนักเรียน ${skipped} คนยังไม่ได้เลือกสถานะ — จะบันทึกเฉพาะ ${records.length} คนที่เลือกแล้วใช่ไหม?`);
+    if (!ok) return;
+  }
 
   const btn = document.querySelector('.btn-save-big');
   btn.disabled = true;

@@ -862,7 +862,7 @@ def api_attendance_get():
     with get_db() as con:
         rows = con.execute("""
             SELECT s.id, s.number, s.student_code, s.name, s.gender,
-                   COALESCE(a.status,'present') AS status,
+                   a.status AS status,
                    a.note,
                    CASE WHEN a.id IS NOT NULL THEN 1 ELSE 0 END AS is_recorded,
                    COALESCE((SELECT SUM(points) FROM behavior_logs WHERE student_id=s.id), 0) AS score_delta
