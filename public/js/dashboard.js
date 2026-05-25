@@ -1,6 +1,15 @@
 document.addEventListener('DOMContentLoaded', async () => {
-  document.getElementById('thaiDate').textContent = formatThaiDateFull(todayISO());
+  // Greeting ตามเวลา
+  const h = new Date().getHours();
+  const greet = h < 12 ? 'สวัสดีตอนเช้า 🌅'
+              : h < 17 ? 'สวัสดีตอนบ่าย ☀️'
+              : 'สวัสดีตอนเย็น 🌙';
   await loadCurrentUser();
+  const userName = currentUser?.full_name || currentUser?.username || '';
+  document.getElementById('heroGreeting').textContent =
+    userName ? `${greet}, คุณ${userName}` : greet;
+  document.getElementById('thaiDate').innerHTML =
+    `<i class="bi bi-calendar3 me-1"></i>${formatThaiDateFull(todayISO())}`;
 
   try {
     const d = await apiFetch('/api/dashboard');
@@ -9,6 +18,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('statAbsent').textContent  = d.today?.absent  ?? 0;
     document.getElementById('statLate').textContent    = d.today?.late    ?? 0;
     document.getElementById('statLeave').textContent   = d.today?.leave   ?? 0;
+    const heroC = document.getElementById('heroClasses');
+    if (heroC) heroC.textContent = (d.classSummary || []).length;
 
     document.getElementById('monPresent').textContent = d.monthStats?.present ?? 0;
     document.getElementById('monAbsent').textContent  = d.monthStats?.absent  ?? 0;

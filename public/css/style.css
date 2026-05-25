@@ -61,23 +61,219 @@ body {
   padding: .9rem 1.25rem;
 }
 
+/* ── DASHBOARD HERO ── */
+.dash-hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 60%, #2980b9 100%);
+  color: #fff;
+  padding: 2.5rem 0 2rem;
+  margin-bottom: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+.dash-hero::before {
+  content: '';
+  position: absolute;
+  top: -50%; right: -10%;
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, rgba(255,255,255,.08), transparent 70%);
+  pointer-events: none;
+}
+.dash-hero::after {
+  content: '';
+  position: absolute;
+  bottom: -50%; left: -5%;
+  width: 350px; height: 350px;
+  background: radial-gradient(circle, rgba(255,255,255,.06), transparent 70%);
+  pointer-events: none;
+}
+.dash-hero .container { position: relative; z-index: 1; }
+.hero-greeting {
+  font-size: 1.05rem;
+  font-weight: 500;
+  opacity: .9;
+  margin-bottom: .3rem;
+}
+.hero-title {
+  font-size: 1.85rem;
+  font-weight: 800;
+  margin: 0 0 .5rem;
+  letter-spacing: -.02em;
+  line-height: 1.15;
+}
+.hero-date {
+  font-size: 1rem;
+  opacity: .92;
+  font-weight: 500;
+}
+.hero-cta {
+  border-radius: 50px;
+  padding: .75rem 1.75rem;
+  color: var(--primary) !important;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  transition: transform .15s, box-shadow .2s;
+}
+.hero-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,.25);
+}
+@media (max-width: 767px) {
+  .dash-hero { padding: 1.5rem 0; text-align: center; }
+  .hero-title { font-size: 1.45rem; }
+  .hero-cta { margin-top: 1rem; }
+}
+
+/* ── DASH SECTIONS ── */
+.dash-section { margin-bottom: 2rem; }
+.dash-section-head {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: .75rem;
+  padding-bottom: .4rem;
+  border-bottom: 2px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  display: flex;
+  align-items: center;
+}
+.dash-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+}
+
+/* ── MINI STATS (monthly summary) ── */
+.mini-stat {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.1rem .8rem;
+  text-align: center;
+  border: 1px solid #eef1f5;
+  position: relative;
+  overflow: hidden;
+  transition: transform .15s, box-shadow .2s;
+}
+.mini-stat:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,.08);
+}
+.mini-stat > i:first-child {
+  font-size: 1.5rem;
+  opacity: .35;
+  position: absolute;
+  top: .5rem; right: .6rem;
+}
+.mini-stat-num {
+  font-size: 1.85rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.mini-stat-label {
+  font-size: .8rem;
+  color: #6c757d;
+  margin-top: .25rem;
+}
+.mini-stat.success { border-top: 3px solid #198754; }
+.mini-stat.success .mini-stat-num { color: #198754; }
+.mini-stat.danger  { border-top: 3px solid #dc3545; }
+.mini-stat.danger .mini-stat-num  { color: #dc3545; }
+.mini-stat.warning { border-top: 3px solid #ffc107; }
+.mini-stat.warning .mini-stat-num { color: #d39e00; }
+.mini-stat.info    { border-top: 3px solid #0dcaf0; }
+.mini-stat.info .mini-stat-num    { color: #0aa3c2; }
+
+/* ── BEHAVIOR BOX ── */
+.behavior-box {
+  border-radius: 10px;
+  padding: 1rem .5rem;
+  transition: transform .15s;
+}
+.behavior-box:hover { transform: scale(1.03); }
+.behavior-box.success { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); }
+.behavior-box.warning { background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); }
+.behavior-num {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.behavior-box.success .behavior-num { color: #155724; }
+.behavior-box.warning .behavior-num { color: #856404; }
+.behavior-label {
+  font-size: .8rem;
+  color: #555;
+  margin-top: .35rem;
+  font-weight: 500;
+}
+.behavior-mini { padding: .5rem 0; }
+.behavior-mini-num {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.behavior-mini-label {
+  font-size: .75rem;
+  color: #6c757d;
+  margin-top: .15rem;
+  line-height: 1.2;
+}
+
+/* ── QUICK MENU ── */
+.quick-menu .btn {
+  padding: .65rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
 /* ── STAT CARDS ── */
 .stat-card {
-  border-radius: 12px;
-  padding: 1.2rem 1.4rem;
+  border-radius: 14px;
+  padding: 1.25rem 1.4rem;
   color: #fff;
   display: flex;
   align-items: center;
   gap: 1rem;
-  box-shadow: 0 3px 12px rgba(0,0,0,.15);
+  box-shadow: 0 4px 14px rgba(0,0,0,.15);
+  transition: transform .15s, box-shadow .2s;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::after {
+  content: '';
+  position: absolute;
+  top: -20%; right: -15%;
+  width: 100px; height: 100px;
+  background: radial-gradient(circle, rgba(255,255,255,.18), transparent 70%);
+  pointer-events: none;
+}
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 22px rgba(0,0,0,.22);
 }
 .stat-card .stat-icon {
-  font-size: 2.4rem;
-  opacity: .85;
+  font-size: 2.5rem;
+  opacity: .92;
   flex-shrink: 0;
+  text-shadow: 0 2px 6px rgba(0,0,0,.15);
+  position: relative;
+  z-index: 1;
 }
-.stat-card .stat-value { font-size: 2rem; font-weight: 800; line-height: 1; }
-.stat-card .stat-label { font-size: .9rem; opacity: .9; margin-top: .1rem; }
+.stat-card .stat-value {
+  font-size: 2.1rem;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 2px 4px rgba(0,0,0,.15);
+  position: relative;
+  z-index: 1;
+}
+.stat-card .stat-label {
+  font-size: .9rem;
+  opacity: .92;
+  margin-top: .15rem;
+  font-weight: 500;
+  position: relative;
+  z-index: 1;
+}
 .stat-card.bg-total   { background: linear-gradient(135deg, #1a237e, #283593); }
 .stat-card.bg-present { background: linear-gradient(135deg, #1b5e20, #2e7d32); }
 .stat-card.bg-absent  { background: linear-gradient(135deg, #b71c1c, #c62828); }
@@ -106,6 +302,7 @@ body {
 .counter-pill.late    { background: var(--late); }
 .counter-pill.leave   { background: #0aa3c2; }
 .counter-pill.activity { background: #8e44ad; }
+.counter-pill.none     { background: #6c757d; }
 
 /* "ไปกิจกรรม" sits between status btn-info and btn-warning palette */
 .btn-purple { background: #8e44ad; color: white; border-color: #8e44ad; }
