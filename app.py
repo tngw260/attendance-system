@@ -1994,19 +1994,27 @@ def api_dashboard():
 
 @app.get('/api/director')
 def api_director():
-    """ภาพรวมโรงเรียนสำหรับ ผอ. — ไม่ต้อง login แต่ต้องมี key ที่ถูก"""
+    """ภาพรวมโรงเรียนสำหรับ ผอ. — ไม่ต้อง login แต่ต้องมี key ที่ถูก
+    รับ ?date=YYYY-MM-DD (optional, default=วันนี้) เพื่อดูย้อนหลัง
+    """
     key = request.args.get('key', '').strip()
     settings = get_settings()
     expected = (settings.get('director_view_key') or '').strip()
     if not expected or key != expected:
         return jsonify(error='invalid key'), 403
 
-    today = today_iso()
-    today_d = datetime.date.today()
+    # รับ date จาก query, ถ้าไม่มี/ผิด → ใช้วันนี้
+    today = request.args.get('date', '').strip() or today_iso()
+    try:
+        today_d = datetime.date.fromisoformat(today)
+    except ValueError:
+        today_d = datetime.date.today()
+        today = today_d.isoformat()
+
     month_start = today_d.replace(day=1).isoformat()
     start_score = int(settings.get('start_score', '100'))
 
-    # 14 วันย้อนหลัง
+    # 14 วันย้อนหลังจากวันที่เลือก
     fourteen = (today_d - datetime.timedelta(days=13)).isoformat()
 
     with get_db() as con:

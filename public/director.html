@@ -73,6 +73,17 @@
       margin-top: .5rem;
     }
 
+    /* DATE NAV */
+    .date-nav-bar {
+      background: linear-gradient(180deg, #122a44 0%, #1a3a5c 100%);
+      padding: .7rem 0;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }
+    .date-nav-bar input[type=date] {
+      font-weight: 600;
+    }
+
     /* SECTION */
     .dir-section { margin-bottom: 2.5rem; }
     .dir-section-title {
@@ -298,12 +309,12 @@
 <div class="dir-hero">
   <div class="container">
     <div class="row align-items-center">
-      <div class="col-md-9">
+      <div class="col-md-8">
         <div class="d-flex align-items-center flex-wrap">
           <img id="schoolLogo" class="school-logo" src="" style="display:none;" alt="">
           <div>
             <h1 id="schoolName">โรงเรียน</h1>
-            <div class="subtitle">รายงานสรุปภาพรวมประจำวัน</div>
+            <div class="subtitle">รายงานสรุปภาพรวม</div>
             <div class="dir-date" id="todayDate">-</div>
             <div class="dir-badge">
               <i class="bi bi-person-badge me-1"></i>
@@ -312,11 +323,40 @@
           </div>
         </div>
       </div>
-      <div class="col-md-3 text-md-end mt-3 mt-md-0">
+      <div class="col-md-4 text-md-end mt-3 mt-md-0">
         <button class="btn btn-light no-print" onclick="window.print()">
           <i class="bi bi-printer-fill me-1"></i>พิมพ์รายงาน
         </button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- DATE NAVIGATOR -->
+<div class="date-nav-bar no-print">
+  <div class="container">
+    <div class="d-flex flex-wrap align-items-center gap-2 justify-content-center">
+      <button class="btn btn-sm btn-outline-light" onclick="changeDay(-1)" title="ก่อนหน้า 1 วัน">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <label class="text-light fw-600 mb-0 me-1">
+        <i class="bi bi-calendar3 me-1"></i>เลือกวันที่
+      </label>
+      <input type="date" id="datePicker" class="form-control form-control-sm"
+        style="width:auto; max-width:170px;" onchange="reload()">
+      <button class="btn btn-sm btn-outline-light" onclick="changeDay(1)" title="ถัดไป 1 วัน">
+        <i class="bi bi-chevron-right"></i>
+      </button>
+      <div class="vr text-light mx-1 d-none d-md-block"></div>
+      <button class="btn btn-sm btn-warning fw-600" onclick="setToday()">
+        <i class="bi bi-calendar-check me-1"></i>วันนี้
+      </button>
+      <button class="btn btn-sm btn-outline-light" onclick="setDaysFromToday(-1)" title="เมื่อวาน">
+        เมื่อวาน
+      </button>
+      <button class="btn btn-sm btn-outline-light" onclick="setDaysFromToday(-7)" title="7 วันที่แล้ว">
+        7 วันที่แล้ว
+      </button>
     </div>
   </div>
 </div>
@@ -509,6 +549,8 @@ const key = params.get('key');
 
 const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
+function todayISO() { return new Date().toISOString().split('T')[0]; }
+
 function formatThaiDate(iso) {
   if (!iso) return '-';
   const [y, m, d] = iso.split('-');
@@ -516,9 +558,44 @@ function formatThaiDate(iso) {
 }
 function formatThaiDateFull(iso) {
   if (!iso) return '-';
-  const d = new Date(iso);
+  const d = new Date(iso + 'T00:00:00');
   const days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
   return `วัน${days[d.getDay()]}ที่ ${formatThaiDate(iso)}`;
+}
+
+let trendChartInstance = null;
+
+function getSelectedDate() {
+  return document.getElementById('datePicker').value || todayISO();
+}
+
+function setToday() {
+  document.getElementById('datePicker').value = todayISO();
+  reload();
+}
+
+function setDaysFromToday(daysBack) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysBack);
+  document.getElementById('datePicker').value = d.toISOString().split('T')[0];
+  reload();
+}
+
+function changeDay(delta) {
+  const cur = getSelectedDate();
+  const d = new Date(cur + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  document.getElementById('datePicker').value = d.toISOString().split('T')[0];
+  reload();
+}
+
+function reload() {
+  // อัพเดท URL (เพื่อให้ refresh/share ได้)
+  const date = getSelectedDate();
+  const url = new URL(location.href);
+  url.searchParams.set('date', date);
+  history.replaceState(null, '', url.toString());
+  load();
 }
 
 async function load() {
@@ -533,8 +610,15 @@ async function load() {
     return;
   }
 
+  const date = getSelectedDate();
+  // Show loading state on reload (not first load)
+  const loader = document.getElementById('loadingScreen');
+  if (loader.style.display === 'none') {
+    document.body.style.cursor = 'wait';
+  }
+
   try {
-    const r = await fetch('/api/director?key=' + encodeURIComponent(key));
+    const r = await fetch(`/api/director?key=${encodeURIComponent(key)}&date=${date}`);
     if (!r.ok) {
       document.body.innerHTML = `
         <div class="container py-5">
@@ -548,7 +632,9 @@ async function load() {
     const d = await r.json();
     render(d);
     document.getElementById('loadingScreen').style.display = 'none';
+    document.body.style.cursor = '';
   } catch (e) {
+    document.body.style.cursor = '';
     document.body.innerHTML = `<div class="container py-5"><div class="alert alert-danger">ผิดพลาด: ${e.message}</div></div>`;
   }
 }
@@ -561,8 +647,15 @@ function render(d) {
     img.style.display = '';
   }
   document.getElementById('schoolName').textContent = d.schoolName || 'โรงเรียน';
+  // ถ้าไม่ใช่วันนี้ → แสดง badge "ดูย้อนหลัง"
+  const isToday = d.date === todayISO();
+  const historyBadge = isToday
+    ? ''
+    : ` <span style="background:#f5a623;color:#3a2a05;padding:.2rem .7rem;border-radius:50px;font-size:.8rem;font-weight:700;margin-left:.5rem;">
+        <i class="bi bi-clock-history"></i> ดูย้อนหลัง
+       </span>`;
   document.getElementById('todayDate').innerHTML =
-    '<i class="bi bi-calendar3 me-1"></i>' + formatThaiDateFull(d.date);
+    '<i class="bi bi-calendar3 me-1"></i>' + formatThaiDateFull(d.date) + historyBadge;
   document.getElementById('directorBadgeName').textContent = d.directorName || '';
   document.getElementById('sigName').textContent = d.directorName || '';
   document.getElementById('sigTitle').textContent = d.directorTitle || 'ผู้อำนวยการ';
@@ -642,7 +735,12 @@ function drawTrend(trend) {
     const [y,m,day] = t.date.split('-');
     return `${+day}/${+m}`;
   });
-  new Chart(document.getElementById('trendChart'), {
+  // Destroy old chart instance (กัน memory leak ตอน reload)
+  if (trendChartInstance) {
+    trendChartInstance.destroy();
+    trendChartInstance = null;
+  }
+  trendChartInstance = new Chart(document.getElementById('trendChart'), {
     type: 'line',
     data: {
       labels,
@@ -671,6 +769,12 @@ function drawTrend(trend) {
 const style = document.createElement('style');
 style.textContent = `@media (min-width: 992px) { .col-lg-2-4 { flex: 0 0 auto; width: 20%; } }`;
 document.head.appendChild(style);
+
+// Init date picker — ใช้ ?date= ใน URL, ถ้าไม่มี = วันนี้
+const initialDate = params.get('date') || todayISO();
+document.getElementById('datePicker').value = initialDate;
+// จำกัด max = วันนี้ (ห้ามดูล่วงหน้า)
+document.getElementById('datePicker').max = todayISO();
 
 load();
 </script>
