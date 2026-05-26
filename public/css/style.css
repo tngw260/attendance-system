@@ -64,18 +64,20 @@
 [data-theme="dark"] .btn-outline-primary { color: #6ea3ff; border-color: #6ea3ff; }
 [data-theme="dark"] .btn-outline-secondary { color: #b0b6c0; border-color: #5a606b; }
 
-/* Force readable text color for elements that explicitly use Bootstrap .text-dark
-   — but leave badges alone (bg-warning/bg-light + text-dark = intentional pattern) */
-[data-theme="dark"] a.text-dark,
-[data-theme="dark"] .card a.text-dark,
-[data-theme="dark"] td.text-dark,
-[data-theme="dark"] th.text-dark,
-[data-theme="dark"] p.text-dark,
-[data-theme="dark"] div.text-dark:not(.badge),
-[data-theme="dark"] span.text-dark:not(.badge):not([class*="bg-"]) {
-  color: var(--text) !important;
-}
-[data-theme="dark"] a.text-dark:hover { color: #fff !important; }
+/* Force ALL .text-dark to be readable in dark mode — restore for badges below */
+html[data-theme="dark"] .text-dark { color: var(--text) !important; }
+html[data-theme="dark"] .text-dark:hover { color: #ffffff !important; }
+/* Badges keep dark text (they have light bg-warning/bg-light backgrounds) */
+html[data-theme="dark"] .badge.text-dark { color: #212529 !important; }
+html[data-theme="dark"] .badge.bg-light { color: #212529 !important; }
+html[data-theme="dark"] .badge.bg-warning { color: #212529 !important; }
+
+/* Force table cells/rows text to be readable */
+html[data-theme="dark"] .table,
+html[data-theme="dark"] .table td,
+html[data-theme="dark"] .table th { color: var(--text) !important; }
+html[data-theme="dark"] .table a { color: inherit; }
+html[data-theme="dark"] .table a:hover { color: #fff; }
 
 /* Catch-all: ANY element inside cards/tables/lists that has no explicit color
    inherits from the dark surface */
