@@ -280,11 +280,87 @@
 
     /* PRINT */
     @media print {
-      body { background: white; }
-      .no-print { display: none !important; }
-      .dir-hero { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .stat-card, .info-card { box-shadow: none; border: 1px solid #ddd; }
-      @page { size: A4; margin: 12mm; }
+      @page { size: A4; margin: 10mm; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      html, body { background: white !important; font-size: 10pt; padding-bottom: 0 !important; }
+      .no-print, #loadingScreen { display: none !important; }
+
+      /* Hero — compact ตอนพิมพ์ + เก็บสี gradient */
+      .dir-hero {
+        background: linear-gradient(135deg, #1a3a5c 0%, #2980b9 70%, #d4a017 130%) !important;
+        padding: 1rem 0 !important;
+        margin-bottom: 1rem !important;
+        box-shadow: none !important;
+        page-break-after: avoid;
+        break-after: avoid;
+      }
+      .dir-hero::before, .dir-hero::after { display: none !important; }
+      .dir-hero h1 { font-size: 16pt !important; margin-bottom: .2rem; }
+      .dir-hero .subtitle { font-size: 10pt !important; }
+      .dir-hero .dir-date { font-size: 10pt !important; margin-top: .25rem; }
+      .dir-hero .dir-badge { font-size: 8.5pt !important; padding: .15rem .6rem; margin-top: .35rem; }
+      .dir-hero .school-logo { width: 50px !important; height: 50px !important; box-shadow: none !important; }
+      .container { max-width: 100% !important; padding-left: 0 !important; padding-right: 0 !important; }
+
+      /* Sections — กันตก */
+      .dir-section {
+        margin-bottom: 1rem !important;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .dir-section-title {
+        font-size: 11pt !important;
+        margin-bottom: .5rem !important;
+        padding-bottom: .25rem !important;
+        page-break-after: avoid;
+        break-after: avoid;
+      }
+
+      /* Cards — กระชับ, ไม่ break */
+      .stat-card, .info-card, .signature-box {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .stat-card { padding: .6rem .5rem !important; }
+      .stat-card .num { font-size: 18pt !important; }
+      .stat-card .label { font-size: 8.5pt !important; }
+      .stat-card .icon { font-size: 1.6rem !important; opacity: .2 !important; }
+      .info-card { padding: .75rem !important; }
+      .info-card-title { font-size: 10pt !important; margin-bottom: .5rem !important; }
+
+      /* Behavior + low list */
+      .behavior-box { padding: .6rem !important; }
+      .behavior-num { font-size: 18pt !important; }
+      .behavior-label { font-size: 8.5pt !important; }
+
+      /* Level rows compact */
+      .level-row {
+        padding: .35rem .6rem !important;
+        margin-bottom: .3rem !important;
+        font-size: 9pt;
+      }
+      .level-row .level-name { font-size: 9.5pt; min-width: 50px; }
+
+      /* Student lists compact */
+      .stu-list-item { padding: .35rem .6rem !important; font-size: 9pt; }
+      .stu-list-item .num-circle { width: 24px; height: 24px; font-size: 8pt; }
+
+      /* Chart wrap — กันตก */
+      canvas { max-height: 180px !important; }
+
+      /* Signature ติดกัน */
+      .signature-box {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        margin-top: 1rem !important;
+        padding: 1rem !important;
+      }
+      .signature-box .sig-line { margin: 1.5rem auto .5rem !important; }
+
+      /* Read-only notice ไม่ต้องพิมพ์ */
+      .read-only-note { display: none !important; }
     }
 
     /* Loading state */
