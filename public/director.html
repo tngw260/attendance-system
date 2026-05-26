@@ -178,28 +178,48 @@
     }
     .level-row .level-bar {
       flex: 1;
-      height: 12px;
+      height: 14px;
       background: #e9ecef;
       border-radius: 50px;
       overflow: hidden;
       position: relative;
+      display: flex;
     }
-    .level-row .level-fill {
+    .level-row .level-fill-present {
       height: 100%;
       background: linear-gradient(90deg, #198754, #20c997);
-      border-radius: 50px;
+      transition: width .6s ease;
+    }
+    .level-row .level-fill-late {
+      height: 100%;
+      background: linear-gradient(90deg, #fd7e14, #ffa94d);
       transition: width .6s ease;
     }
     .level-row .level-stats {
-      font-size: .85rem;
-      color: #6c757d;
-      min-width: 130px;
+      font-size: .82rem;
+      color: #495057;
+      min-width: 160px;
       text-align: right;
+      display: flex;
+      gap: .35rem;
+      justify-content: flex-end;
+      flex-wrap: wrap;
     }
+    .level-row .level-stats .pill {
+      padding: .1rem .5rem;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: .75rem;
+      white-space: nowrap;
+    }
+    .level-row .level-stats .p-present { background: #d4edda; color: #155724; }
+    .level-row .level-stats .p-late    { background: #ffe5cc; color: #8a4500; }
+    .level-row .level-stats .p-absent  { background: #f8d7da; color: #721c24; }
+    .level-row .level-stats .p-total   { background: #e2e3e5; color: #383d41; }
     .level-row .level-pct {
       font-weight: 700;
       color: var(--primary);
-      min-width: 50px;
+      min-width: 55px;
       text-align: right;
     }
 
@@ -759,15 +779,30 @@ function render(d) {
   document.getElementById('bDeducted').textContent = b.deductedCount || 0;
   document.getElementById('bGood').textContent = (b.totalStudents || 0) - (b.deductedCount || 0);
 
-  // Levels
+  // Levels — รวมมาเรียน + สาย เป็น "มาโรงเรียน"
   const levelHtml = (d.byLevel || []).map(l => {
-    const pct = l.total > 0 ? Math.round((l.present / l.total) * 100) : 0;
+    const present = +(l.present || 0);
+    const late    = +(l.late    || 0);
+    const absent  = +(l.absent  || 0);
+    const total   = +(l.total   || 0);
+    const attended = present + late;  // มาโรงเรียนทั้งหมด (รวมสาย)
+    const pct = total > 0 ? Math.round((attended / total) * 100) : 0;
+    const pctPresent = total > 0 ? (present / total) * 100 : 0;
+    const pctLate    = total > 0 ? (late    / total) * 100 : 0;
     return `
       <div class="level-row">
         <div class="level-name">ม.${l.class_level}</div>
-        <div class="level-bar"><div class="level-fill" style="width:${pct}%"></div></div>
+        <div class="level-bar">
+          <div class="level-fill-present" style="width:${pctPresent}%" title="มา ${present}"></div>
+          <div class="level-fill-late"    style="width:${pctLate}%"    title="สาย ${late}"></div>
+        </div>
         <div class="level-pct">${pct}%</div>
-        <div class="level-stats">${l.present || 0}/${l.total} คน</div>
+        <div class="level-stats">
+          <span class="pill p-present" title="มาตรงเวลา">มา ${present}</span>
+          ${late > 0 ? `<span class="pill p-late" title="มาสาย">สาย ${late}</span>` : ''}
+          ${absent > 0 ? `<span class="pill p-absent" title="ขาด">ขาด ${absent}</span>` : ''}
+          <span class="pill p-total">รวม ${total}</span>
+        </div>
       </div>`;
   }).join('') || '<div class="text-muted text-center py-3">ยังไม่มีข้อมูล</div>';
   document.getElementById('levelList').innerHTML = levelHtml;
@@ -821,22 +856,62 @@ function drawTrend(trend) {
     data: {
       labels,
       datasets: [
-        { label: 'มา', data: trend.map(t => t.present || 0),
-          borderColor: '#198754', backgroundColor: 'rgba(25,135,84,.1)',
-          fill: true, tension: .35, borderWidth: 2.5 },
-        { label: 'ขาด', data: trend.map(t => t.absent || 0),
-          borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,.1)',
-          fill: true, tension: .35, borderWidth: 2 },
-        { label: 'มาสาย', data: trend.map(t => t.late || 0),
-          borderColor: '#fd7e14', backgroundColor: 'rgba(253,126,20,.1)',
-          fill: true, tension: .35, borderWidth: 2 },
+        {
+          label: 'มา',
+          data: trend.map(t => t.present || 0),
+          borderColor: '#198754',
+          backgroundColor: 'rgba(25,135,84,.18)',
+          fill: true, tension: .35, borderWidth: 3,
+          pointBackgroundColor: '#198754',
+          pointRadius: 3, pointHoverRadius: 5,
+        },
+        {
+          label: 'มาสาย',
+          data: trend.map(t => t.late || 0),
+          borderColor: '#fd7e14',
+          backgroundColor: 'rgba(253,126,20,.18)',
+          fill: true, tension: .35, borderWidth: 3,
+          pointBackgroundColor: '#fd7e14',
+          pointRadius: 3, pointHoverRadius: 5,
+        },
+        {
+          label: 'ขาด',
+          data: trend.map(t => t.absent || 0),
+          borderColor: '#dc3545',
+          backgroundColor: 'rgba(220,53,69,.12)',
+          fill: true, tension: .35, borderWidth: 2,
+          pointBackgroundColor: '#dc3545',
+          pointRadius: 2, pointHoverRadius: 4,
+        },
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom' } },
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { weight: 600 }, padding: 12, usePointStyle: true, boxWidth: 10 },
+        },
+        tooltip: {
+          backgroundColor: 'rgba(33,37,41,.95)',
+          titleFont: { weight: 700 },
+          bodyFont: { size: 13 },
+          padding: 10,
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0, font: { weight: 500 } },
+          grid: { color: 'rgba(0,0,0,.06)' }
+        },
+        x: {
+          ticks: { font: { weight: 500 } },
+          grid: { display: false }
+        }
+      }
     }
   });
 }
