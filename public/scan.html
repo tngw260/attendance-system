@@ -25,10 +25,22 @@
       padding: 12px; border-radius: 10px;
       margin-bottom: 8px;
       display: flex; align-items: center; gap: 10px;
+      transition: opacity .3s;
     }
     .recent-scan.was-already { opacity: .6; border-left: 3px solid #ffc107; }
     .recent-scan.success { border-left: 3px solid #198754; }
     .recent-scan.error { background: #842029; border-left: 3px solid #dc3545; }
+    .recent-scan.removed { opacity: .3; text-decoration: line-through; }
+    .recent-scan .btn-undo {
+      background: rgba(220,53,69,.85);
+      color: white; border: none;
+      padding: 4px 10px; border-radius: 6px;
+      font-size: .78rem; font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .recent-scan .btn-undo:hover { background: #dc3545; }
+    .recent-scan .btn-undo:disabled { opacity: .5; cursor: not-allowed; }
     .status-pill {
       display: inline-block; padding: 4px 12px;
       border-radius: 20px; font-size: .85rem; font-weight: 600;
@@ -86,6 +98,10 @@
 
   <!-- Camera -->
   <div id="reader"></div>
+  <div class="text-center mt-2 small text-warning">
+    <i class="bi bi-info-circle me-1"></i>
+    วาง QR ให้อยู่ในกรอบเดียวเท่านั้น — ใช้นิ้วบังตัวข้างเคียงถ้าจำเป็น
+  </div>
 
   <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
     <div>
@@ -131,12 +147,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function startScanner() {
   scanner = new Html5Qrcode('reader');
+  // กรอบสแกนแคบ — กันอ่าน QR ที่อยู่ติดกันไปด้วย
+  const qrboxFunc = (vw, vh) => {
+    const minEdge = Math.min(vw, vh);
+    const size = Math.max(140, Math.floor(minEdge * 0.55)); // 55% ของหน้าจอ (แคบกว่าเดิม)
+    return { width: size, height: size };
+  };
   scanner.start(
     { facingMode: 'environment' }, // กล้องหลัง
     {
-      fps: 10,
-      qrbox: { width: 250, height: 250 },
-      aspectRatio: 1.0
+      fps: 12,
+      qrbox: qrboxFunc,
+      aspectRatio: 1.0,
+      disableFlip: true,
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
     },
     onScanSuccess,
     () => {} // ignore scan failures
@@ -174,11 +198,13 @@ async function onScanSuccess(decodedText) {
     scanCount++;
     document.getElementById('scanCount').textContent = scanCount;
     addRecent({
+      student_id: res.student.id,
       name: res.student.name,
       class: `ม.${res.student.class_level}/${res.student.room}`,
       number: res.student.number,
       photo: res.student.photo,
       status: res.status,
+      date: res.date,
       wasAlready: res.was_already,
       previousStatus: res.previous_status,
     }, res.was_already ? 'was-already' : 'success');
@@ -210,6 +236,13 @@ function addRecent(item, kind) {
     ? `<small class="text-warning">⚠ เคยบันทึกเป็น ${STATUS_LABEL[item.previousStatus] || item.previousStatus} แล้ว — อัพเดทใหม่</small>`
     : '';
 
+  // ปุ่มลบ (เฉพาะรายการที่สแกนสำเร็จ ไม่ใช่ error)
+  const undoBtn = (kind !== 'error' && item.student_id)
+    ? `<button class="btn-undo" onclick="undoScan(this, ${item.student_id}, '${item.date || ''}')">
+         <i class="bi bi-x-lg"></i> ลบ
+       </button>`
+    : '';
+
   const div = document.createElement('div');
   div.className = `recent-scan ${kind}`;
   div.innerHTML = `
@@ -221,11 +254,47 @@ function addRecent(item, kind) {
       </div>
       ${alreadyNote}
     </div>
-    <div>${statusBadge}</div>
+    <div class="d-flex align-items-center gap-2">
+      ${statusBadge}
+      ${undoBtn}
+    </div>
   `;
   list.prepend(div);
   // Keep only 20 latest
   while (list.children.length > 20) list.lastElementChild.remove();
+}
+
+async function undoScan(btn, sid, date) {
+  const row = btn.closest('.recent-scan');
+  const name = row.querySelector('.fw-bold')?.textContent || 'รายการนี้';
+  if (!confirm(`ลบรายการของ "${name}" ออกจริงๆ?`)) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+  try {
+    await apiFetch('/api/attendance/scan', {
+      method: 'DELETE',
+      body: JSON.stringify({ student_id: sid, date: date || undefined })
+    });
+    // ทำ effect ตัดออก
+    row.classList.add('removed');
+    btn.innerHTML = '<i class="bi bi-check2"></i> ลบแล้ว';
+    // ลด scan counter
+    scanCount = Math.max(0, scanCount - 1);
+    document.getElementById('scanCount').textContent = scanCount;
+    // ถ้า student ID นี้คือ lastScannedId — reset เพื่อให้สแกนใหม่ได้
+    if (String(sid) === String(lastScannedId)) {
+      lastScannedId = null;
+      lastScannedTime = 0;
+    }
+    // ลบออกจาก list หลัง 1.5 วินาที
+    setTimeout(() => row.remove(), 1500);
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-x-lg"></i> ลบ';
+    alert('ลบไม่สำเร็จ: ' + e.message);
+  }
 }
 
 function playSound(type) {

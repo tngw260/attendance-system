@@ -1201,6 +1201,49 @@ def api_attendance_scan():
         message=f"บันทึก {student['name']} เป็น {status}"
     )
 
+@app.delete('/api/attendance/scan')
+@login_required
+def api_attendance_scan_undo():
+    """ลบรายการสแกนผิด — ลบ attendance + behavior_logs ที่เกี่ยวข้อง
+    Body: { student_id: int, date: 'YYYY-MM-DD' (optional, default=today) }
+    """
+    u = current_user()
+    b = request.get_json() or {}
+    sid = b.get('student_id')
+    date = b.get('date', today_iso())
+
+    if not sid:
+        return jsonify(success=False, message='ไม่พบ student_id'), 400
+    try: sid = int(sid)
+    except (TypeError, ValueError):
+        return jsonify(success=False, message='student_id ไม่ถูกต้อง'), 400
+
+    with get_db() as con:
+        student = con.execute('SELECT * FROM students WHERE id=?', (sid,)).fetchone()
+        if not student:
+            return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+
+        # ครูที่มี assigned_room ทำได้เฉพาะห้องตัวเอง
+        if u['role'] == 'teacher' and u.get('assigned_level'):
+            if student['class_level'] != u['assigned_level']:
+                return jsonify(success=False, message='ไม่มีสิทธิ์ลบรายการห้องนี้'), 403
+            if u.get('assigned_room') and student['room'] != u['assigned_room']:
+                return jsonify(success=False, message='ไม่มีสิทธิ์ลบรายการห้องนี้'), 403
+
+        att = con.execute('SELECT id FROM attendance WHERE student_id=? AND date=?',
+                          (sid, date)).fetchone()
+        if not att:
+            return jsonify(success=False, message='ไม่พบรายการเช็คชื่อ'), 404
+
+        # ลบ behavior_logs ที่เกิดจาก attendance นี้ (จะคืนคะแนนอัตโนมัติ)
+        con.execute('DELETE FROM behavior_logs WHERE source=? AND source_id=?',
+                    ('attendance', att['id']))
+        # ลบ attendance
+        con.execute('DELETE FROM attendance WHERE id=?', (att['id'],))
+        audit_log(con, 'undo_scan', 'student', sid, {'date': date})
+
+    return jsonify(success=True, message=f"ลบรายการของ {student['name']} แล้ว")
+
 @app.get('/api/late')
 @login_required
 def api_late_list():
