@@ -1,3 +1,95 @@
+// ─── THEME (Dark/Light Mode) — init ก่อนทุกอย่าง ป้องกัน flash ───
+(function initTheme() {
+  try {
+    const saved = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const theme = saved || (prefersDark ? 'dark' : 'light');
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.setAttribute('data-bs-theme', theme); // Bootstrap 5.3+
+  } catch (e) {}
+})();
+
+function toggleTheme() {
+  const cur = document.documentElement.dataset.theme || 'light';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  document.documentElement.setAttribute('data-bs-theme', next);
+  try { localStorage.setItem('theme', next); } catch (e) {}
+  // Update toggle button icon + label
+  const btn = document.querySelector('.theme-toggle');
+  if (btn) {
+    const icon = next === 'dark' ? 'bi-sun-fill' : 'bi-moon-stars-fill';
+    const label = next === 'dark' ? 'สว่าง' : 'มืด';
+    btn.innerHTML = `<i class="bi ${icon}"></i> ${label}`;
+  }
+  // Update theme-color meta (mobile address bar)
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = next === 'dark' ? '#15171c' : '#0d3b8e';
+}
+
+// ─── PWA: register service worker + manifest + iOS support ───
+(function initPWA() {
+  const head = document.head;
+  // Manifest
+  if (!document.querySelector('link[rel="manifest"]')) {
+    const m = document.createElement('link');
+    m.rel = 'manifest'; m.href = '/manifest.json';
+    head.appendChild(m);
+  }
+  // Theme color (mobile address bar)
+  if (!document.querySelector('meta[name="theme-color"]')) {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    const t = document.createElement('meta');
+    t.name = 'theme-color';
+    t.content = dark ? '#15171c' : '#0d3b8e';
+    head.appendChild(t);
+  }
+  // iOS PWA support
+  if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+    const ai = document.createElement('link');
+    ai.rel = 'apple-touch-icon';
+    ai.href = '/icons/icon.svg';
+    head.appendChild(ai);
+  }
+  if (!document.querySelector('meta[name="apple-mobile-web-app-capable"]')) {
+    const ac = document.createElement('meta');
+    ac.name = 'apple-mobile-web-app-capable'; ac.content = 'yes';
+    head.appendChild(ac);
+    const at = document.createElement('meta');
+    at.name = 'apple-mobile-web-app-title'; at.content = 'เช็คชื่อ';
+    head.appendChild(at);
+  }
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+  }
+})();
+
+// ─── SKELETON helper ───
+function skeletonBlock(opts = {}) {
+  const { lines = 3, withCircle = false } = opts;
+  let inner = '';
+  if (withCircle) {
+    inner += '<div class="d-flex align-items-center gap-2 mb-2">';
+    inner += '<div class="skeleton skeleton-circle"></div>';
+    inner += '<div style="flex:1"><div class="skeleton skeleton-line lg"></div><div class="skeleton skeleton-line sm"></div></div>';
+    inner += '</div>';
+  }
+  for (let i = 0; i < lines; i++) {
+    inner += `<div class="skeleton skeleton-line${i === lines-1 ? ' sm' : ''}"></div>`;
+  }
+  return `<div class="skeleton-card">${inner}</div>`;
+}
+function showSkeleton(selectorOrEl, count = 3, opts = {}) {
+  const el = typeof selectorOrEl === 'string' ? document.querySelector(selectorOrEl) : selectorOrEl;
+  if (!el) return;
+  let html = '';
+  for (let i = 0; i < count; i++) html += skeletonBlock(opts);
+  el.innerHTML = html;
+}
+
 const THAI_MONTHS = [
   'มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
   'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'
@@ -162,7 +254,13 @@ async function loadCurrentUser() {
           ? ` <span class="badge bg-warning text-dark ms-1">ม.${currentUser.assigned_level}/${currentUser.assigned_room}</span>`
           : ` <span class="badge bg-warning text-dark ms-1">ม.${currentUser.assigned_level}</span>`;
       }
+      const dark = document.documentElement.dataset.theme === 'dark';
+      const themeIcon = dark ? 'bi-sun-fill' : 'bi-moon-stars-fill';
+      const themeLabel = dark ? 'สว่าง' : 'มืด';
       el.innerHTML = `
+        <button class="theme-toggle" onclick="toggleTheme()" title="สลับโหมดมืด/สว่าง">
+          <i class="bi ${themeIcon}"></i> ${themeLabel}
+        </button>
         <span class="badge bg-light text-dark me-2">${roleLabel}</span>
         <span class="text-light me-2"><i class="bi bi-person-circle me-1"></i>${currentUser.full_name}${assignTxt}</span>
         <button class="btn btn-sm btn-outline-light" onclick="logout()" title="ออกจากระบบ">

@@ -82,6 +82,30 @@ with open(SECRET_FILE) as f:
 app = Flask(__name__, static_folder='public', static_url_path='')
 app.secret_key = SECRET_KEY
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=7)
+# Cache static files for 1 day (CSS/JS/images) — ลดโหลด CPU + Bandwidth
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 86400
+
+@app.after_request
+def add_cache_headers(response):
+    """Cache static assets; HTML/API responses ไม่ cache"""
+    path = request.path or ''
+    # Service worker — ต้องไม่ cache (update เร็ว)
+    if path == '/sw.js':
+        response.headers['Cache-Control'] = 'no-cache, must-revalidate'
+    # Manifest — cache 1 ชม.
+    elif path == '/manifest.json':
+        response.headers['Cache-Control'] = 'public, max-age=3600'
+    # API + HTML — ไม่ cache
+    elif path.startswith('/api/') or path.endswith('.html') or path == '/':
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+    # Static assets — cache 1 วัน
+    elif (path.startswith('/css/') or path.startswith('/js/')
+          or path.startswith('/photos/') or path.startswith('/logos/')
+          or path.startswith('/icons/')
+          or path.endswith(('.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp'))):
+        response.headers['Cache-Control'] = 'public, max-age=86400'
+    return response
 
 # ── DATABASE ──────────────────────────────────────────────
 
@@ -222,12 +246,17 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
             CREATE INDEX IF NOT EXISTS idx_audit_user    ON audit_logs(user_id);
 
-            CREATE INDEX IF NOT EXISTS idx_att_date    ON attendance(date);
-            CREATE INDEX IF NOT EXISTS idx_att_student ON attendance(student_id);
-            CREATE INDEX IF NOT EXISTS idx_stu_class   ON students(class_level, room);
-            CREATE INDEX IF NOT EXISTS idx_bhv_student ON behavior_logs(student_id);
-            CREATE INDEX IF NOT EXISTS idx_bhv_source  ON behavior_logs(source, source_id);
+            CREATE INDEX IF NOT EXISTS idx_att_date         ON attendance(date);
+            CREATE INDEX IF NOT EXISTS idx_att_student      ON attendance(student_id);
+            CREATE INDEX IF NOT EXISTS idx_att_student_date ON attendance(student_id, date);
+            CREATE INDEX IF NOT EXISTS idx_att_date_status  ON attendance(date, status);
+            CREATE INDEX IF NOT EXISTS idx_stu_class        ON students(class_level, room);
+            CREATE INDEX IF NOT EXISTS idx_bhv_student      ON behavior_logs(student_id);
+            CREATE INDEX IF NOT EXISTS idx_bhv_source       ON behavior_logs(source, source_id);
+            CREATE INDEX IF NOT EXISTS idx_bhv_date         ON behavior_logs(date);
+            CREATE INDEX IF NOT EXISTS idx_bhv_student_date ON behavior_logs(student_id, date);
         """)
+        con.execute("ANALYZE")  # update query planner statistics
 
         # Migrate: users
         cols = [r['name'] for r in con.execute('PRAGMA table_info(users)').fetchall()]
@@ -2372,6 +2401,66 @@ def api_restore():
     except Exception as e:
         return jsonify(success=False, message=f'กู้คืนไม่สำเร็จ: {e}'), 500
     return jsonify(success=True, message='กู้คืนสำเร็จ — กรุณา login ใหม่')
+
+# ── ADMIN: BACKUP DATABASE ────────────────────────────────
+
+@app.get('/api/admin/backup')
+@admin_required
+def api_admin_backup():
+    """ดาวน์โหลดไฟล์ฐานข้อมูล SQLite (สำหรับเก็บสำรอง)"""
+    import io, tempfile
+    # ใช้ sqlite backup API เพื่อ snapshot ที่ consistent (ไม่กระทบ WAL)
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp:
+            tmp_path = tmp.name
+        src = sqlite3.connect(DB_PATH)
+        dst = sqlite3.connect(tmp_path)
+        with dst:
+            src.backup(dst)
+        src.close()
+        dst.close()
+
+        with open(tmp_path, 'rb') as f:
+            data = f.read()
+        os.unlink(tmp_path)
+
+        ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'school_backup_{ts}.db'
+        audit_log_oneshot('download_backup', 'system', None, {'file': filename, 'bytes': len(data)})
+
+        return send_file(
+            io.BytesIO(data),
+            mimetype='application/x-sqlite3',
+            as_attachment=True,
+            download_name=filename,
+        )
+    except Exception as e:
+        return jsonify(success=False, message=f'สร้าง backup ไม่สำเร็จ: {e}'), 500
+
+@app.get('/api/admin/backup/info')
+@admin_required
+def api_admin_backup_info():
+    """ข้อมูล DB เบื้องต้น: ขนาดไฟล์, จำนวน records"""
+    try:
+        size = os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0
+        with get_db() as con:
+            counts = {
+                'students':      con.execute('SELECT COUNT(*) AS n FROM students').fetchone()['n'],
+                'attendance':    con.execute('SELECT COUNT(*) AS n FROM attendance').fetchone()['n'],
+                'behavior_logs': con.execute('SELECT COUNT(*) AS n FROM behavior_logs').fetchone()['n'],
+                'users':         con.execute('SELECT COUNT(*) AS n FROM users').fetchone()['n'],
+            }
+        return jsonify(size_bytes=size, size_mb=round(size/1024/1024, 2), counts=counts)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+# helper สำหรับ audit log ใน endpoint ที่ไม่มี context db อยู่แล้ว
+def audit_log_oneshot(action, entity, entity_id, payload):
+    try:
+        with get_db() as con:
+            audit_log(con, action, entity, entity_id, payload)
+    except Exception:
+        pass
 
 # ── ADMIN: RESET DATA ─────────────────────────────────────
 

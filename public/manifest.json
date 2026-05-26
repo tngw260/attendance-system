@@ -1,0 +1,32 @@
+{
+  "name": "ระบบเช็คชื่อนักเรียน — ตะกั่วทุ่งงานทวีวิทยาคม",
+  "short_name": "เช็คชื่อ",
+  "description": "ระบบบริหารการเช็คชื่อนักเรียนและคะแนนความประพฤติ",
+  "lang": "th",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f0f4fb",
+  "theme_color": "#0d3b8e",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "เช็คชื่อวันนี้",
+      "short_name": "เช็คชื่อ",
+      "url": "/attendance.html"
+    },
+    {
+      "name": "สแกน QR",
+      "url": "/scan.html"
+    }
+  ]
+}

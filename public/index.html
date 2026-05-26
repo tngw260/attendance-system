@@ -222,7 +222,7 @@
   </div>
 
   <!-- ===== BEHAVIOR PANEL ===== -->
-  <div class="dash-section">
+  <div class="dash-section" id="behaviorSection">
     <div class="row g-4">
       <div class="col-lg-5">
         <div class="dash-section-head"><i class="bi bi-award-fill me-2"></i>คะแนนความประพฤติ</div>
@@ -275,10 +275,10 @@
       <div class="col-lg-7">
         <div class="dash-section-head"><i class="bi bi-exclamation-octagon-fill me-2"></i>นักเรียนคะแนนต่ำ (ดูแลเป็นพิเศษ)</div>
         <div class="card border-0 shadow-sm">
-          <div id="lowScoreList" class="card-body p-0">
-            <div class="text-center text-muted py-4">
-              <div class="spinner-border spinner-border-sm"></div>
-            </div>
+          <div id="lowScoreList" class="card-body">
+            <div class="skeleton skeleton-line lg mb-2"></div>
+            <div class="skeleton skeleton-line"></div>
+            <div class="skeleton skeleton-line sm"></div>
           </div>
         </div>
       </div>
@@ -289,8 +289,11 @@
   <div class="dash-section">
     <div class="dash-section-head"><i class="bi bi-grid-3x2-gap-fill me-2"></i>สรุปรายชั้นเรียน — วันนี้</div>
     <div id="classGrid">
-      <div class="text-center text-muted py-4">
-        <i class="bi bi-hourglass-split fs-3 d-block mb-2"></i>กำลังโหลด...
+      <div class="row g-2">
+        <div class="col-6 col-sm-4 col-lg-3"><div class="skeleton-card"><div class="skeleton skeleton-line lg"></div><div class="skeleton skeleton-line sm"></div></div></div>
+        <div class="col-6 col-sm-4 col-lg-3"><div class="skeleton-card"><div class="skeleton skeleton-line lg"></div><div class="skeleton skeleton-line sm"></div></div></div>
+        <div class="col-6 col-sm-4 col-lg-3"><div class="skeleton-card"><div class="skeleton skeleton-line lg"></div><div class="skeleton skeleton-line sm"></div></div></div>
+        <div class="col-6 col-sm-4 col-lg-3"><div class="skeleton-card"><div class="skeleton skeleton-line lg"></div><div class="skeleton skeleton-line sm"></div></div></div>
       </div>
     </div>
   </div>
