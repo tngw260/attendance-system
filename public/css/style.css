@@ -63,6 +63,60 @@
 [data-theme="dark"] .alert-danger { background: #4a1c22; color: #ffb8c0; border-color: #7e2d39; }
 [data-theme="dark"] .btn-outline-primary { color: #6ea3ff; border-color: #6ea3ff; }
 [data-theme="dark"] .btn-outline-secondary { color: #b0b6c0; border-color: #5a606b; }
+
+/* Force readable text color for elements that explicitly use Bootstrap .text-dark
+   — but leave badges alone (bg-warning/bg-light + text-dark = intentional pattern) */
+[data-theme="dark"] a.text-dark,
+[data-theme="dark"] .card a.text-dark,
+[data-theme="dark"] td.text-dark,
+[data-theme="dark"] th.text-dark,
+[data-theme="dark"] p.text-dark,
+[data-theme="dark"] div.text-dark:not(.badge),
+[data-theme="dark"] span.text-dark:not(.badge):not([class*="bg-"]) {
+  color: var(--text) !important;
+}
+[data-theme="dark"] a.text-dark:hover { color: #fff !important; }
+
+/* Catch-all: ANY element inside cards/tables/lists that has no explicit color
+   inherits from the dark surface */
+[data-theme="dark"] .card,
+[data-theme="dark"] .card-body,
+[data-theme="dark"] .list-group-item,
+[data-theme="dark"] .info-card,
+[data-theme="dark"] .mini-stat,
+[data-theme="dark"] .behavior-mini { color: var(--text); }
+
+/* Headings inside cards/sections */
+[data-theme="dark"] .card h1, [data-theme="dark"] .card h2, [data-theme="dark"] .card h3,
+[data-theme="dark"] .card h4, [data-theme="dark"] .card h5, [data-theme="dark"] .card h6,
+[data-theme="dark"] h1, [data-theme="dark"] h2, [data-theme="dark"] h3,
+[data-theme="dark"] h4, [data-theme="dark"] h5, [data-theme="dark"] h6 { color: var(--text); }
+
+/* Links inside content (not nav, not buttons) — make them light-blue readable */
+[data-theme="dark"] .card a:not(.btn):not(.badge):not(.text-dark),
+[data-theme="dark"] .table a:not(.btn):not(.badge):not(.text-dark) {
+  color: #6ea3ff;
+}
+[data-theme="dark"] .card a:not(.btn):not(.badge):not(.text-dark):hover { color: #9cc1ff; }
+
+/* Generic "dark text" inline patterns from JS templates */
+[data-theme="dark"] [style*="color:#222"],
+[data-theme="dark"] [style*="color: #222"],
+[data-theme="dark"] [style*="color:#333"],
+[data-theme="dark"] [style*="color: #333"],
+[data-theme="dark"] [style*="color:#000"],
+[data-theme="dark"] [style*="color: #000"],
+[data-theme="dark"] [style*="color:black"],
+[data-theme="dark"] [style*="color: black"] { color: var(--text) !important; }
+
+/* Site footer (สี #333 hardcoded) */
+[data-theme="dark"] .site-footer { background: var(--surface) !important; color: var(--text); border-top-color: var(--border) !important; }
+[data-theme="dark"] .site-footer .footer-credit strong { color: var(--text) !important; }
+
+/* Student row text — bold name and number need to be readable */
+[data-theme="dark"] .student-name { color: var(--text); }
+[data-theme="dark"] .student-num { color: var(--text-muted); }
+[data-theme="dark"] .student-code { color: var(--text-muted); }
 [data-theme="dark"] .modal-header, [data-theme="dark"] .modal-footer { border-color: var(--border); }
 [data-theme="dark"] .border, [data-theme="dark"] .border-top, [data-theme="dark"] .border-bottom,
 [data-theme="dark"] .border-start, [data-theme="dark"] .border-end { border-color: var(--border) !important; }
