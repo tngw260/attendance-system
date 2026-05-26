@@ -117,6 +117,53 @@
 [data-theme="dark"] .student-name { color: var(--text); }
 [data-theme="dark"] .student-num { color: var(--text-muted); }
 [data-theme="dark"] .student-code { color: var(--text-muted); }
+
+/* ── DARK MODE: Bootstrap table row variants ── */
+[data-theme="dark"] .table-danger,
+[data-theme="dark"] .table-danger > th,
+[data-theme="dark"] .table-danger > td {
+  background: #4a1c22 !important; color: #ffd1d6 !important;
+}
+[data-theme="dark"] .table-warning,
+[data-theme="dark"] .table-warning > th,
+[data-theme="dark"] .table-warning > td {
+  background: #4a3a18 !important; color: #ffe8a8 !important;
+}
+[data-theme="dark"] .table-success,
+[data-theme="dark"] .table-success > th,
+[data-theme="dark"] .table-success > td {
+  background: #1d4029 !important; color: #b4e8c5 !important;
+}
+[data-theme="dark"] .table-info,
+[data-theme="dark"] .table-info > th,
+[data-theme="dark"] .table-info > td {
+  background: #163d4a !important; color: #b5e7f0 !important;
+}
+[data-theme="dark"] .table-light,
+[data-theme="dark"] .table-light > th,
+[data-theme="dark"] .table-light > td {
+  background: var(--surface-2) !important; color: var(--text) !important;
+}
+
+/* Tweaks สีโทน muted ในรายงานให้สว่างขึ้น */
+[data-theme="dark"] .text-success { color: #4ade80 !important; }
+[data-theme="dark"] .text-danger  { color: #ff7080 !important; }
+[data-theme="dark"] .text-warning { color: #ffb84d !important; }
+[data-theme="dark"] .text-info    { color: #58d2e8 !important; }
+[data-theme="dark"] .text-primary { color: #6ea3ff !important; }
+[data-theme="dark"] .text-secondary { color: #a8b0bd !important; }
+
+/* แถบ % มาเรียน (pct-bar) ใน report — เปลี่ยน bg ให้เห็นบน dark */
+[data-theme="dark"] .pct-bar { background: var(--surface-2) !important; }
+
+/* ปุ่ม nav-tabs link โหมดมืด - ป้องกัน "..." จาง */
+[data-theme="dark"] .nav-tabs .nav-link:not(.active):hover { background: var(--surface-2); color: var(--text); }
+
+/* Bootstrap dropdown menus */
+[data-theme="dark"] .dropdown-menu { background: var(--surface); border-color: var(--border); }
+[data-theme="dark"] .dropdown-item { color: var(--text); }
+[data-theme="dark"] .dropdown-item:hover, [data-theme="dark"] .dropdown-item:focus { background: var(--surface-2); color: var(--text); }
+[data-theme="dark"] .dropdown-divider { border-color: var(--border); }
 [data-theme="dark"] .modal-header, [data-theme="dark"] .modal-footer { border-color: var(--border); }
 [data-theme="dark"] .border, [data-theme="dark"] .border-top, [data-theme="dark"] .border-bottom,
 [data-theme="dark"] .border-start, [data-theme="dark"] .border-end { border-color: var(--border) !important; }
