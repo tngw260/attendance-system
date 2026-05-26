@@ -1,48 +1,54 @@
-// Service worker — minimal caching strategy
-// - HTML/API → network-first (always fresh, fallback to cache when offline)
-// - Static assets (CSS/JS/images/fonts) → cache-first
+// Service worker v2 — strategy ที่ deploy CSS/JS ได้ทันที
+// - HTML/API → network-first
+// - CSS/JS → network-first + cache fallback (ให้ update ทันที)
+// - Images/fonts → cache-first (เปลี่ยนน้อย, ประหยัด data)
 
-const CACHE_NAME = 'school-v1';
-const STATIC_CACHE = 'school-static-v1';
-
-const STATIC_ASSETS = [
-  '/css/style.css',
-  '/js/common.js',
-];
+const VERSION = 'v2-2026';
+const CACHE_NAME = `school-${VERSION}`;
+const STATIC_CACHE = `school-static-${VERSION}`;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(STATIC_CACHE).then(cache => cache.addAll(STATIC_ASSETS).catch(()=>{}))
-  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
+  // ลบ cache เก่าทั้งหมดที่ไม่ใช่ version ปัจจุบัน
   e.waitUntil(
     caches.keys().then(keys => Promise.all(
       keys.filter(k => k !== CACHE_NAME && k !== STATIC_CACHE).map(k => caches.delete(k))
-    ))
+    )).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-
-  // Same-origin only
   if (url.origin !== self.location.origin) return;
-
-  // Skip non-GET
   if (event.request.method !== 'GET') return;
 
-  // API and HTML: network-first
+  // CSS/JS — network-first (อัพเดททันทีเมื่อ deploy)
+  if (url.pathname.startsWith('/css/') || url.pathname.startsWith('/js/') ||
+      url.pathname.endsWith('.css') || url.pathname.endsWith('.js')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(res => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(STATIC_CACHE).then(c => c.put(event.request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // API + HTML — network-first
   if (url.pathname.startsWith('/api/') ||
       url.pathname.endsWith('.html') ||
       url.pathname === '/') {
     event.respondWith(
       fetch(event.request)
         .then(res => {
-          // Cache successful HTML responses for offline fallback
           if (res.ok && (url.pathname.endsWith('.html') || url.pathname === '/')) {
             const clone = res.clone();
             caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
@@ -57,10 +63,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first
-  if (url.pathname.match(/\.(css|js|png|jpg|jpeg|gif|svg|webp|woff2?|ttf|ico)$/i) ||
-      url.pathname.startsWith('/css/') ||
-      url.pathname.startsWith('/js/') ||
+  // รูป/ไอคอน/ฟอนต์ — cache-first (เปลี่ยนน้อย)
+  if (url.pathname.match(/\.(png|jpg|jpeg|gif|svg|webp|woff2?|ttf|ico)$/i) ||
       url.pathname.startsWith('/photos/') ||
       url.pathname.startsWith('/icons/')) {
     event.respondWith(
