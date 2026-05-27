@@ -59,10 +59,32 @@ function toggleTheme() {
     at.name = 'apple-mobile-web-app-title'; at.content = 'เช็คชื่อ';
     head.appendChild(at);
   }
-  // Register service worker
+  // Register service worker + auto-update เมื่อ deploy ใหม่
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        // Force check for SW update ทุกครั้งที่โหลดหน้า
+        reg.update().catch(() => {});
+        // เมื่อมี SW ใหม่กำลังติดตั้ง
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // SW ใหม่พร้อมแล้ว — reload หน้าเพื่อใช้ CSS/JS ใหม่
+              console.log('[SW] Update ready — reloading...');
+              window.location.reload();
+            }
+          });
+        });
+      }).catch(() => {});
+      // Listen for controller change (SW เปลี่ยนตัว)
+      let reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloading) return;
+        reloading = true;
+        window.location.reload();
+      });
     });
   }
 })();
@@ -236,6 +258,8 @@ async function loadCurrentUser() {
 
     // Upgrade "คะแนน" link → "คะแนนความประพฤติ" dropdown
     upgradeBehaviorMenu();
+    // Add Heatmap link (after รายงาน) if not present
+    injectHeatmapLink();
     // Add global student search
     injectGlobalSearch();
     // Apply theme color and logo from settings
@@ -274,6 +298,20 @@ async function loadCurrentUser() {
   } catch (e) {
     return null;
   }
+}
+
+function injectHeatmapLink() {
+  // ถ้ามีแล้ว skip
+  if (document.querySelector('a.nav-link[href="/heatmap.html"]')) return;
+  const reportLink = document.querySelector('a.nav-link[href="/report.html"]');
+  if (!reportLink) return;
+  const reportLi = reportLink.closest('li.nav-item');
+  if (!reportLi) return;
+  const li = document.createElement('li');
+  li.className = 'nav-item';
+  const isActive = location.pathname === '/heatmap.html';
+  li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/heatmap.html"><i class="bi bi-calendar3-week me-1"></i>ปฏิทินมาเรียน</a>`;
+  reportLi.parentNode.insertBefore(li, reportLi.nextSibling);
 }
 
 function upgradeBehaviorMenu() {

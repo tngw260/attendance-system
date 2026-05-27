@@ -2254,6 +2254,91 @@ def api_dashboard():
         }
     )
 
+# ── HEATMAP (calendar grid) ───────────────────────────────
+
+@app.get('/api/heatmap')
+@login_required
+def api_heatmap():
+    """ข้อมูลการมาเรียนรายวัน 1 ปี สำหรับ heatmap calendar
+    Query: ?days=365 (default), ?level=1, ?room=1, ?student_id=123
+    Return: { from, to, days: [{date, total, present, late, absent, leave, activity, attended_pct}] }
+    """
+    u = current_user()
+    days = int(request.args.get('days', '365'))
+    days = max(30, min(days, 730))  # 1 month - 2 years
+    student_id = request.args.get('student_id')
+    level = request.args.get('level')
+    room = request.args.get('room')
+
+    today_d = datetime.date.today()
+    from_d = today_d - datetime.timedelta(days=days - 1)
+
+    # Build filter
+    where = ''
+    params = [from_d.isoformat()]
+    if student_id:
+        try:
+            sid = int(student_id)
+            where += ' AND a.student_id=?'
+            params.append(sid)
+        except ValueError: pass
+    if level:
+        try:
+            where += ' AND s.class_level=?'
+            params.append(int(level))
+        except ValueError: pass
+    if room:
+        try:
+            where += ' AND s.room=?'
+            params.append(int(room))
+        except ValueError: pass
+
+    # ครูดูได้เฉพาะห้องตัวเอง
+    if u['role'] == 'teacher' and u.get('assigned_level'):
+        where += ' AND s.class_level=?'
+        params.append(u['assigned_level'])
+        if u.get('assigned_room'):
+            where += ' AND s.room=?'
+            params.append(u['assigned_room'])
+
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT a.date,
+                   COUNT(*) AS total,
+                   SUM(a.status='present')  AS present,
+                   SUM(a.status='late')     AS late,
+                   SUM(a.status='absent')   AS absent,
+                   SUM(a.status='leave')    AS leave,
+                   SUM(a.status='activity') AS activity
+            FROM attendance a
+            JOIN students s ON s.id=a.student_id
+            WHERE a.date >= ? {where}
+            GROUP BY a.date
+            ORDER BY a.date
+        """, params).fetchall()
+
+    days_list = []
+    for r in rows:
+        total = r['total'] or 0
+        attended = (r['present'] or 0) + (r['late'] or 0)
+        pct = round((attended / total * 100), 1) if total > 0 else 0
+        days_list.append({
+            'date':     r['date'],
+            'total':    total,
+            'present':  r['present'] or 0,
+            'late':     r['late']    or 0,
+            'absent':   r['absent']  or 0,
+            'leave':    r['leave']   or 0,
+            'activity': r['activity']or 0,
+            'attended_pct': pct,
+        })
+
+    return jsonify(
+        from_date=from_d.isoformat(),
+        to_date=today_d.isoformat(),
+        days=days_list,
+    )
+
 # ── DIRECTOR VIEW (public, key-protected, read-only) ──────
 
 @app.get('/api/director')

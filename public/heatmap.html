@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ปฏิทินการมาเรียน — Heatmap</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    /* Heatmap grid */
+    .hm-wrap {
+      background: var(--surface, #fff);
+      border-radius: 12px;
+      padding: 1.25rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+      overflow-x: auto;
+    }
+    .hm-month-row {
+      display: flex;
+      gap: 3px;
+      padding-left: 28px;
+      font-size: .75rem;
+      color: var(--text-muted, #6c757d);
+      margin-bottom: 4px;
+      min-width: max-content;
+    }
+    .hm-month-label {
+      font-weight: 600;
+    }
+    .hm-body {
+      display: flex;
+      gap: 4px;
+      min-width: max-content;
+    }
+    .hm-day-labels {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: .68rem;
+      color: var(--text-muted, #6c757d);
+      padding-right: 6px;
+      justify-content: space-around;
+      min-width: 22px;
+    }
+    .hm-grid {
+      display: grid;
+      grid-template-rows: repeat(7, 14px);
+      grid-auto-flow: column;
+      grid-auto-columns: 14px;
+      gap: 3px;
+    }
+    .hm-cell {
+      width: 14px; height: 14px;
+      border-radius: 3px;
+      background: #ebedf0;
+      cursor: pointer;
+      transition: transform .1s;
+    }
+    .hm-cell:hover {
+      transform: scale(1.5);
+      outline: 1px solid #555;
+      z-index: 10;
+      position: relative;
+    }
+    /* Color scale by attendance % — green */
+    .hm-cell.lvl-1 { background: #c6e48b; }   /* 0-25% */
+    .hm-cell.lvl-2 { background: #7bc96f; }   /* 25-50% */
+    .hm-cell.lvl-3 { background: #239a3b; }   /* 50-75% */
+    .hm-cell.lvl-4 { background: #196127; }   /* 75-100% */
+    /* Warning state — มีคนขาดมาก */
+    .hm-cell.warn  { background: #fd7e14; }   /* >20% ขาด */
+    .hm-cell.crit  { background: #dc3545; }   /* >40% ขาด */
+    /* No data */
+    .hm-cell.empty { background: #f0f0f0; opacity: .5; }
+
+    [data-theme="dark"] .hm-cell { background: #2a2f38; }
+    [data-theme="dark"] .hm-cell.empty { background: #1f232b; }
+    [data-theme="dark"] .hm-wrap { background: var(--surface); }
+
+    /* Tooltip */
+    .hm-tooltip {
+      position: fixed;
+      background: #212529;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: .82rem;
+      pointer-events: none;
+      z-index: 9999;
+      display: none;
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,.3);
+    }
+    .hm-tooltip strong { color: #ffd86b; }
+
+    /* Legend */
+    .hm-legend {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      font-size: .8rem;
+      color: var(--text-muted);
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    .hm-legend-scale { display: flex; gap: 2px; align-items: center; }
+    .hm-legend-cell {
+      width: 12px; height: 12px;
+      border-radius: 2px;
+    }
+
+    /* Stats summary */
+    .hm-stat {
+      background: var(--surface, #fff);
+      border-radius: 10px;
+      padding: .75rem 1rem;
+      text-align: center;
+      border-top: 3px solid var(--primary);
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    .hm-stat .num { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+    .hm-stat .lbl { font-size: .8rem; color: var(--text-muted); margin-top: .25rem; }
+    .hm-stat.green { border-top-color: #198754; }
+    .hm-stat.green .num { color: #198754; }
+    .hm-stat.orange { border-top-color: #fd7e14; }
+    .hm-stat.orange .num { color: #fd7e14; }
+    .hm-stat.red { border-top-color: #dc3545; }
+    .hm-stat.red .num { color: #dc3545; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+        <li class="nav-item"><a class="nav-link" href="/attendance.html"><i class="bi bi-check2-square me-1"></i>เช็คชื่อ</a></li>
+        <li class="nav-item"><a class="nav-link" href="/report.html"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/heatmap.html"><i class="bi bi-calendar3-week me-1"></i>ปฏิทินมาเรียน</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header">
+  <div class="container">
+    <h1><i class="bi bi-calendar3-week me-2"></i>ปฏิทินการมาเรียน 1 ปี</h1>
+    <div class="subtitle">ดูภาพรวมแบบ Heatmap — สีเข้ม = มามาก, สีอ่อน = น้อย, ส้ม/แดง = ขาดมาก</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+
+  <!-- Filters -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small fw-600 mb-1">ดูข้อมูล</label>
+          <select id="selScope" class="form-select form-select-sm" onchange="onScopeChange()">
+            <option value="all">ทั้งโรงเรียน</option>
+            <option value="class">เฉพาะห้อง</option>
+            <option value="student">รายบุคคล (นักเรียน)</option>
+          </select>
+        </div>
+        <div class="col-md-3" id="classFilter" style="display:none;">
+          <label class="form-label small fw-600 mb-1">ห้อง</label>
+          <select id="selClass" class="form-select form-select-sm" onchange="load()">
+            <option value="">-- เลือกห้อง --</option>
+          </select>
+        </div>
+        <div class="col-md-4" id="studentFilter" style="display:none;">
+          <label class="form-label small fw-600 mb-1">นักเรียน</label>
+          <select id="selStudent" class="form-select form-select-sm" onchange="load()">
+            <option value="">-- เลือกนักเรียน --</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-600 mb-1">ช่วงเวลา</label>
+          <select id="selRange" class="form-select form-select-sm" onchange="load()">
+            <option value="90">90 วัน</option>
+            <option value="180">6 เดือน</option>
+            <option value="365" selected>1 ปี</option>
+            <option value="730">2 ปี</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary stats -->
+  <div class="row g-2 mb-3" id="statSummary"></div>
+
+  <!-- Heatmap -->
+  <div class="hm-wrap">
+    <div id="heatmapBody">
+      <div class="text-center text-muted py-5">
+        <div class="spinner-border"></div>
+        <div class="mt-2">กำลังโหลด...</div>
+      </div>
+    </div>
+    <div class="hm-legend">
+      <span>น้อย</span>
+      <div class="hm-legend-scale">
+        <div class="hm-legend-cell" style="background:#ebedf0;"></div>
+        <div class="hm-legend-cell" style="background:#c6e48b;"></div>
+        <div class="hm-legend-cell" style="background:#7bc96f;"></div>
+        <div class="hm-legend-cell" style="background:#239a3b;"></div>
+        <div class="hm-legend-cell" style="background:#196127;"></div>
+      </div>
+      <span>มาก</span>
+      <span class="ms-3"><span class="hm-legend-cell d-inline-block" style="background:#fd7e14;"></span> ขาด > 20%</span>
+      <span><span class="hm-legend-cell d-inline-block" style="background:#dc3545;"></span> ขาด > 40%</span>
+    </div>
+  </div>
+</div>
+
+<div id="hmTooltip" class="hm-tooltip"></div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="mainToast" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex"><div class="toast-body fw-500"></div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const THAI_MONTHS_SHORT_HM = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const THAI_DAY_SHORT = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+let allClasses = [];
+let allStudents = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  try {
+    allClasses = await apiFetch('/api/classes');
+    const sel = document.getElementById('selClass');
+    const grouped = {};
+    allClasses.forEach(c => {
+      if (!grouped[c.class_level]) grouped[c.class_level] = [];
+      grouped[c.class_level].push(c);
+    });
+    Object.keys(grouped).sort((a,b) => +a - +b).forEach(level => {
+      const og = document.createElement('optgroup');
+      og.label = `มัธยมศึกษาปีที่ ${level}`;
+      grouped[level].forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = `${c.class_level}_${c.room}`;
+        opt.textContent = `ม.${c.class_level}/${c.room}`;
+        og.appendChild(opt);
+      });
+      sel.appendChild(og);
+    });
+
+    // ถ้าครู — auto fill ห้อง
+    if (currentUser?.role === 'teacher' && currentUser?.assigned_level) {
+      document.getElementById('selScope').value = 'class';
+      onScopeChange();
+      if (currentUser.assigned_room) {
+        sel.value = `${currentUser.assigned_level}_${currentUser.assigned_room}`;
+      }
+    }
+  } catch (e) {}
+  load();
+});
+
+async function loadStudentList() {
+  try {
+    const s = await apiFetch('/api/students');
+    allStudents = s;
+    const sel = document.getElementById('selStudent');
+    sel.innerHTML = '<option value="">-- เลือกนักเรียน --</option>';
+    const grouped = {};
+    s.forEach(stu => {
+      const k = `ม.${stu.class_level}/${stu.room}`;
+      if (!grouped[k]) grouped[k] = [];
+      grouped[k].push(stu);
+    });
+    Object.keys(grouped).sort().forEach(k => {
+      const og = document.createElement('optgroup');
+      og.label = k;
+      grouped[k].forEach(stu => {
+        const opt = document.createElement('option');
+        opt.value = stu.id;
+        opt.textContent = `${stu.number ? stu.number+'. ' : ''}${stu.name}`;
+        og.appendChild(opt);
+      });
+      sel.appendChild(og);
+    });
+  } catch (e) {}
+}
+
+function onScopeChange() {
+  const scope = document.getElementById('selScope').value;
+  document.getElementById('classFilter').style.display    = scope === 'class' ? '' : 'none';
+  document.getElementById('studentFilter').style.display  = scope === 'student' ? '' : 'none';
+  if (scope === 'student' && allStudents.length === 0) loadStudentList();
+  load();
+}
+
+async function load() {
+  const scope = document.getElementById('selScope').value;
+  const range = document.getElementById('selRange').value;
+  let url = `/api/heatmap?days=${range}`;
+
+  if (scope === 'class') {
+    const v = document.getElementById('selClass').value;
+    if (!v) return;
+    const [level, room] = v.split('_');
+    url += `&level=${level}&room=${room}`;
+  } else if (scope === 'student') {
+    const sid = document.getElementById('selStudent').value;
+    if (!sid) return;
+    url += `&student_id=${sid}`;
+  }
+
+  document.getElementById('heatmapBody').innerHTML =
+    '<div class="text-center text-muted py-5"><div class="spinner-border"></div></div>';
+
+  try {
+    const d = await apiFetch(url);
+    renderStats(d);
+    renderHeatmap(d);
+  } catch (e) {
+    document.getElementById('heatmapBody').innerHTML =
+      `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+function renderStats(data) {
+  const days = data.days || [];
+  if (days.length === 0) {
+    document.getElementById('statSummary').innerHTML = '';
+    return;
+  }
+  const totalPresent = days.reduce((s, d) => s + d.present, 0);
+  const totalLate    = days.reduce((s, d) => s + d.late, 0);
+  const totalAbsent  = days.reduce((s, d) => s + d.absent, 0);
+  const totalAll     = days.reduce((s, d) => s + d.total, 0);
+  const attendedPct  = totalAll > 0 ? Math.round(((totalPresent + totalLate) / totalAll) * 100) : 0;
+
+  document.getElementById('statSummary').innerHTML = `
+    <div class="col-6 col-md-3"><div class="hm-stat"><div class="num">${days.length}</div><div class="lbl">วันที่บันทึก</div></div></div>
+    <div class="col-6 col-md-3"><div class="hm-stat green"><div class="num">${attendedPct}%</div><div class="lbl">อัตราการมาโรงเรียน</div></div></div>
+    <div class="col-6 col-md-3"><div class="hm-stat orange"><div class="num">${totalLate.toLocaleString()}</div><div class="lbl">มาสายรวม (ครั้ง)</div></div></div>
+    <div class="col-6 col-md-3"><div class="hm-stat red"><div class="num">${totalAbsent.toLocaleString()}</div><div class="lbl">ขาดรวม (ครั้ง)</div></div></div>
+  `;
+}
+
+function renderHeatmap(data) {
+  const from = new Date(data.from_date + 'T00:00:00');
+  const to   = new Date(data.to_date   + 'T00:00:00');
+  // Map date → data
+  const dataMap = {};
+  data.days.forEach(d => { dataMap[d.date] = d; });
+
+  // Pad to start on Sunday (column boundary)
+  const startCol = new Date(from);
+  startCol.setDate(startCol.getDate() - startCol.getDay());  // เลื่อนถอยไป "วันอาทิตย์"
+
+  const cells = [];
+  const monthMarkers = []; // { col, label }
+  let currentDate = new Date(startCol);
+  let col = 0;
+  let lastMonth = -1;
+
+  while (currentDate <= to) {
+    const iso = currentDate.toISOString().split('T')[0];
+    const inRange = currentDate >= from && currentDate <= to;
+    const d = dataMap[iso];
+    let className = 'hm-cell';
+    let tip = formatThaiDate(iso) + ' — ';
+
+    if (!inRange) {
+      className += ' empty';
+      tip = '';
+    } else if (!d) {
+      tip += 'ไม่มีข้อมูล (วันหยุด/ไม่ได้บันทึก)';
+    } else {
+      const absentRate = d.total > 0 ? (d.absent / d.total) : 0;
+      if (absentRate > 0.4) className += ' crit';
+      else if (absentRate > 0.2) className += ' warn';
+      else {
+        const pct = d.attended_pct;
+        if (pct >= 95) className += ' lvl-4';
+        else if (pct >= 80) className += ' lvl-3';
+        else if (pct >= 60) className += ' lvl-2';
+        else className += ' lvl-1';
+      }
+      tip += `<b>${d.attended_pct}%</b> มา · ${d.present + d.late}/${d.total} คน` +
+             `<br>มา ${d.present} · สาย ${d.late} · ขาด ${d.absent}` +
+             (d.leave ? ` · ลา ${d.leave}` : '') +
+             (d.activity ? ` · กิจกรรม ${d.activity}` : '');
+    }
+
+    const dayOfWeek = currentDate.getDay();
+    cells.push({ col, row: dayOfWeek, className, tip, iso, inRange });
+
+    // Track month markers
+    if (dayOfWeek === 0 && inRange) {
+      const m = currentDate.getMonth();
+      if (m !== lastMonth) {
+        monthMarkers.push({ col, label: THAI_MONTHS_SHORT_HM[m] });
+        lastMonth = m;
+      }
+    }
+    if (dayOfWeek === 6) col++;
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  // Build month row
+  const totalCols = col + 1;
+  const monthRowParts = [];
+  let lastEnd = 0;
+  monthMarkers.forEach((m, i) => {
+    const gap = (m.col - lastEnd) * 17; // 14px cell + 3px gap
+    monthRowParts.push(`<span style="margin-left:${Math.max(0, gap)}px;" class="hm-month-label">${m.label}</span>`);
+    lastEnd = m.col;
+  });
+
+  // Day labels (column on left)
+  const dayLabelsHtml = THAI_DAY_SHORT.map((d, i) =>
+    `<div style="height:14px;line-height:14px;">${i % 2 === 1 ? d : ''}</div>`
+  ).join('');
+
+  // Build cells (grid auto-flow column means we place by row position)
+  const cellsHtml = cells.map(c =>
+    `<div class="${c.className}" data-tip="${c.tip.replace(/"/g, '&quot;')}" style="grid-row:${c.row + 1};grid-column:${c.col + 1};"></div>`
+  ).join('');
+
+  document.getElementById('heatmapBody').innerHTML = `
+    <div class="hm-month-row">${monthRowParts.join('')}</div>
+    <div class="hm-body">
+      <div class="hm-day-labels">${dayLabelsHtml}</div>
+      <div class="hm-grid" style="grid-template-columns:repeat(${totalCols}, 14px);">
+        ${cellsHtml}
+      </div>
+    </div>`;
+
+  // Tooltip
+  const tip = document.getElementById('hmTooltip');
+  document.querySelectorAll('.hm-cell').forEach(el => {
+    el.addEventListener('mouseenter', e => {
+      const t = e.target.dataset.tip;
+      if (!t) return;
+      tip.innerHTML = t;
+      tip.style.display = 'block';
+    });
+    el.addEventListener('mousemove', e => {
+      tip.style.left = (e.clientX + 14) + 'px';
+      tip.style.top  = (e.clientY + 14) + 'px';
+    });
+    el.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+  });
+}
+
+function formatThaiDate(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${+d} ${THAI_MONTHS_SHORT_HM[+m-1]} ${+y+543}`;
+}
+</script>
+</body>
+</html>
