@@ -338,6 +338,52 @@ function setupDragDrop() {
   });
 }
 
+async function handleBulkUpdate(file) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['xlsx','xls'].includes(ext)) {
+    showToast('กรุณาเลือกไฟล์ Excel', 'warning'); return;
+  }
+
+  const resultEl = document.getElementById('bulkResult');
+  resultEl.style.display = '';
+  resultEl.innerHTML = '<div class="alert alert-info mb-0"><div class="spinner-border spinner-border-sm me-2"></div>กำลังอัพเดท...</div>';
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const res = await fetch('/api/students/bulk-update', { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (data.success) {
+      let html = `
+        <div class="alert alert-success mb-0">
+          <i class="bi bi-check-circle-fill me-2"></i>
+          <strong>${data.message}</strong>`;
+      if (data.not_found && data.not_found.length > 0) {
+        html += `<details class="mt-2"><summary class="small text-muted" style="cursor:pointer;">
+          ไม่พบในระบบ ${data.not_found.length} คน (คลิกดูรายชื่อ)
+          </summary><ul class="small mt-1 mb-0">`;
+        data.not_found.slice(0, 20).forEach(n => html += `<li>${n}</li>`);
+        if (data.not_found.length > 20) html += `<li>... และอีก ${data.not_found.length - 20} คน</li>`;
+        html += `</ul></details>`;
+      }
+      html += '</div>';
+      resultEl.innerHTML = html;
+      showToast(data.message, 'success');
+      await loadStudents();
+    } else {
+      resultEl.innerHTML = `<div class="alert alert-danger mb-0"><i class="bi bi-x-circle-fill me-2"></i>${data.message}</div>`;
+      showToast(data.message, 'danger');
+    }
+  } catch (e) {
+    resultEl.innerHTML = `<div class="alert alert-danger mb-0">ผิดพลาด: ${e.message}</div>`;
+  }
+  // เคลียร์ input เผื่อ upload ไฟล์เดิมซ้ำ
+  document.getElementById('bulkUpdateInput').value = '';
+}
+
 async function handleFile(file) {
   if (!file) return;
   const ext = file.name.split('.').pop().toLowerCase();

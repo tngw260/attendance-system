@@ -856,6 +856,143 @@ def api_import():
     msg = f'นำเข้าสำเร็จ {count} คน' + (f' (ข้าม {errors} แถว)' if errors else '')
     return jsonify(success=True, count=count, errors=errors, message=msg)
 
+@app.get('/api/students/export')
+@admin_required
+def api_students_export():
+    """Export รายชื่อนักเรียนปัจจุบันทั้งหมด เป็น Excel — ใช้ format เดียวกับ template
+    เพื่อให้แก้แล้ว upload กลับผ่าน /bulk-update ได้ทันที"""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'รายชื่อนักเรียน'
+
+    headers = ['เลขที่', 'รหัสนักเรียน', 'ชื่อ-นามสกุล', 'ชั้น (1-6)', 'ห้อง', 'เพศ',
+               'วันเกิด (YYYY-MM-DD)', 'เลขบัตรประชาชน (13 หลัก)']
+    hfill = PatternFill(fill_type='solid', fgColor='1A5276')
+    hfont = Font(bold=True, color='FFFFFF')
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.fill = hfill; cell.font = hfont
+        cell.alignment = Alignment(horizontal='center')
+
+    with get_db() as con:
+        rows = con.execute("""
+            SELECT number, student_code, name, class_level, room, gender, birthdate, national_id
+            FROM students ORDER BY class_level, room, number, name
+        """).fetchall()
+    for r in rows:
+        ws.append([r['number'], r['student_code'], r['name'], r['class_level'],
+                   r['room'], r['gender'], r['birthdate'], r['national_id']])
+    for col, w in zip(ws.columns, [8, 16, 32, 12, 8, 8, 16, 20]):
+        ws.column_dimensions[col[0].column_letter].width = w
+
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    ts = datetime.datetime.now().strftime('%Y%m%d')
+    return send_file(buf, as_attachment=True,
+                     download_name=f'students_{ts}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@app.post('/api/students/bulk-update')
+@admin_required
+def api_bulk_update():
+    """อัพเดทข้อมูลนักเรียนเก่าจาก Excel — match ตาม student_code (priority) หรือ name+class+room
+    คอลัมน์ที่ใช้ update: number, name, gender, birthdate, national_id (ยกเว้นช่องว่าง)
+    """
+    if 'file' not in request.files:
+        return jsonify(success=False, message='ไม่พบไฟล์'), 400
+    f = request.files['file']
+    if not f.filename.lower().endswith(('.xlsx', '.xls')):
+        return jsonify(success=False, message='ต้องเป็นไฟล์ Excel'), 400
+
+    try:
+        wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        wb.close()
+    except Exception as e:
+        return jsonify(success=False, message=f'เปิดไฟล์ไม่ได้: {e}'), 400
+
+    updated = 0
+    not_found = []
+    skipped = 0
+
+    with get_db() as con:
+        for row in rows:
+            if not row or len(row) < 3: continue
+            try:
+                num   = int(row[0]) if row[0] is not None else None
+                code  = str(row[1]).strip() if row[1] is not None else ''
+                name  = str(row[2]).strip() if row[2] is not None else ''
+                level = int(row[3]) if row[3] is not None else None
+                room  = int(row[4]) if row[4] is not None else None
+                gender = str(row[5]).strip() if len(row) > 5 and row[5] is not None else None
+
+                # birthdate
+                birthdate = None
+                if len(row) > 6 and row[6] is not None:
+                    bd = row[6]
+                    if hasattr(bd, 'isoformat'):
+                        birthdate = bd.date().isoformat() if hasattr(bd, 'date') else bd.isoformat()
+                    else:
+                        bd_str = str(bd).strip()
+                        if bd_str:
+                            try:
+                                datetime.date.fromisoformat(bd_str)
+                                birthdate = bd_str
+                            except ValueError: pass
+
+                # national_id
+                national_id = None
+                if len(row) > 7 and row[7] is not None:
+                    nid = str(row[7]).strip().replace('-', '').replace(' ', '')
+                    if nid.isdigit() and len(nid) == 13:
+                        national_id = nid
+
+                # หานักเรียน — priority: student_code → name+class+room
+                target = None
+                if code:
+                    target = con.execute(
+                        'SELECT id FROM students WHERE student_code=?', (code,)
+                    ).fetchone()
+                if not target and name and level and room:
+                    target = con.execute(
+                        'SELECT id FROM students WHERE name=? AND class_level=? AND room=?',
+                        (name, level, room)
+                    ).fetchone()
+
+                if not target:
+                    not_found.append(name or code or f'row {num}')
+                    continue
+
+                # Build update — ใส่เฉพาะที่มีค่าใหม่ (ไม่ overwrite ของเดิมด้วยว่าง)
+                updates = {}
+                if num is not None: updates['number'] = num
+                if name:            updates['name'] = name
+                if gender:          updates['gender'] = gender
+                if birthdate:       updates['birthdate'] = birthdate
+                if national_id:     updates['national_id'] = national_id
+
+                if not updates:
+                    skipped += 1
+                    continue
+
+                cols = ', '.join(f'{k}=?' for k in updates.keys())
+                con.execute(
+                    f'UPDATE students SET {cols} WHERE id=?',
+                    list(updates.values()) + [target['id']]
+                )
+                updated += 1
+
+            except Exception:
+                skipped += 1
+
+        audit_log(con, 'bulk_update_students', 'student', None,
+                  {'updated': updated, 'not_found': len(not_found), 'skipped': skipped})
+
+    msg = f'อัพเดทสำเร็จ {updated} คน'
+    if not_found: msg += f' • ไม่พบ {len(not_found)} คน'
+    if skipped:   msg += f' • ข้าม {skipped} แถว'
+    return jsonify(success=True, updated=updated, not_found=not_found, skipped=skipped, message=msg)
+
 @app.delete('/api/students/all')
 @admin_required
 def api_students_clear():
