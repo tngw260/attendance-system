@@ -266,13 +266,17 @@ def init_db():
             con.execute('ALTER TABLE users ADD COLUMN assigned_room INTEGER')
         if 'must_change_pw' not in cols:
             con.execute('ALTER TABLE users ADD COLUMN must_change_pw INTEGER DEFAULT 0')
-        # Migrate: students - add photo + parent_code
+        # Migrate: students - add photo + parent_code + birthdate + national_id
         scols = [r['name'] for r in con.execute('PRAGMA table_info(students)').fetchall()]
         if 'photo' not in scols:
             con.execute('ALTER TABLE students ADD COLUMN photo TEXT')
         if 'parent_code' not in scols:
             con.execute('ALTER TABLE students ADD COLUMN parent_code TEXT')
             con.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_stu_pcode ON students(parent_code)')
+        if 'birthdate' not in scols:
+            con.execute('ALTER TABLE students ADD COLUMN birthdate TEXT')  # ISO YYYY-MM-DD
+        if 'national_id' not in scols:
+            con.execute('ALTER TABLE students ADD COLUMN national_id TEXT')  # 13 หลัก
 
         # Migrate: behavior_logs - add note column
         bcols = [r['name'] for r in con.execute('PRAGMA table_info(behavior_logs)').fetchall()]
@@ -765,7 +769,8 @@ def api_template():
     ws = wb.active
     ws.title = 'รายชื่อนักเรียน'
 
-    headers = ['เลขที่', 'รหัสนักเรียน', 'ชื่อ-นามสกุล', 'ชั้น (1-6)', 'ห้อง', 'เพศ']
+    headers = ['เลขที่', 'รหัสนักเรียน', 'ชื่อ-นามสกุล', 'ชั้น (1-6)', 'ห้อง', 'เพศ',
+               'วันเกิด (YYYY-MM-DD)', 'เลขบัตรประชาชน (13 หลัก)']
     hfill = PatternFill(fill_type='solid', fgColor='1A5276')
     hfont = Font(bold=True, color='FFFFFF')
     for col, h in enumerate(headers, 1):
@@ -774,12 +779,12 @@ def api_template():
         cell.alignment = Alignment(horizontal='center')
 
     sample = [
-        [1, '12345', 'เด็กชาย ตัวอย่าง นามสกุลตัวอย่าง', 1, 1, 'ชาย'],
-        [2, '12346', 'เด็กหญิง ตัวอย่าง นามสกุลตัวอย่าง', 1, 1, 'หญิง'],
-        [3, '12347', 'เด็กชาย สมชาย รักเรียน', 2, 1, 'ชาย'],
+        [1, '12345', 'เด็กชาย ตัวอย่าง นามสกุลตัวอย่าง', 1, 1, 'ชาย', '2012-05-15', '1234567890123'],
+        [2, '12346', 'เด็กหญิง ตัวอย่าง นามสกุลตัวอย่าง', 1, 1, 'หญิง', '2012-08-22', ''],
+        [3, '12347', 'เด็กชาย สมชาย รักเรียน', 2, 1, 'ชาย', '', ''],
     ]
     for r in sample: ws.append(r)
-    for col, w in zip(ws.columns, [8, 16, 32, 12, 8, 8]):
+    for col, w in zip(ws.columns, [8, 16, 32, 12, 8, 8, 16, 20]):
         ws.column_dimensions[col[0].column_letter].width = w
 
     buf = io.BytesIO(); wb.save(buf); buf.seek(0)
@@ -813,16 +818,37 @@ def api_import():
             level  = int(row[3]) if row[3] is not None else None
             room   = int(row[4]) if row[4] is not None else None
             gender = str(row[5]).strip() if len(row) > 5 and row[5] is not None else None
+            # วันเกิด (col 7) — รองรับทั้ง string และ datetime
+            birthdate = None
+            if len(row) > 6 and row[6] is not None:
+                bd = row[6]
+                if hasattr(bd, 'isoformat'):
+                    birthdate = bd.date().isoformat() if hasattr(bd, 'date') else bd.isoformat()
+                else:
+                    bd_str = str(bd).strip()
+                    if bd_str:
+                        try:
+                            datetime.date.fromisoformat(bd_str)
+                            birthdate = bd_str
+                        except ValueError: pass
+            # เลขบัตรประชาชน (col 8) — must be 13 digits
+            national_id = None
+            if len(row) > 7 and row[7] is not None:
+                nid = str(row[7]).strip().replace('-', '').replace(' ', '')
+                if nid.isdigit() and len(nid) == 13:
+                    national_id = nid
             if not name or not level or not room or not (1 <= level <= 6):
                 errors += 1; continue
-            inserts.append((num, code, name, level, room, gender)); count += 1
+            inserts.append((num, code, name, level, room, gender, birthdate, national_id))
+            count += 1
         except Exception:
             errors += 1
 
     if inserts:
         with get_db() as con:
             con.executemany(
-                'INSERT INTO students (number,student_code,name,class_level,room,gender) VALUES (?,?,?,?,?,?)',
+                'INSERT INTO students (number,student_code,name,class_level,room,gender,birthdate,national_id) '
+                'VALUES (?,?,?,?,?,?,?,?)',
                 inserts
             )
             audit_log(con, 'import_students', 'student', None, {'count': count, 'errors': errors})
@@ -845,8 +871,10 @@ def api_student_get(sid):
     """ข้อมูลนักเรียน 1 คน — สำหรับ confirm scan + อื่นๆ"""
     u = current_user()
     with get_db() as con:
-        s = con.execute('SELECT id, number, student_code, name, class_level, room, gender, photo FROM students WHERE id=?',
-                        (sid,)).fetchone()
+        s = con.execute(
+            'SELECT id, number, student_code, name, class_level, room, gender, photo, '
+            'birthdate, national_id, parent_code FROM students WHERE id=?',
+            (sid,)).fetchone()
     if not s:
         return jsonify(error='ไม่พบนักเรียน'), 404
     # ครูดึงได้เฉพาะห้องตัวเอง
@@ -892,21 +920,102 @@ def api_student_create():
     number = b.get('number')
     student_code = (b.get('student_code') or '').strip() or None
     gender = (b.get('gender') or '').strip() or None
+    birthdate = (b.get('birthdate') or '').strip() or None
+    national_id = (b.get('national_id') or '').strip() or None
     try:
         number = int(number) if number else None
     except (TypeError, ValueError):
         number = None
 
+    # Validate
+    if national_id and (not national_id.isdigit() or len(national_id) != 13):
+        return jsonify(success=False, message='เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก'), 400
+    if birthdate:
+        try: datetime.date.fromisoformat(birthdate)
+        except ValueError: return jsonify(success=False, message='วันเกิดไม่ถูกต้อง (YYYY-MM-DD)'), 400
+
     with get_db() as con:
         cur = con.execute(
-            'INSERT INTO students (number, student_code, name, class_level, room, gender) VALUES (?,?,?,?,?,?)',
-            (number, student_code, name, level, room, gender)
+            'INSERT INTO students (number, student_code, name, class_level, room, gender, birthdate, national_id) '
+            'VALUES (?,?,?,?,?,?,?,?)',
+            (number, student_code, name, level, room, gender, birthdate, national_id)
         )
         sid = cur.lastrowid
         audit_log(con, 'create_student', 'student', sid,
                   {'name': name, 'class': f'{level}/{room}'})
 
     return jsonify(success=True, id=sid, message=f'เพิ่มนักเรียน "{name}" สำเร็จ')
+
+@app.put('/api/students/<int:sid>')
+@login_required
+def api_student_update(sid):
+    """อัพเดทข้อมูลนักเรียน — admin หรือครูประจำชั้น"""
+    u = current_user()
+    b = request.get_json() or {}
+
+    with get_db() as con:
+        s = con.execute('SELECT * FROM students WHERE id=?', (sid,)).fetchone()
+        if not s:
+            return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        # ครูแก้ได้เฉพาะห้องตัวเอง
+        if u['role'] == 'teacher' and u.get('assigned_level'):
+            if s['class_level'] != u['assigned_level']:
+                return jsonify(success=False, message='ไม่มีสิทธิ์แก้ไขห้องนี้'), 403
+            if u.get('assigned_room') and s['room'] != u['assigned_room']:
+                return jsonify(success=False, message='ไม่มีสิทธิ์แก้ไขห้องนี้'), 403
+
+        # อ่านค่าเดิมเป็น default — ถ้าไม่ส่งมาให้เก็บเดิม
+        updates = {}
+        if 'name' in b:
+            name = (b.get('name') or '').strip()
+            if not name: return jsonify(success=False, message='ชื่อห้ามว่าง'), 400
+            updates['name'] = name
+        if 'number' in b:
+            try: updates['number'] = int(b['number']) if b['number'] else None
+            except (TypeError, ValueError): pass
+        if 'student_code' in b:
+            updates['student_code'] = (b.get('student_code') or '').strip() or None
+        if 'class_level' in b:
+            try:
+                lv = int(b['class_level'])
+                if not (1 <= lv <= 6): raise ValueError()
+                # ครูเปลี่ยน level ไม่ได้
+                if u['role'] != 'admin' and lv != s['class_level']:
+                    return jsonify(success=False, message='ครูเปลี่ยนชั้นไม่ได้'), 403
+                updates['class_level'] = lv
+            except (TypeError, ValueError):
+                return jsonify(success=False, message='ชั้นไม่ถูกต้อง'), 400
+        if 'room' in b:
+            try:
+                rm = int(b['room'])
+                if rm < 1: raise ValueError()
+                if u['role'] != 'admin' and rm != s['room']:
+                    return jsonify(success=False, message='ครูเปลี่ยนห้องไม่ได้'), 403
+                updates['room'] = rm
+            except (TypeError, ValueError):
+                return jsonify(success=False, message='ห้องไม่ถูกต้อง'), 400
+        if 'gender' in b:
+            updates['gender'] = (b.get('gender') or '').strip() or None
+        if 'birthdate' in b:
+            bd = (b.get('birthdate') or '').strip() or None
+            if bd:
+                try: datetime.date.fromisoformat(bd)
+                except ValueError: return jsonify(success=False, message='วันเกิดไม่ถูกต้อง (YYYY-MM-DD)'), 400
+            updates['birthdate'] = bd
+        if 'national_id' in b:
+            nid = (b.get('national_id') or '').strip() or None
+            if nid and (not nid.isdigit() or len(nid) != 13):
+                return jsonify(success=False, message='เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก'), 400
+            updates['national_id'] = nid
+
+        if not updates:
+            return jsonify(success=False, message='ไม่มีข้อมูลให้อัพเดท'), 400
+
+        cols = ', '.join(f'{k}=?' for k in updates.keys())
+        con.execute(f'UPDATE students SET {cols} WHERE id=?', list(updates.values()) + [sid])
+        audit_log(con, 'update_student', 'student', sid, {'fields': list(updates.keys())})
+
+    return jsonify(success=True, message='อัพเดทข้อมูลสำเร็จ')
 
 # ── ATTENDANCE ────────────────────────────────────────────
 

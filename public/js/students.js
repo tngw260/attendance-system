@@ -33,7 +33,9 @@ function openAddStudent() {
             room: fd.get('room'),
             number: fd.get('number') || null,
             student_code: fd.get('student_code') || null,
-            gender: fd.get('gender') || null
+            gender: fd.get('gender') || null,
+            birthdate: fd.get('birthdate') || null,
+            national_id: fd.get('national_id') || null,
           })
         });
         showToast(res.message);
@@ -45,6 +47,8 @@ function openAddStudent() {
           e.target.name.value = '';
           e.target.student_code.value = '';
           e.target.gender.value = '';
+          e.target.birthdate.value = '';
+          e.target.national_id.value = '';
           if (next > 0) e.target.number.value = next;
           e.target.name.focus();
         } else {
@@ -56,6 +60,59 @@ function openAddStudent() {
   }
   addStudentModal.show();
   setTimeout(() => document.querySelector('#addStudentForm [name=name]').focus(), 300);
+}
+
+let editStudentModal;
+
+async function openEditStudent(sid) {
+  try {
+    const s = await apiFetch(`/api/students/${sid}`);
+    if (!editStudentModal) {
+      editStudentModal = new bootstrap.Modal('#editStudentModal');
+      document.getElementById('editStudentForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const id = fd.get('id');
+        try {
+          const res = await apiFetch(`/api/students/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              name:         fd.get('name'),
+              class_level:  fd.get('class_level'),
+              room:         fd.get('room'),
+              number:       fd.get('number') || null,
+              student_code: fd.get('student_code') || null,
+              gender:       fd.get('gender') || null,
+              birthdate:    fd.get('birthdate') || null,
+              national_id:  fd.get('national_id') || null,
+            })
+          });
+          showToast(res.message);
+          editStudentModal.hide();
+          loadStudents();
+        } catch (err) { showToast(err.message, 'danger'); }
+      });
+    }
+    // Pre-fill form
+    const f = document.getElementById('editStudentForm');
+    f.id.value           = s.id;
+    f.name.value         = s.name || '';
+    f.class_level.value  = s.class_level || '';
+    f.room.value         = s.room || '';
+    f.number.value       = s.number || '';
+    f.student_code.value = s.student_code || '';
+    f.gender.value       = s.gender || '';
+    f.birthdate.value    = s.birthdate || '';
+    f.national_id.value  = s.national_id || '';
+    // ครูเปลี่ยน class/room ไม่ได้
+    if (currentUser?.role === 'teacher' && currentUser?.assigned_level) {
+      f.class_level.disabled = true;
+      if (currentUser.assigned_room) f.room.disabled = true;
+    }
+    editStudentModal.show();
+  } catch (e) {
+    showToast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'danger');
+  }
 }
 
 function openPhotoUpload(sid, name, currentPhoto) {
@@ -445,6 +502,9 @@ function renderTable(students) {
           <td>${s.gender ?? ''}</td>
           <td>${parentBadge}</td>
           <td class="text-end">
+            <button class="btn btn-link btn-sm p-0 me-2 text-primary" onclick="openEditStudent(${s.id})" title="แก้ไขข้อมูล">
+              <i class="bi bi-pencil-square"></i>
+            </button>
             <a href="/behavior.html?id=${s.id}" class="btn btn-link btn-sm p-0 me-2" title="คะแนนความประพฤติ"><i class="bi bi-award"></i></a>
             ${adminBtn}
           </td>

@@ -208,6 +208,17 @@
               </select>
             </div>
           </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-600"><i class="bi bi-cake2 me-1"></i>วันเกิด</label>
+              <input type="date" name="birthdate" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-600"><i class="bi bi-credit-card me-1"></i>เลขบัตรประชาชน</label>
+              <input type="text" name="national_id" class="form-control"
+                pattern="\d{13}" maxlength="13" placeholder="13 หลัก" inputmode="numeric">
+            </div>
+          </div>
           <div class="form-check">
             <input type="checkbox" id="keepOpen" class="form-check-input">
             <label for="keepOpen" class="form-check-label small text-muted">เพิ่มต่อเลย (ไม่ปิดหน้านี้ — สำหรับเพิ่มหลายคนติดกัน)</label>
@@ -217,6 +228,76 @@
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
           <button type="submit" class="btn btn-success">
             <i class="bi bi-plus-circle me-2"></i>เพิ่มนักเรียน
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Student Modal -->
+<div class="modal fade" id="editStudentModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>แก้ไขข้อมูลนักเรียน</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="editStudentForm">
+        <div class="modal-body">
+          <input type="hidden" name="id">
+          <div class="mb-3">
+            <label class="form-label fw-600">ชื่อ-นามสกุล <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control form-control-lg" required>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-4">
+              <label class="form-label fw-600">ชั้น</label>
+              <select name="class_level" class="form-select">
+                <option value="1">ม.1</option><option value="2">ม.2</option>
+                <option value="3">ม.3</option><option value="4">ม.4</option>
+                <option value="5">ม.5</option><option value="6">ม.6</option>
+              </select>
+            </div>
+            <div class="col-4">
+              <label class="form-label fw-600">ห้อง</label>
+              <input type="number" name="room" class="form-control" min="1" max="20">
+            </div>
+            <div class="col-4">
+              <label class="form-label fw-600">เลขที่</label>
+              <input type="number" name="number" class="form-control" min="1" max="60">
+            </div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-7">
+              <label class="form-label fw-600">รหัสนักเรียน</label>
+              <input type="text" name="student_code" class="form-control">
+            </div>
+            <div class="col-5">
+              <label class="form-label fw-600">เพศ</label>
+              <select name="gender" class="form-select">
+                <option value="">-</option>
+                <option value="ชาย">ชาย</option>
+                <option value="หญิง">หญิง</option>
+              </select>
+            </div>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label fw-600"><i class="bi bi-cake2 me-1"></i>วันเกิด</label>
+              <input type="date" name="birthdate" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-600"><i class="bi bi-credit-card me-1"></i>เลขบัตรประชาชน</label>
+              <input type="text" name="national_id" class="form-control"
+                pattern="\d{13}" maxlength="13" placeholder="13 หลัก" inputmode="numeric">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-2"></i>บันทึก
           </button>
         </div>
       </form>
