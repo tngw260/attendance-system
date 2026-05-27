@@ -135,8 +135,8 @@
     }
     .sc-info .info-grid {
       display: grid;
-      grid-template-columns: 11mm 1fr;
-      gap: 0.6mm 1.5mm;
+      grid-template-columns: 16mm 1fr;
+      gap: 1mm 1.5mm;
       font-size: 8pt;
       line-height: 1.2;
     }
@@ -148,14 +148,10 @@
       font-weight: 700;
       color: #1a1a1a;
     }
-    .sc-info .code-row {
-      margin-top: auto;
-      padding-top: 1mm;
+    .sc-info .info-grid .value.code-val {
       font-family: 'Courier New', monospace;
-      font-size: 6.5pt;
       letter-spacing: 0.5pt;
-      color: rgba(0,0,0,.55);
-      border-top: 0.2mm dotted rgba(0,0,0,.2);
+      color: #0d3b8e;
     }
 
     /* QR */
@@ -512,10 +508,9 @@ function renderFront(s, theme) {
       <div class="info-grid">
         <span class="label">ชั้น</span>
         <span class="value">มัธยมศึกษาปีที่ ${s.class_level}/${s.room}</span>
-        <span class="label">เลขที่</span>
-        <span class="value">${s.number ?? '-'}</span>
+        <span class="label">เลขประจำตัว</span>
+        <span class="value code-val">${s.student_code || '-'}</span>
       </div>
-      <div class="code-row">${s.student_code || ''}</div>
     </div>
     <div class="sc-qr"><img src="${qrUrl}" alt="QR"></div>
     <div class="sc-qr-label">SCAN</div>
