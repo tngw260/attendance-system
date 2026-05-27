@@ -28,123 +28,189 @@
     }
     .card-page:last-child { page-break-after: auto; }
 
-    /* ===== บัตร CR80 มาตรฐาน 85.6 × 54 mm ===== */
+    /* ===== บัตร CR80 มาตรฐาน 85.6 × 54 mm — Layout ใหม่ ===== */
     .student-card {
       width: 85.6mm;
       height: 54mm;
       border-radius: 3mm;
-      padding: 2.5mm 3mm;
+      padding: 0;
       box-sizing: border-box;
       display: grid;
-      grid-template-columns: 22mm 1fr 22mm;
-      grid-template-rows: auto 1fr auto;
-      gap: 1mm 2mm;
+      grid-template-columns: 24mm 1fr 22mm;
+      grid-template-rows: 8mm 1fr 7mm;
+      grid-template-areas:
+        "head head head"
+        "photo info qr"
+        "foot foot foot";
+      gap: 0;
       position: relative;
       overflow: hidden;
       page-break-inside: avoid;
       color: #1a1a1a;
       font-size: 8pt;
-      line-height: 1.15;
-      border: 0.3mm solid rgba(0,0,0,.15);
-      box-shadow: 0 1px 2px rgba(0,0,0,.08);
+      line-height: 1.2;
+      border: 0.3mm solid rgba(0,0,0,.2);
+      box-shadow: 0 1px 3px rgba(0,0,0,.1);
+    }
+    /* แถบสีทองด้านซ้ายของบัตร (accent) */
+    .student-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 8mm; bottom: 7mm;
+      width: 1.5mm;
+      background: linear-gradient(180deg, #d4a017, #b8870c);
+      z-index: 1;
     }
 
-    /* หัวบัตร (full width) */
+    /* HEADER */
     .sc-head {
-      grid-column: 1 / 4;
+      grid-area: head;
       display: flex;
       align-items: center;
       gap: 2mm;
-      border-bottom: 0.3mm solid rgba(0,0,0,.2);
-      padding-bottom: 1mm;
+      padding: 1mm 3mm;
+      background: linear-gradient(90deg, rgba(13,59,142,.92), rgba(26,85,200,.7) 60%, transparent);
+      color: white;
+      border-bottom: 0.3mm solid rgba(212,160,23,.6);
     }
     .sc-head .logo {
-      width: 7mm; height: 7mm; border-radius: 50%;
-      background: white; padding: 0.4mm;
+      width: 6.5mm; height: 6.5mm; border-radius: 50%;
+      background: white; padding: 0.3mm;
       object-fit: contain;
       flex-shrink: 0;
+      box-shadow: 0 0.2mm 0.5mm rgba(0,0,0,.2);
     }
     .sc-head .titles { flex: 1; min-width: 0; }
     .sc-head .school {
       font-weight: 700;
-      font-size: 8.5pt;
-      line-height: 1.1;
+      font-size: 8pt;
+      line-height: 1.05;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      letter-spacing: 0.1pt;
     }
     .sc-head .badge-id {
-      font-size: 6.5pt;
-      letter-spacing: 0.3pt;
+      font-size: 5.5pt;
+      letter-spacing: 0.5pt;
       opacity: .85;
+      text-transform: uppercase;
+      margin-top: -0.2mm;
     }
 
-    /* รูปนักเรียน */
-    .sc-photo {
-      width: 22mm; height: 28mm;
-      border-radius: 1.5mm;
+    /* PHOTO */
+    .sc-photo, .sc-photo-placeholder {
+      grid-area: photo;
+      width: 21mm; height: 28mm;
+      margin: 3mm auto 0;
+      border-radius: 1.2mm;
       object-fit: cover;
-      background: rgba(255,255,255,.7);
-      border: 0.3mm solid rgba(0,0,0,.2);
+      border: 0.4mm solid rgba(255,255,255,.95);
+      box-shadow: 0 0.3mm 1mm rgba(0,0,0,.25);
+      background: white;
     }
     .sc-photo-placeholder {
-      width: 22mm; height: 28mm;
-      border-radius: 1.5mm;
-      background: rgba(255,255,255,.6);
-      border: 0.3mm dashed rgba(0,0,0,.3);
       display: flex; align-items: center; justify-content: center;
-      color: rgba(0,0,0,.4); font-size: 14pt;
+      color: rgba(0,0,0,.35); font-size: 13pt;
     }
 
-    /* ข้อมูล */
-    .sc-info { min-width: 0; padding-top: 0.5mm; }
+    /* INFO (กลาง) */
+    .sc-info {
+      grid-area: info;
+      padding: 2.5mm 2mm 0 2mm;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5mm;
+    }
     .sc-info .name {
-      font-size: 10pt; font-weight: 700; line-height: 1.15;
-      margin-bottom: 0.8mm;
+      font-size: 11pt;
+      font-weight: 800;
+      line-height: 1.1;
+      color: #0d3b8e;
+      margin-bottom: 1mm;
       word-wrap: break-word;
+      padding-bottom: 1mm;
+      border-bottom: 0.25mm solid rgba(13,59,142,.25);
     }
-    .sc-info .row-i {
-      font-size: 7.5pt; line-height: 1.3;
-      display: flex; gap: 1.5mm;
+    .sc-info .info-grid {
+      display: grid;
+      grid-template-columns: 11mm 1fr;
+      gap: 0.6mm 1.5mm;
+      font-size: 8pt;
+      line-height: 1.2;
     }
-    .sc-info .row-i b { font-weight: 600; opacity: .75; }
-    .sc-info .code {
+    .sc-info .info-grid .label {
+      color: rgba(0,0,0,.55);
+      font-weight: 500;
+    }
+    .sc-info .info-grid .value {
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+    .sc-info .code-row {
+      margin-top: auto;
+      padding-top: 1mm;
       font-family: 'Courier New', monospace;
-      font-size: 7pt;
-      margin-top: 0.8mm;
-      letter-spacing: 0.4pt;
-      opacity: .8;
+      font-size: 6.5pt;
+      letter-spacing: 0.5pt;
+      color: rgba(0,0,0,.55);
+      border-top: 0.2mm dotted rgba(0,0,0,.2);
     }
 
     /* QR */
     .sc-qr {
-      width: 22mm; height: 22mm;
+      grid-area: qr;
+      width: 20mm; height: 20mm;
+      margin: 3mm auto 0;
       background: white;
       padding: 0.5mm;
       border-radius: 1mm;
-      align-self: center;
-      justify-self: center;
+      border: 0.2mm solid rgba(0,0,0,.15);
+      align-self: start;
     }
     .sc-qr img { width: 100%; height: 100%; display: block; }
+    .sc-qr-label {
+      grid-area: qr;
+      align-self: end;
+      justify-self: center;
+      font-size: 5pt;
+      color: rgba(0,0,0,.5);
+      margin-bottom: 0.8mm;
+      letter-spacing: 0.3pt;
+      text-transform: uppercase;
+    }
 
-    /* ลายเซ็น ผอ. (full width) */
+    /* FOOTER — ลายเซ็น ผอ. */
     .sc-sign {
-      grid-column: 1 / 4;
+      grid-area: foot;
       display: flex;
-      justify-content: flex-end;
-      align-items: flex-end;
-      font-size: 6.5pt;
-      line-height: 1.2;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 3mm;
+      font-size: 6pt;
+      line-height: 1.15;
+      background: rgba(13,59,142,.06);
+      border-top: 0.25mm solid rgba(13,59,142,.2);
+    }
+    .sc-sign .left-note {
+      color: rgba(0,0,0,.5);
+      font-style: italic;
+      font-size: 5.5pt;
+    }
+    .sc-sign .sig-block {
       text-align: center;
-      padding-top: 0.5mm;
+      line-height: 1.1;
     }
-    .sc-sign .box {
-      min-width: 32mm;
+    .sc-sign .sig-block .sig-name {
+      font-weight: 700;
+      color: #0d3b8e;
+      font-size: 6pt;
     }
-    .sc-sign .sig-line {
-      border-top: 0.3mm dotted rgba(0,0,0,.55);
-      margin-top: 0.5mm;
-      padding-top: 0.3mm;
+    .sc-sign .sig-block .sig-title {
+      font-size: 5.2pt;
+      color: rgba(0,0,0,.6);
+      letter-spacing: 0.2pt;
     }
 
     /* ===== ด้านหลังบัตร ===== */
@@ -211,9 +277,17 @@
     .theme-pink    { background: linear-gradient(135deg, #ffe0ec 0%, #ff6f91 100%); color:#3a0a1a;}
     .theme-gold    { background: linear-gradient(135deg, #fff5cc 0%, #f6c453 100%); color:#3a2a05;}
     .theme-dark    { background: linear-gradient(135deg, #2c3e50 0%, #1a1a1a 100%); color:#f5f5f5;}
-    .theme-dark .sc-head, .theme-dark .sc-sign .sig-line { border-color: rgba(255,255,255,.35); }
-    .theme-dark .sc-info .row-i b { opacity: .85; }
-    .theme-dark .sc-photo, .theme-dark .sc-photo-placeholder { border-color: rgba(255,255,255,.5); }
+    .theme-dark .sc-info .name { color: #ffd86b; border-bottom-color: rgba(255,216,107,.4); }
+    .theme-dark .sc-info .info-grid .label { color: rgba(255,255,255,.7); }
+    .theme-dark .sc-info .info-grid .value { color: #ffffff; }
+    .theme-dark .sc-info .code-row { color: rgba(255,255,255,.6); border-top-color: rgba(255,255,255,.2); }
+    .theme-dark .sc-photo, .theme-dark .sc-photo-placeholder { border-color: rgba(255,255,255,.6); }
+    .theme-dark .sc-qr-label { color: rgba(255,255,255,.6); }
+    .theme-dark .sc-sign { background: rgba(0,0,0,.3); border-top-color: rgba(255,216,107,.3); }
+    .theme-dark .sc-sign .sig-block .sig-name { color: #ffd86b; }
+    .theme-dark .sc-sign .sig-block .sig-title { color: rgba(255,255,255,.6); }
+    .theme-dark .sc-sign .left-note { color: rgba(255,255,255,.5); }
+
     .theme-white   { background: #fff; border: 0.4mm solid #1a5276; }
     .theme-school  { background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, var(--primary, #1a5276) 25%, white) 100%); }
 
@@ -421,28 +495,35 @@ function renderFront(s, theme) {
     : `<div class="sc-photo-placeholder"><i class="bi bi-person"></i></div>`;
   const logoHtml = schoolLogo
     ? `<img class="logo" src="${schoolLogo}" alt="">`
-    : `<div class="logo" style="background:rgba(0,0,0,.1);"></div>`;
+    : `<div class="logo" style="background:rgba(255,255,255,.3);"></div>`;
+  const year = academicYearBE();
 
   return `<div class="student-card ${theme}">
     <div class="sc-head">
       ${logoHtml}
       <div class="titles">
         <div class="school">${schoolName}</div>
-        <div class="badge-id">STUDENT ID CARD</div>
+        <div class="badge-id">บัตรประจำตัวนักเรียน • ปีการศึกษา ${year}</div>
       </div>
     </div>
     ${photoHtml}
     <div class="sc-info">
       <div class="name">${s.name}</div>
-      <div class="row-i"><b>ชั้น</b> ม.${s.class_level}/${s.room}</div>
-      <div class="row-i"><b>เลขที่</b> ${s.number ?? '-'}</div>
-      <div class="code">${s.student_code || ''}</div>
+      <div class="info-grid">
+        <span class="label">ชั้น</span>
+        <span class="value">มัธยมศึกษาปีที่ ${s.class_level}/${s.room}</span>
+        <span class="label">เลขที่</span>
+        <span class="value">${s.number ?? '-'}</span>
+      </div>
+      <div class="code-row">${s.student_code || ''}</div>
     </div>
     <div class="sc-qr"><img src="${qrUrl}" alt="QR"></div>
+    <div class="sc-qr-label">SCAN</div>
     <div class="sc-sign">
-      <div class="box">
-        <div class="sig-line">(${directorName})</div>
-        <div>${directorTitle}</div>
+      <div class="left-note">บัตรนี้เป็นกรรมสิทธิ์ของโรงเรียน</div>
+      <div class="sig-block">
+        <div class="sig-name">${directorName}</div>
+        <div class="sig-title">${directorTitle}</div>
       </div>
     </div>
   </div>`;
