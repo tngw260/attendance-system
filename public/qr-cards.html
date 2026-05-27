@@ -128,11 +128,13 @@
       font-weight: 800;
       line-height: 1.1;
       color: #0d3b8e;
-      margin-bottom: 1mm;
+      margin-bottom: 1.5mm;
       word-wrap: break-word;
       padding-bottom: 1mm;
       border-bottom: 0.25mm solid rgba(13,59,142,.25);
     }
+    /* ชื่อยาว — auto-shrink */
+    .sc-info .name.long { font-size: 9pt; line-height: 1.05; }
     .sc-info .info-grid {
       display: grid;
       grid-template-columns: 16mm 1fr;
@@ -504,10 +506,10 @@ function renderFront(s, theme) {
     </div>
     ${photoHtml}
     <div class="sc-info">
-      <div class="name">${s.name}</div>
+      <div class="name ${s.name.length > 22 ? 'long' : ''}">${s.name}</div>
       <div class="info-grid">
         <span class="label">ชั้น</span>
-        <span class="value">มัธยมศึกษาปีที่ ${s.class_level}/${s.room}</span>
+        <span class="value">ม.${s.class_level}/${s.room}</span>
         <span class="label">เลขประจำตัว</span>
         <span class="value code-val">${s.student_code || '-'}</span>
       </div>
