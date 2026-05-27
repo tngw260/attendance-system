@@ -129,12 +129,14 @@
       line-height: 1.1;
       color: #0d3b8e;
       margin-bottom: 1.5mm;
-      word-wrap: break-word;
       padding-bottom: 1mm;
       border-bottom: 0.25mm solid rgba(13,59,142,.25);
+      /* บังคับ 1 บรรทัด — ถ้าเกินจะ ellipsis แต่ JS จะ shrink ก่อน */
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
     }
-    /* ชื่อยาว — auto-shrink */
-    .sc-info .name.long { font-size: 9pt; line-height: 1.05; }
     .sc-info .info-grid {
       display: grid;
       grid-template-columns: 16mm 1fr;
@@ -156,27 +158,29 @@
       color: #0d3b8e;
     }
 
-    /* QR */
-    .sc-qr {
+    /* QR — wrapper รวม QR + label ติดกัน */
+    .sc-qr-wrap {
       grid-area: qr;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 3mm;
+    }
+    .sc-qr {
       width: 20mm; height: 20mm;
-      margin: 3mm auto 0;
       background: white;
       padding: 0.5mm;
       border-radius: 1mm;
       border: 0.2mm solid rgba(0,0,0,.15);
-      align-self: start;
     }
     .sc-qr img { width: 100%; height: 100%; display: block; }
     .sc-qr-label {
-      grid-area: qr;
-      align-self: end;
-      justify-self: center;
       font-size: 5pt;
-      color: rgba(0,0,0,.5);
-      margin-bottom: 0.8mm;
-      letter-spacing: 0.3pt;
+      color: rgba(0,0,0,.55);
+      margin-top: 0.6mm;
+      letter-spacing: 0.5pt;
       text-transform: uppercase;
+      font-weight: 600;
     }
 
     /* FOOTER — ลายเซ็น ผอ. */
@@ -280,7 +284,7 @@
     .theme-dark .sc-info .info-grid .value { color: #ffffff; }
     .theme-dark .sc-info .code-row { color: rgba(255,255,255,.6); border-top-color: rgba(255,255,255,.2); }
     .theme-dark .sc-photo, .theme-dark .sc-photo-placeholder { border-color: rgba(255,255,255,.6); }
-    .theme-dark .sc-qr-label { color: rgba(255,255,255,.6); }
+    .theme-dark .sc-qr-label { color: rgba(255,255,255,.7); }
     .theme-dark .sc-sign { background: rgba(0,0,0,.3); border-top-color: rgba(255,216,107,.3); }
     .theme-dark .sc-sign .sig-block .sig-name { color: #ffd86b; }
     .theme-dark .sc-sign .sig-block .sig-title { color: rgba(255,255,255,.6); }
@@ -473,6 +477,24 @@ function renderCards(students, level, room) {
     }
   });
   document.getElementById('content').innerHTML = html;
+
+  // Auto-shrink ชื่อนักเรียนทุกใบให้พอดี (รัน 2 รอบ — กัน font ยังไม่โหลด)
+  requestAnimationFrame(() => {
+    autoShrinkNames();
+    setTimeout(autoShrinkNames, 200); // อีกครั้งหลัง font + image โหลด
+  });
+}
+
+function autoShrinkNames() {
+  document.querySelectorAll('.student-card:not(.back) .sc-info .name').forEach(el => {
+    // เริ่มจาก 11pt — ลดทีละ 0.5pt จนข้อความไม่ล้นแนวนอน
+    let size = 11;
+    el.style.fontSize = size + 'pt';
+    while (el.scrollWidth > el.clientWidth && size > 6) {
+      size -= 0.5;
+      el.style.fontSize = size + 'pt';
+    }
+  });
 }
 
 function renderPage(students, theme, side) {
@@ -506,7 +528,7 @@ function renderFront(s, theme) {
     </div>
     ${photoHtml}
     <div class="sc-info">
-      <div class="name ${s.name.length > 22 ? 'long' : ''}">${s.name}</div>
+      <div class="name">${s.name}</div>
       <div class="info-grid">
         <span class="label">ชั้น</span>
         <span class="value">ม.${s.class_level}/${s.room}</span>
@@ -514,8 +536,10 @@ function renderFront(s, theme) {
         <span class="value code-val">${s.student_code || '-'}</span>
       </div>
     </div>
-    <div class="sc-qr"><img src="${qrUrl}" alt="QR"></div>
-    <div class="sc-qr-label">SCAN</div>
+    <div class="sc-qr-wrap">
+      <div class="sc-qr"><img src="${qrUrl}" alt="QR"></div>
+      <div class="sc-qr-label">SCAN</div>
+    </div>
     <div class="sc-sign">
       <div class="left-note">บัตรนี้เป็นกรรมสิทธิ์ของโรงเรียน</div>
       <div class="sig-block">
