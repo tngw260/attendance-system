@@ -839,6 +839,24 @@ def api_students_clear():
         con.execute('DELETE FROM students')
     return jsonify(success=True, message='ลบข้อมูลทั้งหมดแล้ว')
 
+@app.get('/api/students/<int:sid>')
+@login_required
+def api_student_get(sid):
+    """ข้อมูลนักเรียน 1 คน — สำหรับ confirm scan + อื่นๆ"""
+    u = current_user()
+    with get_db() as con:
+        s = con.execute('SELECT id, number, student_code, name, class_level, room, gender, photo FROM students WHERE id=?',
+                        (sid,)).fetchone()
+    if not s:
+        return jsonify(error='ไม่พบนักเรียน'), 404
+    # ครูดึงได้เฉพาะห้องตัวเอง
+    if u['role'] == 'teacher' and u.get('assigned_level'):
+        if s['class_level'] != u['assigned_level']:
+            return jsonify(error='ไม่มีสิทธิ์ดูข้อมูลห้องนี้'), 403
+        if u.get('assigned_room') and s['room'] != u['assigned_room']:
+            return jsonify(error='ไม่มีสิทธิ์ดูข้อมูลห้องนี้'), 403
+    return jsonify(dict(s))
+
 @app.delete('/api/students/<int:sid>')
 @admin_required
 def api_student_delete(sid):

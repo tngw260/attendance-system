@@ -41,6 +41,78 @@
     }
     .recent-scan .btn-undo:hover { background: #dc3545; }
     .recent-scan .btn-undo:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* CONFIRM BANNER */
+    #confirmBanner {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: rgba(13, 59, 142, .98);
+      color: white;
+      padding: 16px;
+      box-shadow: 0 4px 18px rgba(0,0,0,.4);
+      z-index: 9999;
+      transform: translateY(-120%);
+      transition: transform .25s ease;
+      display: flex; align-items: center; gap: 14px;
+    }
+    #confirmBanner.show { transform: translateY(0); }
+    #confirmBanner.confirming-error { background: rgba(220, 53, 69, .98); }
+    #confirmBanner .cb-photo {
+      width: 56px; height: 56px; border-radius: 50%;
+      object-fit: cover; background: white; flex-shrink: 0;
+      border: 2px solid white;
+    }
+    #confirmBanner .cb-info { flex-grow: 1; min-width: 0; }
+    #confirmBanner .cb-info .name { font-weight: 700; font-size: 1.05rem; line-height: 1.2; }
+    #confirmBanner .cb-info .meta { font-size: .85rem; opacity: .9; }
+    #confirmBanner .cb-status {
+      font-size: 1rem; font-weight: 700;
+      padding: 4px 12px; border-radius: 50px;
+      background: rgba(255,255,255,.25);
+      white-space: nowrap;
+    }
+    #confirmBanner .cb-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    #confirmBanner .cb-actions button {
+      border: none; padding: 8px 14px; border-radius: 8px;
+      font-weight: 700; cursor: pointer; font-size: .9rem;
+    }
+    #confirmBanner .cb-cancel { background: #dc3545; color: white; }
+    #confirmBanner .cb-ok { background: #198754; color: white; }
+    #confirmBanner .cb-countdown {
+      position: absolute;
+      bottom: 0; left: 0; height: 4px;
+      background: #ffc107;
+      width: 100%;
+      transform-origin: left;
+    }
+    @media (max-width: 575px) {
+      #confirmBanner { flex-wrap: wrap; }
+      #confirmBanner .cb-actions { width: 100%; justify-content: stretch; }
+      #confirmBanner .cb-actions button { flex: 1; }
+    }
+
+    /* Camera pause overlay */
+    .cam-pause {
+      position: relative;
+    }
+    .cam-pause::after {
+      content: '✅ บันทึกแล้ว';
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(25, 135, 84, .9);
+      color: white;
+      padding: 8px 20px;
+      border-radius: 50px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      animation: cam-pop .3s ease;
+      z-index: 10;
+    }
+    @keyframes cam-pop {
+      0% { transform: translate(-50%, -50%) scale(.5); opacity: 0; }
+      100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
     .status-pill {
       display: inline-block; padding: 4px 12px;
       border-radius: 20px; font-size: .85rem; font-weight: 600;
@@ -96,11 +168,52 @@
     </div>
   </div>
 
+  <!-- Safety options -->
+  <div class="scan-status" style="background:rgba(255,255,255,.06);">
+    <div class="row g-2 align-items-center">
+      <div class="col-12 col-md-6">
+        <label class="small fw-600 d-block mb-1">🎯 ขนาดกรอบสแกน</label>
+        <div class="btn-group btn-group-sm w-100" role="group">
+          <input type="radio" class="btn-check" name="boxSize" id="boxSm" value="0.45">
+          <label class="btn btn-outline-light" for="boxSm">เล็ก (แม่น)</label>
+          <input type="radio" class="btn-check" name="boxSize" id="boxMd" value="0.55" checked>
+          <label class="btn btn-outline-light" for="boxMd">กลาง</label>
+          <input type="radio" class="btn-check" name="boxSize" id="boxLg" value="0.7">
+          <label class="btn btn-outline-light" for="boxLg">ใหญ่ (เร็ว)</label>
+        </div>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="small fw-600 d-block mb-1">🛡️ ยืนยันก่อนบันทึก</label>
+        <div class="form-check form-switch ms-2">
+          <input class="form-check-input" type="checkbox" id="confirmMode" style="transform:scale(1.4); cursor:pointer;">
+          <label class="form-check-label small" for="confirmMode">
+            แสดงยืนยันทุกครั้ง (กันสแกนผิด)
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Camera -->
   <div id="reader"></div>
   <div class="text-center mt-2 small text-warning">
     <i class="bi bi-info-circle me-1"></i>
     วาง QR ให้อยู่ในกรอบเดียวเท่านั้น — ใช้นิ้วบังตัวข้างเคียงถ้าจำเป็น
+  </div>
+
+  <!-- Confirm Banner -->
+  <div id="confirmBanner">
+    <div id="cbPhoto"></div>
+    <div class="cb-info">
+      <div class="name" id="cbName">-</div>
+      <div class="meta" id="cbMeta">-</div>
+    </div>
+    <div class="cb-status" id="cbStatus">-</div>
+    <div class="cb-actions">
+      <button class="cb-cancel" onclick="cancelConfirm()">❌ ยกเลิก</button>
+      <button class="cb-ok" onclick="okConfirm()">✅ บันทึก</button>
+    </div>
+    <div class="cb-countdown" id="cbCountdown"></div>
   </div>
 
   <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
@@ -137,24 +250,59 @@ let scanCount = 0;
 let lastScannedId = null;
 let lastScannedTime = 0;
 let soundOn = true;
-const SCAN_DEDUP_MS = 3000; // ห้ามสแกนคนเดิมซ้ำใน 3 วินาที
+let scanPaused = false;          // pause หลังสแกนแต่ละครั้ง
+let pendingConfirm = null;       // {sid, status, timer, interval}
+const SCAN_DEDUP_MS = 3000;
+const PAUSE_AFTER_SCAN_MS = 1500;
+const CONFIRM_COUNTDOWN_MS = 3500;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
   document.getElementById('dateText').textContent = formatThaiDateFull(todayISO());
+  // โหลด preferences จาก localStorage
+  const savedBoxSize = localStorage.getItem('scanBoxSize') || '0.55';
+  const r = document.querySelector(`input[name="boxSize"][value="${savedBoxSize}"]`);
+  if (r) r.checked = true;
+  document.getElementById('confirmMode').checked = localStorage.getItem('scanConfirm') === '1';
+
+  // Save preferences เมื่อเปลี่ยน
+  document.querySelectorAll('input[name="boxSize"]').forEach(el => {
+    el.addEventListener('change', () => {
+      localStorage.setItem('scanBoxSize', el.value);
+      restartScanner();
+    });
+  });
+  document.getElementById('confirmMode').addEventListener('change', e => {
+    localStorage.setItem('scanConfirm', e.target.checked ? '1' : '0');
+  });
+
   startScanner();
 });
 
+function getBoxRatio() {
+  const v = document.querySelector('input[name="boxSize"]:checked')?.value;
+  return parseFloat(v || '0.55');
+}
+
+async function restartScanner() {
+  if (scanner) {
+    try { await scanner.stop(); } catch (e) {}
+    try { await scanner.clear(); } catch (e) {}
+    scanner = null;
+  }
+  startScanner();
+}
+
 function startScanner() {
   scanner = new Html5Qrcode('reader');
-  // กรอบสแกนแคบ — กันอ่าน QR ที่อยู่ติดกันไปด้วย
+  const ratio = getBoxRatio();
   const qrboxFunc = (vw, vh) => {
     const minEdge = Math.min(vw, vh);
-    const size = Math.max(140, Math.floor(minEdge * 0.55)); // 55% ของหน้าจอ (แคบกว่าเดิม)
+    const size = Math.max(120, Math.floor(minEdge * ratio));
     return { width: size, height: size };
   };
   scanner.start(
-    { facingMode: 'environment' }, // กล้องหลัง
+    { facingMode: 'environment' },
     {
       fps: 12,
       qrbox: qrboxFunc,
@@ -163,7 +311,7 @@ function startScanner() {
       experimentalFeatures: { useBarCodeDetectorIfSupported: true },
     },
     onScanSuccess,
-    () => {} // ignore scan failures
+    () => {}
   ).catch(err => {
     document.getElementById('reader').innerHTML =
       `<div class="alert alert-danger m-3">เปิดกล้องไม่ได้: ${err}<br>
@@ -171,18 +319,31 @@ function startScanner() {
   });
 }
 
+function pauseCamera(ms) {
+  scanPaused = true;
+  const reader = document.getElementById('reader');
+  reader.classList.add('cam-pause');
+  setTimeout(() => {
+    scanPaused = false;
+    reader.classList.remove('cam-pause');
+  }, ms);
+}
+
 async function onScanSuccess(decodedText) {
+  // ถ้ากล้อง paused (หลังสแกนเสร็จ) หรือมี confirm ค้าง — ไม่รับ
+  if (scanPaused || pendingConfirm) return;
+
   // Dedup — ห้ามสแกนคนเดิมซ้ำใน 3 วินาที
   const now = Date.now();
   if (decodedText === lastScannedId && now - lastScannedTime < SCAN_DEDUP_MS) return;
   lastScannedId = decodedText;
   lastScannedTime = now;
 
-  // Extract student_id — ยอมรับทั้ง "123" และ "https://.../scan?s=123"
+  // Extract student_id
   let sid = decodedText.trim();
   const match = sid.match(/[?&]s=(\d+)/);
   if (match) sid = match[1];
-  sid = sid.replace(/\D/g, ''); // เก็บเฉพาะตัวเลข
+  sid = sid.replace(/\D/g, '');
   if (!sid) {
     addRecent({ name: 'QR ไม่ถูกต้อง', detail: decodedText.slice(0, 30) }, 'error');
     playSound('err');
@@ -190,10 +351,29 @@ async function onScanSuccess(decodedText) {
   }
 
   const status = document.querySelector('input[name="scanStatus"]:checked').value;
+  const confirmMode = document.getElementById('confirmMode').checked;
+
+  if (confirmMode) {
+    // ไม่ส่งทันที — ดึงข้อมูลนักเรียนก่อนเพื่อแสดงใน banner
+    try {
+      const stu = await apiFetch(`/api/students/${sid}`);
+      showConfirmBanner(stu, status);
+    } catch (e) {
+      addRecent({ name: e.message, detail: 'sid: ' + sid }, 'error');
+      playSound('err');
+    }
+  } else {
+    // Auto mode — บันทึกทันที
+    await commitScan(+sid, status);
+    pauseCamera(PAUSE_AFTER_SCAN_MS);
+  }
+}
+
+async function commitScan(sid, status) {
   try {
     const res = await apiFetch('/api/attendance/scan', {
       method: 'POST',
-      body: JSON.stringify({ student_id: +sid, status })
+      body: JSON.stringify({ student_id: sid, status })
     });
     scanCount++;
     document.getElementById('scanCount').textContent = scanCount;
@@ -213,6 +393,69 @@ async function onScanSuccess(decodedText) {
     addRecent({ name: e.message, detail: 'sid: ' + sid }, 'error');
     playSound('err');
   }
+}
+
+function showConfirmBanner(stu, status) {
+  const STATUS_LABEL = {
+    late: 'มาสาย', present: 'มา', absent: 'ขาด',
+    leave: 'ลา', activity: 'ไปกิจกรรม'
+  };
+  const STATUS_COLOR = {
+    late: '#ffc107', present: '#198754', absent: '#dc3545',
+    leave: '#0dcaf0', activity: '#8e44ad'
+  };
+
+  const banner = document.getElementById('confirmBanner');
+  banner.style.background = 'rgba(13, 59, 142, .98)';
+  document.getElementById('cbPhoto').innerHTML = stu.photo
+    ? `<img class="cb-photo" src="/photos/${stu.photo}">`
+    : `<div class="cb-photo d-flex align-items-center justify-content-center" style="font-size:1.7rem;">👤</div>`;
+  document.getElementById('cbName').textContent = stu.name;
+  document.getElementById('cbMeta').textContent =
+    `ม.${stu.class_level}/${stu.room}` + (stu.number ? ` • เลขที่ ${stu.number}` : '');
+  const cbStatus = document.getElementById('cbStatus');
+  cbStatus.textContent = STATUS_LABEL[status] || status;
+  cbStatus.style.background = STATUS_COLOR[status] || '#666';
+
+  banner.classList.add('show');
+  playSound('ok');
+
+  // Countdown progress bar
+  const countdown = document.getElementById('cbCountdown');
+  countdown.style.transition = 'none';
+  countdown.style.transform = 'scaleX(1)';
+  void countdown.offsetWidth; // reflow
+  countdown.style.transition = `transform ${CONFIRM_COUNTDOWN_MS}ms linear`;
+  countdown.style.transform = 'scaleX(0)';
+
+  const autoConfirm = setTimeout(() => okConfirm(), CONFIRM_COUNTDOWN_MS);
+
+  pendingConfirm = { sid: stu.id, status, timer: autoConfirm };
+}
+
+async function okConfirm() {
+  if (!pendingConfirm) return;
+  clearTimeout(pendingConfirm.timer);
+  const { sid, status } = pendingConfirm;
+  pendingConfirm = null;
+  hideConfirmBanner();
+  await commitScan(sid, status);
+  pauseCamera(PAUSE_AFTER_SCAN_MS);
+}
+
+function cancelConfirm() {
+  if (!pendingConfirm) return;
+  clearTimeout(pendingConfirm.timer);
+  pendingConfirm = null;
+  hideConfirmBanner();
+  // เคลียร์ dedup เพื่อให้สแกนคนเดียวกันซ้ำได้ทันที (กรณีต้องสแกนใหม่)
+  lastScannedId = null;
+  lastScannedTime = 0;
+  playSound('err');
+}
+
+function hideConfirmBanner() {
+  document.getElementById('confirmBanner').classList.remove('show');
 }
 
 function addRecent(item, kind) {
