@@ -197,9 +197,13 @@ function pcDateShort(iso){
   return `${dt.getDate()} ${THAI_MONTHS_F[dt.getMonth()].slice(0,3)} ${dt.getFullYear()+543}`;
 }
 function namePrefix(s){
-  // ถ้าชื่อมีคำนำหน้าแล้วใช้เลย
   if (/^(เด็กชาย|เด็กหญิง|นาย|นางสาว|ด\.ช\.|ด\.ญ\.)/.test(s.name||'')) return s.name;
   return s.name || '';
+}
+// ชื่อสำหรับฟอร์มที่มี (ด.ช./ด.ญ./นาย/นางสาว) นำให้วงเลือก → ตัดคำนำหน้าออก เหลือชื่อ-สกุล
+function studentFullName(s){
+  let n = s.name || '';
+  return n.replace(/^(เด็กชาย|เด็กหญิง|นางสาว|นาย|ด\.ช\.|ด\.ญ\.)\s*/, '').trim();
 }
 
 function el(id){ return document.getElementById(id); }
@@ -236,7 +240,7 @@ function renderPC4() {
   const useDate = log ? thaiDateLong(log.date) : today;
 
   return `<div class="doc-page" style="position:relative;">
-    <span class="pc-tag" style="top:14mm;right:18mm;">ปค.4</span>
+    <span class="pc-tag" style="top:14mm;right:18mm;">ปค 4</span>
     <div class="doc-head">
       ${logoTag()}
       <h2>แบบฟอร์มตัดคะแนนความประพฤตินักเรียน</h2>
@@ -246,10 +250,9 @@ function renderPC4() {
       <p style="text-align:right;">วันที่ <span class="fill-inline">${useDate.d}</span>
         เดือน <span class="fill-inline">${useDate.m}</span>
         พ.ศ. <span class="fill-inline">${useDate.y}</span></p>
-      <p style="margin-top:4mm;">เนื่องด้วย นักเรียน
-        <span class="fill" style="font-weight:600;">${namePrefix(s)}</span>
-        &nbsp;ระดับชั้น <span class="fill-inline">ม.${s.class_level}/${s.room}</span>
-        เลขที่ <span class="fill-inline" style="min-width:18mm;">${s.number ?? ''}</span></p>
+      <p style="margin-top:4mm;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;เนื่องด้วย นักเรียน (ด.ช./ด.ญ./นาย/นางสาว)
+        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span>
+        &nbsp;ระดับชั้น <span class="fill-inline">ม.${s.class_level}/${s.room}</span></p>
       <p>ได้ประพฤติผิดระเบียบของ${schoolName()} ดังนี้</p>
       <p><span class="editable" contenteditable="true" style="display:block;min-height:7mm;">${reason}</span></p>
       <p><span class="editable" contenteditable="true" style="display:block;min-height:7mm;"></span></p>
@@ -294,7 +297,7 @@ function renderPC4() {
     <div class="director-sign">
       <div class="sign-line">ลงชื่อ ………………………………………</div>
       <div>( ${directorName()} )</div>
-      <div>${directorTitle()}${schoolName()}</div>
+      <div>ผู้อำนวยการ${schoolName()}</div>
     </div>
   </div>`;
 }
