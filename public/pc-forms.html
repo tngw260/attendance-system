@@ -115,15 +115,40 @@
           <option value="">-- ทั้งหมด/ล่าสุด --</option>
         </select>
       </div>
-      <div class="col-md-2">
-        <button class="btn btn-success btn-sm w-100" onclick="window.print()" id="printBtn" disabled>
+      <div class="col-md-2 d-flex gap-1">
+        <button class="btn btn-primary btn-sm flex-fill" onclick="saveForm()" id="saveBtn" disabled title="บันทึกลงระบบ">
+          <i class="bi bi-save"></i>
+        </button>
+        <button class="btn btn-success btn-sm flex-fill" onclick="window.print()" id="printBtn" disabled>
           <i class="bi bi-printer-fill me-1"></i>พิมพ์
         </button>
       </div>
     </div>
-    <div class="small text-muted mt-2">
-      <i class="bi bi-info-circle me-1"></i>
-      ช่องสีเหลืองแก้ไขได้ก่อนพิมพ์ (คลิกพิมพ์ทับได้เลย) • ข้อมูลชื่อ/ชั้น/คะแนน ดึงจากระบบอัตโนมัติ
+    <div class="d-flex justify-content-between align-items-center mt-2 flex-wrap gap-2">
+      <div class="small text-muted">
+        <i class="bi bi-info-circle me-1"></i>
+        ช่องสีเหลืองแก้ไขได้ • <b>บันทึก</b> = เก็บลงระบบเอามาแก้ทีหลังได้
+        <span id="curFormInfo" class="ms-2 badge bg-info" style="display:none;"></span>
+      </div>
+      <button class="btn btn-outline-secondary btn-sm" onclick="openSavedList()">
+        <i class="bi bi-folder2-open me-1"></i>ฟอร์มที่บันทึกไว้
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: รายการฟอร์มที่บันทึกไว้ -->
+<div class="modal fade no-print" id="savedModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-folder2-open me-2"></i>ฟอร์ม ปค. ที่บันทึกไว้</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2 small text-muted">เลือกฟอร์มเพื่อโหลดกลับมาแก้ไข/พิมพ์ซ้ำ</div>
+        <div id="savedList"><div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -143,6 +168,8 @@
 const THAI_MONTHS_F = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 let theme = {};
 let curData = null;   // { student, logs, score, start_score }
+let curFormId = null; // id ของฟอร์มที่กำลังแก้ (null = ฟอร์มใหม่)
+let savedModal = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
@@ -173,6 +200,8 @@ async function loadStudentList() {
 
 async function loadStudent() {
   const sid = document.getElementById('selStudent').value;
+  curFormId = null;  // เปลี่ยนนักเรียน = ฟอร์มใหม่
+  updateFormInfo();
   if (!sid) { curData = null; render(); return; }
   try {
     curData = await apiFetch(`/api/behavior/${sid}`);
@@ -229,6 +258,128 @@ function render() {
                           : (form === 'pc4') ? renderPC4()
                           : renderPC5();
   el('printBtn').disabled = false;
+  el('saveBtn').disabled = false;
+}
+
+function updateFormInfo() {
+  const badge = el('curFormInfo');
+  if (curFormId) {
+    badge.style.display = '';
+    badge.innerHTML = `<i class="bi bi-pencil"></i> กำลังแก้ฟอร์ม #${curFormId}`;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+/* ===== บันทึก / โหลด / ลบ ฟอร์ม ===== */
+async function saveForm() {
+  if (!curData) { alert('เลือกนักเรียนก่อน'); return; }
+  const form = el('selForm').value;
+  // เก็บ HTML ของ doc-page (รวมข้อความที่พิมพ์ในช่อง editable)
+  const docPage = el('content').querySelector('.doc-page');
+  if (!docPage) { alert('ยังไม่มีเอกสาร'); return; }
+  const html = docPage.outerHTML;
+  const title = `${form.toUpperCase()} • ${studentFullName(curData.student)}`;
+
+  el('saveBtn').disabled = true;
+  el('saveBtn').innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  try {
+    const res = await apiFetch('/api/pc-forms', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: curFormId,
+        form_type: form,
+        student_id: curData.student.id,
+        title,
+        payload: { html }
+      })
+    });
+    curFormId = res.id;
+    updateFormInfo();
+    showToast(res.message || 'บันทึกแล้ว');
+  } catch (e) {
+    alert('บันทึกไม่สำเร็จ: ' + e.message);
+  } finally {
+    el('saveBtn').disabled = false;
+    el('saveBtn').innerHTML = '<i class="bi bi-save"></i>';
+  }
+}
+
+async function openSavedList() {
+  if (!savedModal) savedModal = new bootstrap.Modal('#savedModal');
+  savedModal.show();
+  const box = el('savedList');
+  box.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div>';
+  try {
+    const list = await apiFetch('/api/pc-forms');
+    if (!list.length) {
+      box.innerHTML = '<div class="text-center text-muted py-4">ยังไม่มีฟอร์มที่บันทึกไว้</div>';
+      return;
+    }
+    const TYPE_LABEL = { pc1:'ปค.1', pc3:'ปค.3', pc4:'ปค.4', pc5:'ปค.5' };
+    box.innerHTML = list.map(f => `
+      <div class="d-flex align-items-center gap-2 p-2 border-bottom">
+        <span class="badge bg-secondary">${TYPE_LABEL[f.form_type]||f.form_type}</span>
+        <div class="flex-grow-1">
+          <div class="fw-600">${f.student_name} <small class="text-muted">ม.${f.class_level}/${f.room}</small></div>
+          <div class="small text-muted">บันทึก ${fmtDateTime(f.updated_at)}${f.recorded_by_name ? ' • '+f.recorded_by_name : ''}</div>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="loadSavedForm(${f.id})"><i class="bi bi-pencil-square"></i> เปิด</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteSavedForm(${f.id}, this)"><i class="bi bi-trash"></i></button>
+      </div>`).join('');
+  } catch (e) {
+    box.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+async function loadSavedForm(fid) {
+  try {
+    const f = await apiFetch(`/api/pc-forms/${fid}`);
+    const html = f.payload && f.payload.html;
+    if (!html) { alert('ฟอร์มนี้ไม่มีข้อมูล'); return; }
+    // set dropdowns ให้ตรง (เพื่อ save ทับได้ถูก type/นักเรียน)
+    el('selForm').value = f.form_type;
+    el('selStudent').value = f.student_id;
+    el('logPickWrap').style.display = (f.form_type === 'pc4') ? '' : 'none';
+    // โหลด curData ของนักเรียน (เพื่อ save ต่อได้)
+    try { curData = await apiFetch(`/api/behavior/${f.student_id}`); } catch(e){}
+    curFormId = fid;
+    el('content').innerHTML = html;
+    el('printBtn').disabled = false;
+    el('saveBtn').disabled = false;
+    updateFormInfo();
+    if (savedModal) savedModal.hide();
+    showToast('โหลดฟอร์มแล้ว — แก้ไขแล้วกดบันทึกเพื่ออัพเดท');
+  } catch (e) {
+    alert('โหลดไม่สำเร็จ: ' + e.message);
+  }
+}
+
+async function deleteSavedForm(fid, btn) {
+  if (!confirm('ลบฟอร์มนี้ออกจากระบบ?')) return;
+  try {
+    await apiFetch(`/api/pc-forms/${fid}`, { method: 'DELETE' });
+    btn.closest('.d-flex').remove();
+    if (curFormId === fid) { curFormId = null; updateFormInfo(); }
+    showToast('ลบแล้ว');
+  } catch (e) { alert(e.message); }
+}
+
+function fmtDateTime(s) {
+  if (!s) return '';
+  const dt = new Date(s.replace(' ', 'T'));
+  if (isNaN(dt)) return s;
+  return `${dt.getDate()} ${THAI_MONTHS_F[dt.getMonth()].slice(0,3)} ${dt.getFullYear()+543} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+}
+
+function showToast(msg) {
+  // ใช้ alert ง่ายๆ ถ้าไม่มี toast system
+  const t = document.createElement('div');
+  t.className = 'position-fixed bottom-0 end-0 m-3 alert alert-success shadow';
+  t.style.zIndex = 9999;
+  t.innerHTML = `<i class="bi bi-check-circle me-1"></i>${msg}`;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
 }
 
 /* ===== ปค.3 — บันทึกการทำทัณฑ์บนนักเรียน ===== */

@@ -225,6 +225,19 @@ def init_db():
                 created_at TEXT DEFAULT (datetime('now','localtime'))
             );
 
+            CREATE TABLE IF NOT EXISTS pc_forms (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                form_type   TEXT NOT NULL,
+                student_id  INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+                title       TEXT,
+                payload     TEXT,
+                recorded_by INTEGER REFERENCES users(id),
+                created_at  TEXT DEFAULT (datetime('now','localtime')),
+                updated_at  TEXT DEFAULT (datetime('now','localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_pcf_student ON pc_forms(student_id);
+            CREATE INDEX IF NOT EXISTS idx_pcf_type    ON pc_forms(form_type);
+
             CREATE TABLE IF NOT EXISTS holidays (
                 date       TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
@@ -2271,6 +2284,118 @@ def api_dashboard():
             'alertThreshold': score_alert_threshold,
         }
     )
+
+# ── ปค. FORMS (save / load / edit) ────────────────────────
+
+@app.get('/api/pc-forms')
+@login_required
+def api_pcforms_list():
+    """รายการฟอร์ม ปค. ที่บันทึกไว้ — กรองตาม ?student_id= หรือ ?type="""
+    u = current_user()
+    student_id = request.args.get('student_id')
+    form_type = request.args.get('type')
+    where, params = '', []
+    if student_id:
+        where += ' AND f.student_id=?'; params.append(int(student_id))
+    if form_type:
+        where += ' AND f.form_type=?'; params.append(form_type)
+    # ครูเห็นเฉพาะห้องตัวเอง
+    if u['role'] == 'teacher' and u.get('assigned_level'):
+        where += ' AND s.class_level=?'; params.append(u['assigned_level'])
+        if u.get('assigned_room'):
+            where += ' AND s.room=?'; params.append(u['assigned_room'])
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT f.id, f.form_type, f.student_id, f.title, f.created_at, f.updated_at,
+                   s.name AS student_name, s.class_level, s.room, s.number,
+                   u.full_name AS recorded_by_name
+            FROM pc_forms f
+            JOIN students s ON s.id=f.student_id
+            LEFT JOIN users u ON u.id=f.recorded_by
+            WHERE 1=1 {where}
+            ORDER BY f.updated_at DESC
+        """, params).fetchall()
+    return jsonify(rows_to_list(rows))
+
+@app.get('/api/pc-forms/<int:fid>')
+@login_required
+def api_pcform_get(fid):
+    u = current_user()
+    with get_db() as con:
+        f = con.execute("""
+            SELECT f.*, s.class_level, s.room FROM pc_forms f
+            JOIN students s ON s.id=f.student_id WHERE f.id=?
+        """, (fid,)).fetchone()
+    if not f:
+        return jsonify(error='ไม่พบฟอร์ม'), 404
+    if u['role'] == 'teacher' and u.get('assigned_level'):
+        if f['class_level'] != u['assigned_level'] or (u.get('assigned_room') and f['room'] != u['assigned_room']):
+            return jsonify(error='ไม่มีสิทธิ์'), 403
+    d = dict(f)
+    try: d['payload'] = json.loads(d['payload'] or '{}')
+    except Exception: d['payload'] = {}
+    return jsonify(d)
+
+@app.post('/api/pc-forms')
+@login_required
+def api_pcform_save():
+    """บันทึกฟอร์มใหม่ หรืออัพเดท (ถ้ามี id)"""
+    u = current_user()
+    b = request.get_json() or {}
+    fid        = b.get('id')
+    form_type  = (b.get('form_type') or '').strip()
+    student_id = b.get('student_id')
+    title      = (b.get('title') or '').strip() or None
+    payload    = b.get('payload') or {}
+
+    if form_type not in ('pc1', 'pc3', 'pc4', 'pc5'):
+        return jsonify(success=False, message='ชนิดฟอร์มไม่ถูกต้อง'), 400
+    if not student_id:
+        return jsonify(success=False, message='ไม่พบนักเรียน'), 400
+
+    payload_json = json.dumps(payload, ensure_ascii=False)
+    with get_db() as con:
+        student = con.execute('SELECT class_level, room FROM students WHERE id=?', (student_id,)).fetchone()
+        if not student:
+            return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if u['role'] == 'teacher' and u.get('assigned_level'):
+            if student['class_level'] != u['assigned_level'] or (u.get('assigned_room') and student['room'] != u['assigned_room']):
+                return jsonify(success=False, message='ไม่มีสิทธิ์ห้องนี้'), 403
+
+        if fid:
+            con.execute("""
+                UPDATE pc_forms SET title=?, payload=?, updated_at=datetime('now','localtime')
+                WHERE id=?
+            """, (title, payload_json, fid))
+            audit_log(con, 'update_pcform', 'pc_form', fid, {'type': form_type})
+            saved_id = fid
+        else:
+            cur = con.execute("""
+                INSERT INTO pc_forms (form_type, student_id, title, payload, recorded_by)
+                VALUES (?,?,?,?,?)
+            """, (form_type, student_id, title, payload_json, u['id']))
+            saved_id = cur.lastrowid
+            audit_log(con, 'create_pcform', 'pc_form', saved_id, {'type': form_type})
+
+    return jsonify(success=True, id=saved_id, message='บันทึกฟอร์มเรียบร้อย')
+
+@app.delete('/api/pc-forms/<int:fid>')
+@login_required
+def api_pcform_delete(fid):
+    u = current_user()
+    with get_db() as con:
+        f = con.execute("""
+            SELECT f.id, s.class_level, s.room FROM pc_forms f
+            JOIN students s ON s.id=f.student_id WHERE f.id=?
+        """, (fid,)).fetchone()
+        if not f:
+            return jsonify(success=False, message='ไม่พบฟอร์ม'), 404
+        if u['role'] == 'teacher' and u.get('assigned_level'):
+            if f['class_level'] != u['assigned_level'] or (u.get('assigned_room') and f['room'] != u['assigned_room']):
+                return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+        con.execute('DELETE FROM pc_forms WHERE id=?', (fid,))
+        audit_log(con, 'delete_pcform', 'pc_form', fid, None)
+    return jsonify(success=True, message='ลบฟอร์มแล้ว')
 
 # ── HEATMAP (calendar grid) ───────────────────────────────
 
