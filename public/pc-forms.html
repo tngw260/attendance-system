@@ -24,20 +24,20 @@
       box-shadow: 0 2px 14px rgba(0,0,0,.15);
       /* ใช้ PSK ในเครื่องก่อน (ตรงเอกสารราชการ) ถ้าไม่มี → Sarabun จาก Google */
       font-family: 'TH Sarabun PSK', 'TH SarabunPSK', 'TH Sarabun New', 'Sarabun', sans-serif;
-      font-size: 14pt;
-      line-height: 1.45;
+      font-size: 12pt;
+      line-height: 1.35;
     }
     .doc-page .pc-tag {
       position: absolute;
       font-weight: 700;
-      font-size: 15pt;
+      font-size: 13pt;
     }
     .doc-head { text-align: center; margin-bottom: 4mm; }
-    .doc-head .logo { width: 20mm; height: 20mm; object-fit: contain; }
-    .doc-head h2 { font-size: 17pt; font-weight: 700; margin: 1.5mm 0 0; }
-    .doc-head .sub { font-size: 14pt; }
+    .doc-head .logo { width: 17mm; height: 17mm; object-fit: contain; }
+    .doc-head h2 { font-size: 15pt; font-weight: 700; margin: 1.5mm 0 0; }
+    .doc-head .sub { font-size: 12pt; }
     .doc-title {
-      text-align: center; font-size: 17pt; font-weight: 700;
+      text-align: center; font-size: 15pt; font-weight: 700;
       margin: 3mm 0 5mm; text-decoration: underline;
     }
     .doc-body p { margin: 0 0 2mm; text-indent: 0; }
@@ -58,12 +58,12 @@
       display: grid; grid-template-columns: 1fr 1fr;
       gap: 6mm 10mm; margin-top: 8mm; text-align: center;
     }
-    .sign-grid .sign-cell { font-size: 14pt; }
+    .sign-grid .sign-cell { font-size: 12pt; }
     .sign-line { margin-bottom: 1mm; }
-    .director-sign { text-align: center; margin-top: 6mm; font-size: 14pt; }
+    .director-sign { text-align: center; margin-top: 6mm; font-size: 12pt; }
 
     /* ปค.5 table */
-    table.pc5 { width: 100%; border-collapse: collapse; font-size: 12pt; margin-top: 3mm; table-layout: fixed; }
+    table.pc5 { width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 3mm; table-layout: fixed; }
     table.pc5 th, table.pc5 td { border: 1px solid #000; padding: 1.2mm 1.2mm; vertical-align: top; word-wrap: break-word; }
     table.pc5 td:first-child { white-space: normal !important; }  /* วันที่ขึ้นบรรทัดได้ ไม่ทับชื่อ */
     table.pc5 th { text-align: center; font-weight: 700; background: #f0f0f0;
@@ -306,16 +306,19 @@ function renderPC4() {
 /* ===== ปค.5 — แบบบันทึกพฤติกรรมรายบุคคล (ตาราง) ===== */
 function renderPC5() {
   const s = curData.student;
-  const logs = (curData.logs||[]).slice().reverse(); // เก่า→ใหม่
-  const totalDeduct = logs.filter(l=>l.points<0).reduce((a,l)=>a+Math.abs(l.points),0);
+  // เฉพาะที่ครูหักเอง (source=manual) — ตัด มาสาย(attendance) + บำเพ็ญประโยชน์(makeup) + เครื่องแต่งกาย(uniform) ออก
+  const logs = (curData.logs||[])
+    .filter(l => (l.source === 'manual' || !l.source) && l.points < 0)
+    .slice().reverse(); // เก่า→ใหม่
+  const totalDeduct = logs.reduce((a,l)=>a+Math.abs(l.points),0);
   const remaining = curData.score;
 
   let rows = '';
   logs.forEach(l => {
     rows += `<tr>
-      <td class="c" style="white-space:nowrap;">${pcDateShort(l.date)}</td>
+      <td class="c" style="white-space:normal;">${pcDateShort(l.date)}</td>
       <td>${l.reason || ''}${l.note ? ' — '+l.note : ''}</td>
-      <td class="c">${l.points < 0 ? Math.abs(l.points) : (l.points>0?'+'+l.points:'')}</td>
+      <td class="c">${Math.abs(l.points)}</td>
       <td></td><td></td><td></td><td></td>
     </tr>`;
   });
