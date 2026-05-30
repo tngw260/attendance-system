@@ -98,6 +98,7 @@
         <label class="form-label small fw-600 mb-1">เลือกแบบฟอร์ม</label>
         <select id="selForm" class="form-select form-select-sm" onchange="render()">
           <option value="pc1">ปค.1 — บันทึกการกระทำผิดของนักเรียน</option>
+          <option value="pc3">ปค.3 — บันทึกการทำทัณฑ์บนนักเรียน</option>
           <option value="pc4">ปค.4 — ตัดคะแนนความประพฤติ</option>
           <option value="pc5">ปค.5 — บันทึกพฤติกรรมรายบุคคล</option>
         </select>
@@ -224,9 +225,86 @@ function render() {
     return;
   }
   el('content').innerHTML = (form === 'pc1') ? renderPC1()
+                          : (form === 'pc3') ? renderPC3()
                           : (form === 'pc4') ? renderPC4()
                           : renderPC5();
   el('printBtn').disabled = false;
+}
+
+/* ===== ปค.3 — บันทึกการทำทัณฑ์บนนักเรียน ===== */
+function renderPC3() {
+  const s = curData.student;
+  const ed  = (w) => `<span class="editable" contenteditable="true" style="min-width:${w};text-align:center;"></span>`;
+  // ช่องที่ pre-fill จากระบบถ้ามี (แก้ได้)
+  const pf  = (val, w) => `<span class="editable" contenteditable="true" style="min-width:${w};">${val||''}</span>`;
+  return `<div class="doc-page" style="position:relative;">
+    <span class="pc-tag" style="top:14mm;right:18mm;">ปค 3</span>
+    <div class="doc-head">
+      ${logoTag()}
+      <h2>บันทึกการทำทัณฑ์บนนักเรียน</h2>
+    </div>
+    <div class="doc-body" style="margin-top:4mm;">
+      <p style="text-align:right;">${schoolName()}</p>
+      <p style="text-align:right;">อำเภอตะกั่วทุ่ง จังหวัดพังงา</p>
+      <p style="text-align:right;">วันที่ ${ed('14mm')} เดือน ${ed('28mm')} พ.ศ. ${ed('16mm')}</p>
+
+      <p style="margin-top:4mm;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ข้าพเจ้า
+        ${pf(s.parent_name, '70mm')} เป็นผู้ปกครองของ
+        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span></p>
+      <p>นักเรียนชั้น ม.<span class="fill-inline" style="min-width:20mm;">${s.class_level}/${s.room}</span>
+        เลขประจำตัว <span class="fill-inline" style="min-width:24mm;">${s.student_code||''}</span>
+        ปัจจุบันพักอยู่บ้านเลขที่ ${ed('20mm')} หมู่ที่ ${ed('14mm')} ถนน ${ed('24mm')}</p>
+      <p>ตำบล ${ed('30mm')} อำเภอ ${ed('30mm')} จังหวัด ${ed('30mm')}</p>
+      <p>หมายเลขโทรศัพท์(ที่สามารถติดต่อได้) ${pf(s.parent_phone, '34mm')}
+        เกี่ยวข้องกับนักเรียนเป็น ${pf(s.parent_relation, '30mm')}</p>
+      <p>นักเรียนได้กระทำความผิดระเบียบโรงเรียนคือ
+        <span class="editable" contenteditable="true" style="display:inline-block;min-width:70mm;"></span></p>
+      <p><span class="editable" contenteditable="true" style="display:block;min-height:6mm;"></span></p>
+      <p style="margin-top:2mm;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ได้รับทราบความผิดของนักเรียน จึงลงลายมือชื่อบันทึกการทำทัณฑ์บนไว้เป็นหลักฐาน
+        และจะควบคุมดูแลให้นักเรียนในการปกครองของข้าพเจ้า ปรับเปลี่ยนพฤติกรรม กำชับให้ปฏิบัติตามระเบียบวินัยของโรงเรียนโดยเคร่งครัด
+        หากนักเรียนกระทำผิดระเบียบของโรงเรียนอีกครั้ง จะถือว่าเป็นการฝ่าฝืนทัณฑ์บน ข้าพเจ้ายินยอมให้โรงเรียนพิจารณาดำเนินการตามความเหมาะสม</p>
+    </div>
+
+    <div class="sign-grid" style="margin-top:7mm;">
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>นักเรียน</div>
+      </div>
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>ผู้ปกครอง</div>
+      </div>
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>ครูที่ปรึกษา</div>
+      </div>
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>หัวหน้าระดับชั้น</div>
+      </div>
+    </div>
+    <div class="director-sign" style="margin-top:5mm;">
+      <div class="sign-line">ลงชื่อ ………………………………………</div>
+      <div>(……………………………………)</div>
+      <div>หัวหน้างานกิจการนักเรียน</div>
+    </div>
+
+    <div style="border:1px solid #000; margin-top:6mm; padding:3mm 5mm;">
+      <p style="text-align:center; font-weight:700;">ความเห็นของผู้อำนวยการโรงเรียน</p>
+      <p><span class="editable" contenteditable="true" style="display:block;min-height:6mm;"></span></p>
+      <p><span class="editable" contenteditable="true" style="display:block;min-height:6mm;"></span></p>
+      <div class="director-sign" style="margin-top:3mm;">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>( ${directorName()} )</div>
+        <div>ผู้อำนวยการ${schoolName()}</div>
+        <div>……… / ……… / ………</div>
+      </div>
+    </div>
+  </div>`;
 }
 
 /* ===== ปค.1 — แบบบันทึกการกระทำผิดของนักเรียน ===== */
