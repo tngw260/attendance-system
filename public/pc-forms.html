@@ -97,6 +97,7 @@
       <div class="col-md-3">
         <label class="form-label small fw-600 mb-1">เลือกแบบฟอร์ม</label>
         <select id="selForm" class="form-select form-select-sm" onchange="render()">
+          <option value="pc1">ปค.1 — บันทึกการกระทำผิดของนักเรียน</option>
           <option value="pc4">ปค.4 — ตัดคะแนนความประพฤติ</option>
           <option value="pc5">ปค.5 — บันทึกพฤติกรรมรายบุคคล</option>
         </select>
@@ -222,8 +223,75 @@ function render() {
     el('printBtn').disabled = true;
     return;
   }
-  el('content').innerHTML = (form === 'pc4') ? renderPC4() : renderPC5();
+  el('content').innerHTML = (form === 'pc1') ? renderPC1()
+                          : (form === 'pc4') ? renderPC4()
+                          : renderPC5();
   el('printBtn').disabled = false;
+}
+
+/* ===== ปค.1 — แบบบันทึกการกระทำผิดของนักเรียน ===== */
+function renderPC1() {
+  const s = curData.student;
+  const ed = (w) => `<span class="editable" contenteditable="true" style="min-width:${w};text-align:center;"></span>`;
+  return `<div class="doc-page" style="position:relative;">
+    <span class="pc-tag" style="top:14mm;right:18mm;">ปค 1</span>
+    <div class="doc-head">
+      ${logoTag()}
+      <h2>แบบบันทึกการกระทำผิดของนักเรียน&nbsp;&nbsp;ครั้งที่ ${ed('16mm')}</h2>
+    </div>
+    <div class="doc-body" style="margin-top:4mm;">
+      <p style="text-align:right;">เขียนที่ ${schoolName()}</p>
+      <p style="text-align:right;">อำเภอตะกั่วทุ่ง จังหวัดพังงา</p>
+      <p style="text-align:right;">วันที่ ${ed('14mm')} เดือน ${ed('28mm')} พ.ศ. ${ed('16mm')}</p>
+
+      <p style="margin-top:4mm;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ข้าพเจ้า
+        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span>
+        นักเรียนชั้น ม.<span class="fill-inline" style="min-width:24mm;">${s.class_level}/${s.room}</span>
+        ได้กระทำผิดระเบียบของโรงเรียน</p>
+      <p>เรื่อง <span class="editable" contenteditable="true" style="display:inline-block;min-width:120mm;"></span></p>
+      <p><span class="editable" contenteditable="true" style="display:block;min-height:6mm;"></span></p>
+      <p>เหตุเกิดเมื่อ วันที่ ${ed('12mm')} เดือน ${ed('26mm')} พ.ศ. ${ed('14mm')}
+        เวลา ${ed('18mm')} น.</p>
+      <p>สถานที่เกิดเหตุ <span class="editable" contenteditable="true" style="display:inline-block;min-width:110mm;"></span></p>
+      <p style="margin-top:2mm;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;การกระทำของข้าพเจ้าดังกล่าว ข้าพเจ้าทราบว่าเป็นการกระทำที่ไม่ถูกต้อง
+        ผิดระเบียบวินัยของ${schoolName()} หากข้าพเจ้ายังคงกระทำการใด ๆ อันไม่เหมาะสมนี้
+        ข้าพเจ้ายินดีให้ทางโรงเรียนพิจารณาโทษตามระเบียบข้อบังคับของทางโรงเรียนได้ทุกกรณี</p>
+    </div>
+
+    <div class="sign-grid" style="margin-top:8mm;">
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>นักเรียน</div>
+      </div>
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>ครูที่ปรึกษา</div>
+      </div>
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>หัวหน้าระดับชั้น</div>
+      </div>
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>หัวหน้างานกิจการนักเรียน</div>
+      </div>
+    </div>
+
+    <div style="margin-top:7mm;">
+      <p>ความคิดเห็นของผู้อำนวยการ${schoolName()}</p>
+      <p><span class="editable" contenteditable="true" style="display:block;min-height:6mm;"></span></p>
+      <p><span class="editable" contenteditable="true" style="display:block;min-height:6mm;"></span></p>
+    </div>
+    <div class="director-sign">
+      <div class="sign-line">ลงชื่อ ………………………………………</div>
+      <div>( ${directorName()} )</div>
+      <div>ผู้อำนวยการ${schoolName()}</div>
+    </div>
+  </div>`;
 }
 
 /* ===== ปค.4 — แบบฟอร์มตัดคะแนนความประพฤติ ===== */
