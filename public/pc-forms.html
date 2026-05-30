@@ -63,8 +63,8 @@
     .director-sign { text-align: center; margin-top: 8mm; font-size: 16pt; }
 
     /* ปค.5 table */
-    table.pc5 { width: 100%; border-collapse: collapse; font-size: 14pt; margin-top: 3mm; }
-    table.pc5 th, table.pc5 td { border: 1px solid #000; padding: 2mm 2mm; vertical-align: top; }
+    table.pc5 { width: 100%; border-collapse: collapse; font-size: 13pt; margin-top: 3mm; table-layout: fixed; }
+    table.pc5 th, table.pc5 td { border: 1px solid #000; padding: 1.5mm 1.5mm; vertical-align: top; word-wrap: break-word; }
     table.pc5 th { text-align: center; font-weight: 700; background: #f0f0f0;
                    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     table.pc5 td.c { text-align: center; }
@@ -314,44 +314,53 @@ function renderPC5() {
     rows += `<tr>
       <td class="c" style="white-space:nowrap;">${pcDateShort(l.date)}</td>
       <td>${l.reason || ''}${l.note ? ' — '+l.note : ''}</td>
-      <td class="c">${l.points < 0 ? Math.abs(l.points) : ''}</td>
-      <td class="c">${l.points > 0 ? '+'+l.points : ''}</td>
+      <td class="c">${l.points < 0 ? Math.abs(l.points) : (l.points>0?'+'+l.points:'')}</td>
+      <td></td><td></td><td></td><td></td>
     </tr>`;
   });
-  // เติมแถวว่างให้เต็มหน้า (อย่างน้อย 12 แถว)
-  const blanks = Math.max(0, 12 - logs.length);
-  for (let i=0;i<blanks;i++) rows += `<tr><td style="height:9mm;">&nbsp;</td><td></td><td></td><td></td></tr>`;
+  // เติมแถวว่างให้เต็มหน้า
+  const blanks = Math.max(0, 11 - logs.length);
+  for (let i=0;i<blanks;i++) rows += `<tr><td style="height:8mm;">&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
 
   return `<div class="doc-page" style="position:relative;">
-    <span class="pc-tag" style="top:14mm;right:18mm;">ปค.5</span>
+    <span class="pc-tag" style="top:14mm;right:18mm;">ปค 5</span>
     <div class="doc-head">
       ${logoTag()}
       <h2>แบบบันทึกพฤติกรรมนักเรียน</h2>
-      <div class="sub">${schoolName()}</div>
     </div>
-    <p style="text-align:center;">ภาคเรียนที่ <span class="editable" contenteditable="true" style="min-width:14mm;"></span>
-      ปีการศึกษา <span class="editable" contenteditable="true" style="min-width:20mm;"></span></p>
-    <p>ชื่อ <span class="fill" style="font-weight:600;">${namePrefix(s)}</span>
-       เลขที่ <span class="fill-inline" style="min-width:16mm;">${s.number ?? ''}</span>
-       ชั้น <span class="fill-inline" style="min-width:22mm;">ม.${s.class_level}/${s.room}</span></p>
+    <p style="text-align:center; margin:1mm 0;">${schoolName()}
+      ภาคเรียนที่ <span class="editable" contenteditable="true" style="min-width:14mm;text-align:center;"></span>
+      ปีการศึกษา <span class="editable" contenteditable="true" style="min-width:20mm;text-align:center;"></span></p>
+    <p style="text-align:center; margin:1mm 0 3mm;">ชื่อ <span class="fill" style="min-width:65mm;">${studentFullName(s)}</span>
+       เลขที่ <span class="fill-inline" style="min-width:14mm;">${s.number ?? ''}</span>
+       ห้อง <span class="fill-inline" style="min-width:22mm;">ม.${s.class_level}/${s.room}</span></p>
 
     <table class="pc5">
-      <thead><tr>
-        <th style="width:28mm;">วัน/เดือน/ปี</th>
-        <th>พฤติกรรมนักเรียน</th>
-        <th style="width:22mm;">คะแนน<br>ที่ถูกหัก</th>
-        <th style="width:22mm;">คะแนน<br>ที่ได้คืน</th>
-      </tr></thead>
+      <thead>
+        <tr>
+          <th rowspan="2" style="width:24mm;">วัน/เดือน/ปี</th>
+          <th rowspan="2">พฤติกรรมนักเรียน</th>
+          <th rowspan="2" style="width:20mm;">คะแนนพฤติกรรม<br>ที่ถูกหัก</th>
+          <th colspan="4">ลงชื่อ</th>
+        </tr>
+        <tr>
+          <th style="width:16mm;">นักเรียน</th>
+          <th style="width:18mm;">ครูที่ปรึกษา</th>
+          <th style="width:18mm;">หัวหน้า<br>ระดับชั้น</th>
+          <th style="width:20mm;">หัวหน้า<br>กิจการนักเรียน</th>
+        </tr>
+      </thead>
       <tbody>${rows}</tbody>
       <tfoot>
         <tr>
-          <td colspan="2" style="text-align:right;font-weight:700;">รวมคะแนนที่ถูกหัก</td>
+          <td colspan="2" class="c" style="font-weight:700;">คะแนนพฤติกรรมที่ถูกหักรวม</td>
           <td class="c" style="font-weight:700;">${totalDeduct || ''}</td>
-          <td></td>
+          <td colspan="4"></td>
         </tr>
         <tr>
-          <td colspan="2" style="text-align:right;font-weight:700;">คะแนนพฤติกรรมคงเหลือ (เต็ม ${curData.start_score} คะแนน/ปีการศึกษา)</td>
-          <td class="c" style="font-weight:700;" colspan="2">${remaining}</td>
+          <td colspan="2" class="c" style="font-weight:700;">คะแนนพฤติกรรมคงเหลือรวม<br>( ${curData.start_score} คะแนน/ปีการศึกษา )</td>
+          <td class="c" style="font-weight:700;">${remaining}</td>
+          <td colspan="4"></td>
         </tr>
       </tfoot>
     </table>
@@ -376,7 +385,7 @@ function renderPC5() {
     <div class="director-sign" style="margin-top:6mm;">
       <div class="sign-line">ลงชื่อ ………………………………………</div>
       <div>( ${directorName()} )</div>
-      <div>${directorTitle()}${schoolName()}</div>
+      <div>ผู้อำนวยการ${schoolName()}</div>
     </div>
   </div>`;
 }
