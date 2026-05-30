@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>แบบฟอร์ม ปค. — งานกิจการนักเรียน</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    /* ===== A4 document ===== */
+    .doc-page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 14px auto;
+      background: white;
+      color: #000;
+      padding: 18mm 20mm;
+      box-sizing: border-box;
+      box-shadow: 0 2px 14px rgba(0,0,0,.15);
+      font-family: 'TH Sarabun New', 'Sarabun', sans-serif;
+      font-size: 16pt;
+      line-height: 1.6;
+    }
+    .doc-page .pc-tag {
+      position: absolute;
+      font-weight: 700;
+      font-size: 15pt;
+    }
+    .doc-head { text-align: center; margin-bottom: 6mm; }
+    .doc-head .logo { width: 22mm; height: 22mm; object-fit: contain; }
+    .doc-head h2 { font-size: 18pt; font-weight: 700; margin: 2mm 0 0; }
+    .doc-head .sub { font-size: 15pt; }
+    .doc-title {
+      text-align: center; font-size: 18pt; font-weight: 700;
+      margin: 4mm 0 6mm; text-decoration: underline;
+    }
+    .doc-body p { margin: 0 0 2.5mm; text-indent: 0; }
+    .fill { border-bottom: 1px dotted #000; padding: 0 4px; }
+    .fill-inline { display: inline-block; min-width: 40mm; border-bottom: 1px dotted #000; padding: 0 4px; text-align: center; }
+    .editable {
+      background: #fffbe6;
+      outline: none;
+      min-width: 30mm;
+      display: inline-block;
+      border-bottom: 1px dotted #888;
+      padding: 0 4px;
+    }
+    .editable:focus { background: #fff3b0; }
+
+    /* signature grid */
+    .sign-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 8mm 10mm; margin-top: 10mm; text-align: center;
+    }
+    .sign-grid .sign-cell { font-size: 15pt; }
+    .sign-line { margin-bottom: 1mm; }
+    .director-sign { text-align: center; margin-top: 8mm; }
+
+    /* ปค.5 table */
+    table.pc5 { width: 100%; border-collapse: collapse; font-size: 13pt; margin-top: 3mm; }
+    table.pc5 th, table.pc5 td { border: 1px solid #000; padding: 2mm 2mm; vertical-align: top; }
+    table.pc5 th { text-align: center; font-weight: 700; background: #f0f0f0;
+                   -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    table.pc5 td.c { text-align: center; }
+
+    .controls { background: #f0f4fb; padding: 14px 0; border-bottom: 2px solid var(--primary); }
+
+    @media print {
+      body { background: white; }
+      .no-print, nav { display: none !important; }
+      .doc-page { box-shadow: none; margin: 0; padding: 16mm 18mm; }
+      .editable { background: transparent !important; border-bottom: 1px dotted #000; }
+      @page { size: A4; margin: 0; }
+    }
+    [data-theme="dark"] .doc-page { color: #000; }  /* เอกสารคงสีขาวเสมอ */
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <div id="userBadge" class="d-flex align-items-center"></div>
+  </div>
+</nav>
+
+<div class="controls no-print">
+  <div class="container">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small fw-600 mb-1">เลือกแบบฟอร์ม</label>
+        <select id="selForm" class="form-select form-select-sm" onchange="render()">
+          <option value="pc4">ปค.4 — ตัดคะแนนความประพฤติ</option>
+          <option value="pc5">ปค.5 — บันทึกพฤติกรรมรายบุคคล</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-600 mb-1">เลือกนักเรียน</label>
+        <select id="selStudent" class="form-select form-select-sm" onchange="loadStudent()">
+          <option value="">-- เลือกนักเรียน --</option>
+        </select>
+      </div>
+      <div class="col-md-3" id="logPickWrap" style="display:none;">
+        <label class="form-label small fw-600 mb-1">เลือกรายการที่จะออกใบ (ปค.4)</label>
+        <select id="selLog" class="form-select form-select-sm" onchange="render()">
+          <option value="">-- ทั้งหมด/ล่าสุด --</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-success btn-sm w-100" onclick="window.print()" id="printBtn" disabled>
+          <i class="bi bi-printer-fill me-1"></i>พิมพ์
+        </button>
+      </div>
+    </div>
+    <div class="small text-muted mt-2">
+      <i class="bi bi-info-circle me-1"></i>
+      ช่องสีเหลืองแก้ไขได้ก่อนพิมพ์ (คลิกพิมพ์ทับได้เลย) • ข้อมูลชื่อ/ชั้น/คะแนน ดึงจากระบบอัตโนมัติ
+    </div>
+  </div>
+</div>
+
+<div id="content">
+  <div class="doc-page">
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-file-earmark-text fs-1 d-block mb-2"></i>
+      เลือกแบบฟอร์มและนักเรียน เพื่อสร้างเอกสาร
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const THAI_MONTHS_F = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+let theme = {};
+let curData = null;   // { student, logs, score, start_score }
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  try { theme = await (await fetch('/api/public/theme')).json(); } catch(e){}
+  await loadStudentList();
+});
+
+async function loadStudentList() {
+  try {
+    const students = await apiFetch('/api/students');
+    const sel = document.getElementById('selStudent');
+    const grouped = {};
+    students.forEach(s => {
+      const k = `ม.${s.class_level}/${s.room}`;
+      (grouped[k] = grouped[k] || []).push(s);
+    });
+    Object.keys(grouped).sort().forEach(k => {
+      const og = document.createElement('optgroup'); og.label = k;
+      grouped[k].forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.id; o.textContent = `${s.number ? s.number+'. ':''}${s.name}`;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+  } catch(e){ alert(e.message); }
+}
+
+async function loadStudent() {
+  const sid = document.getElementById('selStudent').value;
+  if (!sid) { curData = null; render(); return; }
+  try {
+    curData = await apiFetch(`/api/behavior/logs/${sid}`);
+    // เติม dropdown รายการตัดคะแนน (เฉพาะที่หักคะแนน points<0) สำหรับ ปค.4
+    const selLog = document.getElementById('selLog');
+    selLog.innerHTML = '<option value="">-- ล่าสุด --</option>';
+    (curData.logs||[]).filter(l => l.points < 0).forEach(l => {
+      const o = document.createElement('option');
+      o.value = l.id;
+      o.textContent = `${pcDateShort(l.date)} • ${l.reason} (${l.points})`;
+      selLog.appendChild(o);
+    });
+    render();
+  } catch(e){ alert(e.message); }
+}
+
+function thaiDateLong(iso) {
+  if (!iso) return { d:'', m:'', y:'' };
+  const dt = new Date(iso + 'T00:00:00');
+  return { d: dt.getDate(), m: THAI_MONTHS_F[dt.getMonth()], y: dt.getFullYear()+543 };
+}
+function pcDateShort(iso){
+  if(!iso) return '-';
+  const dt = new Date(iso+'T00:00:00');
+  return `${dt.getDate()} ${THAI_MONTHS_F[dt.getMonth()].slice(0,3)} ${dt.getFullYear()+543}`;
+}
+function namePrefix(s){
+  // ถ้าชื่อมีคำนำหน้าแล้วใช้เลย
+  if (/^(เด็กชาย|เด็กหญิง|นาย|นางสาว|ด\.ช\.|ด\.ญ\.)/.test(s.name||'')) return s.name;
+  return s.name || '';
+}
+
+function el(id){ return document.getElementById(id); }
+function schoolName(){ return theme.school_name || 'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม'; }
+function directorName(){ return theme.director_name || 'นางสาวปัทมา จีนดี'; }
+function directorTitle(){ return theme.director_title || 'ผู้อำนวยการ'; }
+function logoTag(){ return theme.school_logo ? `<img class="logo" src="${theme.school_logo}">` : ''; }
+
+function render() {
+  const form = el('selForm').value;
+  el('logPickWrap').style.display = (form === 'pc4') ? '' : 'none';
+  if (!curData) {
+    el('content').innerHTML = `<div class="doc-page"><div class="text-center text-muted py-5">
+      <i class="bi bi-person-x fs-1 d-block mb-2"></i>กรุณาเลือกนักเรียน</div></div>`;
+    el('printBtn').disabled = true;
+    return;
+  }
+  el('content').innerHTML = (form === 'pc4') ? renderPC4() : renderPC5();
+  el('printBtn').disabled = false;
+}
+
+/* ===== ปค.4 — แบบฟอร์มตัดคะแนนความประพฤติ ===== */
+function renderPC4() {
+  const s = curData.student;
+  const today = thaiDateLong(new Date().toISOString().split('T')[0]);
+  // หา log ที่เลือก
+  const logId = el('selLog').value;
+  let log = null;
+  if (logId) log = (curData.logs||[]).find(l => String(l.id) === String(logId));
+  else log = (curData.logs||[]).filter(l => l.points < 0)[0] || null;
+
+  const reason = log ? log.reason + (log.note ? ' — '+log.note : '') : '';
+  const points = log ? Math.abs(log.points) : '';
+  const useDate = log ? thaiDateLong(log.date) : today;
+
+  return `<div class="doc-page" style="position:relative;">
+    <span class="pc-tag" style="top:14mm;right:18mm;">ปค.4</span>
+    <div class="doc-head">
+      ${logoTag()}
+      <h2>แบบฟอร์มตัดคะแนนความประพฤตินักเรียน</h2>
+      <div class="sub">${schoolName()}</div>
+    </div>
+    <div class="doc-body" style="margin-top:6mm;">
+      <p style="text-align:right;">วันที่ <span class="fill-inline">${useDate.d}</span>
+        เดือน <span class="fill-inline">${useDate.m}</span>
+        พ.ศ. <span class="fill-inline">${useDate.y}</span></p>
+      <p style="margin-top:4mm;">เนื่องด้วย นักเรียน
+        <span class="fill" style="font-weight:600;">${namePrefix(s)}</span>
+        &nbsp;ระดับชั้น <span class="fill-inline">ม.${s.class_level}/${s.room}</span>
+        เลขที่ <span class="fill-inline" style="min-width:18mm;">${s.number ?? ''}</span></p>
+      <p>ได้ประพฤติผิดระเบียบของ${schoolName()} ดังนี้</p>
+      <p><span class="editable" contenteditable="true" style="display:block;min-height:7mm;">${reason}</span></p>
+      <p><span class="editable" contenteditable="true" style="display:block;min-height:7mm;"></span></p>
+      <p style="margin-top:3mm;">โดยพิจารณาแล้วเห็นสมควรตัดคะแนนความประพฤติ
+        <span class="editable" contenteditable="true" style="min-width:24mm;text-align:center;font-weight:700;">${points}</span> คะแนน
+        <span style="font-size:12pt;color:#666;">(คะแนนคงเหลือ ${curData.score})</span></p>
+    </div>
+
+    <div class="sign-grid">
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>นักเรียน</div>
+      </div>
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>ผู้ปกครองนักเรียน</div>
+      </div>
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>ครูที่ปรึกษา</div>
+      </div>
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>หัวหน้าระดับชั้น</div>
+      </div>
+    </div>
+    <div class="director-sign" style="margin-top:6mm;">
+      <div class="sign-line">ลงชื่อ ………………………………………</div>
+      <div>(……………………………………)</div>
+      <div>หัวหน้างานกิจการนักเรียน</div>
+    </div>
+
+    <div style="margin-top:7mm;">
+      <p>ความคิดเห็นของผู้อำนวยการ${schoolName()}</p>
+      <p><span class="editable" contenteditable="true" style="display:block;min-height:7mm;"></span></p>
+      <p><span class="editable" contenteditable="true" style="display:block;min-height:7mm;"></span></p>
+    </div>
+    <div class="director-sign">
+      <div class="sign-line">ลงชื่อ ………………………………………</div>
+      <div>( ${directorName()} )</div>
+      <div>${directorTitle()}${schoolName()}</div>
+    </div>
+  </div>`;
+}
+
+/* ===== ปค.5 — แบบบันทึกพฤติกรรมรายบุคคล (ตาราง) ===== */
+function renderPC5() {
+  const s = curData.student;
+  const logs = (curData.logs||[]).slice().reverse(); // เก่า→ใหม่
+  const totalDeduct = logs.filter(l=>l.points<0).reduce((a,l)=>a+Math.abs(l.points),0);
+  const remaining = curData.score;
+
+  let rows = '';
+  logs.forEach(l => {
+    rows += `<tr>
+      <td class="c" style="white-space:nowrap;">${pcDateShort(l.date)}</td>
+      <td>${l.reason || ''}${l.note ? ' — '+l.note : ''}</td>
+      <td class="c">${l.points < 0 ? Math.abs(l.points) : ''}</td>
+      <td class="c">${l.points > 0 ? '+'+l.points : ''}</td>
+    </tr>`;
+  });
+  // เติมแถวว่างให้เต็มหน้า (อย่างน้อย 12 แถว)
+  const blanks = Math.max(0, 12 - logs.length);
+  for (let i=0;i<blanks;i++) rows += `<tr><td style="height:9mm;">&nbsp;</td><td></td><td></td><td></td></tr>`;
+
+  return `<div class="doc-page" style="position:relative;">
+    <span class="pc-tag" style="top:14mm;right:18mm;">ปค.5</span>
+    <div class="doc-head">
+      ${logoTag()}
+      <h2>แบบบันทึกพฤติกรรมนักเรียน</h2>
+      <div class="sub">${schoolName()}</div>
+    </div>
+    <p style="text-align:center;">ภาคเรียนที่ <span class="editable" contenteditable="true" style="min-width:14mm;"></span>
+      ปีการศึกษา <span class="editable" contenteditable="true" style="min-width:20mm;"></span></p>
+    <p>ชื่อ <span class="fill" style="font-weight:600;">${namePrefix(s)}</span>
+       เลขที่ <span class="fill-inline" style="min-width:16mm;">${s.number ?? ''}</span>
+       ชั้น <span class="fill-inline" style="min-width:22mm;">ม.${s.class_level}/${s.room}</span></p>
+
+    <table class="pc5">
+      <thead><tr>
+        <th style="width:28mm;">วัน/เดือน/ปี</th>
+        <th>พฤติกรรมนักเรียน</th>
+        <th style="width:22mm;">คะแนน<br>ที่ถูกหัก</th>
+        <th style="width:22mm;">คะแนน<br>ที่ได้คืน</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2" style="text-align:right;font-weight:700;">รวมคะแนนที่ถูกหัก</td>
+          <td class="c" style="font-weight:700;">${totalDeduct || ''}</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td colspan="2" style="text-align:right;font-weight:700;">คะแนนพฤติกรรมคงเหลือ (เต็ม ${curData.start_score} คะแนน/ปีการศึกษา)</td>
+          <td class="c" style="font-weight:700;" colspan="2">${remaining}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="sign-grid" style="margin-top:8mm;">
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>ครูที่ปรึกษา</div>
+      </div>
+      <div class="sign-cell">
+        <div class="sign-line">ลงชื่อ ………………………………………</div>
+        <div>(……………………………………)</div>
+        <div>หัวหน้าระดับชั้น</div>
+      </div>
+    </div>
+    <div class="director-sign" style="margin-top:6mm;">
+      <div class="sign-line">ลงชื่อ ………………………………………</div>
+      <div>(……………………………………)</div>
+      <div>หัวหน้างานกิจการนักเรียน</div>
+    </div>
+    <div class="director-sign" style="margin-top:6mm;">
+      <div class="sign-line">ลงชื่อ ………………………………………</div>
+      <div>( ${directorName()} )</div>
+      <div>${directorTitle()}${schoolName()}</div>
+    </div>
+  </div>`;
+}
+</script>
+</body>
+</html>

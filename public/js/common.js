@@ -335,6 +335,7 @@ function upgradeBehaviorMenu() {
     </a>
     <ul class="dropdown-menu">
       <li><a class="dropdown-item ${location.pathname === '/behavior-report.html' ? 'active' : ''}" href="/behavior-report.html"><i class="bi bi-bar-chart me-2"></i>รายงานคะแนน</a></li>
+      <li><a class="dropdown-item ${location.pathname === '/pc-forms.html' ? 'active' : ''}" href="/pc-forms.html"><i class="bi bi-file-earmark-text me-2"></i>พิมพ์แบบฟอร์ม ปค.</a></li>
       ${rulesItem}
     </ul>`;
 
