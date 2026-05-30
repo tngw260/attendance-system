@@ -167,7 +167,7 @@ async function loadStudent() {
   const sid = document.getElementById('selStudent').value;
   if (!sid) { curData = null; render(); return; }
   try {
-    curData = await apiFetch(`/api/behavior/logs/${sid}`);
+    curData = await apiFetch(`/api/behavior/${sid}`);
     // เติม dropdown รายการตัดคะแนน (เฉพาะที่หักคะแนน points<0) สำหรับ ปค.4
     const selLog = document.getElementById('selLog');
     selLog.innerHTML = '<option value="">-- ล่าสุด --</option>';

@@ -1154,6 +1154,14 @@ def api_student_update(sid):
             if nid and (not nid.isdigit() or len(nid) != 13):
                 return jsonify(success=False, message='เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก'), 400
             updates['national_id'] = nid
+        if 'parent_name' in b:
+            updates['parent_name'] = (b.get('parent_name') or '').strip() or None
+        if 'parent_relation' in b:
+            updates['parent_relation'] = (b.get('parent_relation') or '').strip() or None
+        if 'parent_phone' in b:
+            updates['parent_phone'] = (b.get('parent_phone') or '').strip() or None
+        if 'address' in b:
+            updates['address'] = (b.get('address') or '').strip() or None
 
         if not updates:
             return jsonify(success=False, message='ไม่มีข้อมูลให้อัพเดท'), 400
