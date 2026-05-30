@@ -277,6 +277,15 @@ def init_db():
             con.execute('ALTER TABLE students ADD COLUMN birthdate TEXT')  # ISO YYYY-MM-DD
         if 'national_id' not in scols:
             con.execute('ALTER TABLE students ADD COLUMN national_id TEXT')  # 13 หลัก
+        # ข้อมูลผู้ปกครอง (สำหรับ ปค.3 ทัณฑ์บน) — กรอกเฉพาะรายที่มีเคส
+        if 'parent_name' not in scols:
+            con.execute('ALTER TABLE students ADD COLUMN parent_name TEXT')
+        if 'parent_relation' not in scols:
+            con.execute('ALTER TABLE students ADD COLUMN parent_relation TEXT')  # บิดา/มารดา/...
+        if 'parent_phone' not in scols:
+            con.execute('ALTER TABLE students ADD COLUMN parent_phone TEXT')
+        if 'address' not in scols:
+            con.execute('ALTER TABLE students ADD COLUMN address TEXT')
 
         # Migrate: behavior_logs - add note column
         bcols = [r['name'] for r in con.execute('PRAGMA table_info(behavior_logs)').fetchall()]
@@ -1010,7 +1019,8 @@ def api_student_get(sid):
     with get_db() as con:
         s = con.execute(
             'SELECT id, number, student_code, name, class_level, room, gender, photo, '
-            'birthdate, national_id, parent_code FROM students WHERE id=?',
+            'birthdate, national_id, parent_code, '
+            'parent_name, parent_relation, parent_phone, address FROM students WHERE id=?',
             (sid,)).fetchone()
     if not s:
         return jsonify(error='ไม่พบนักเรียน'), 404
