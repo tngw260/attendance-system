@@ -238,6 +238,19 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_pcf_student ON pc_forms(student_id);
             CREATE INDEX IF NOT EXISTS idx_pcf_type    ON pc_forms(form_type);
 
+            CREATE TABLE IF NOT EXISTS home_visits (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id    INTEGER NOT NULL UNIQUE REFERENCES students(id) ON DELETE CASCADE,
+                visited       INTEGER DEFAULT 0,         -- เยี่ยมแล้ว=1
+                visit_date    TEXT,
+                data          TEXT,                       -- JSON: ที่อยู่/ผู้ปกครอง/สภาพบ้าน/เศรษฐกิจ ฯลฯ
+                photos        TEXT,                       -- JSON array ของชื่อไฟล์รูป
+                recorded_by   INTEGER REFERENCES users(id),
+                created_at    TEXT DEFAULT (datetime('now','localtime')),
+                updated_at    TEXT DEFAULT (datetime('now','localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_hv_student ON home_visits(student_id);
+
             CREATE TABLE IF NOT EXISTS holidays (
                 date       TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
@@ -3043,6 +3056,161 @@ def api_students_search():
     with get_db() as con:
         rows = con.execute(sql, [pattern, pattern, pattern] + params).fetchall()
     return jsonify(rows_to_list(rows))
+
+# ── HOME VISITS (เยี่ยมบ้าน) ───────────────────────────────
+
+@app.get('/api/home-visits')
+@login_required
+def api_home_visits_list():
+    """รายชื่อนักเรียนในห้อง + สถานะเยี่ยมบ้าน — Query: ?level=1&room=1"""
+    u = current_user()
+    level = request.args.get('level')
+    room = request.args.get('room')
+    where, params, _, _ = user_class_filter(u, {'level': level, 'room': room})
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT s.id, s.number, s.student_code, s.name, s.class_level, s.room, s.photo,
+                   hv.id AS visit_id, hv.visited, hv.visit_date,
+                   hv.photos
+            FROM students s
+            LEFT JOIN home_visits hv ON hv.student_id = s.id
+            WHERE 1=1 {where}
+            ORDER BY s.number, s.name
+        """, params).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        try: d['photo_count'] = len(json.loads(d.get('photos') or '[]'))
+        except Exception: d['photo_count'] = 0
+        d.pop('photos', None)
+        result.append(d)
+    return jsonify(result)
+
+@app.get('/api/home-visits/<int:sid>')
+@login_required
+def api_home_visit_get(sid):
+    """ข้อมูลเยี่ยมบ้านของนักเรียน 1 คน (สร้าง record ว่างถ้ายังไม่มี)"""
+    u = current_user()
+    with get_db() as con:
+        student = con.execute('SELECT * FROM students WHERE id=?', (sid,)).fetchone()
+        if not student:
+            return jsonify(error='ไม่พบนักเรียน'), 404
+        if not can_access_student(u, student):
+            return jsonify(error='ไม่มีสิทธิ์'), 403
+        hv = con.execute('SELECT * FROM home_visits WHERE student_id=?', (sid,)).fetchone()
+    student_d = {
+        'id': student['id'], 'number': student['number'], 'name': student['name'],
+        'student_code': student['student_code'], 'class_level': student['class_level'],
+        'room': student['room'], 'photo': student['photo'],
+        'birthdate': student['birthdate'], 'national_id': student['national_id'],
+        'parent_name': student['parent_name'], 'parent_relation': student['parent_relation'],
+        'parent_phone': student['parent_phone'], 'address': student['address'],
+    }
+    if hv:
+        d = dict(hv)
+        try: d['data'] = json.loads(d.get('data') or '{}')
+        except Exception: d['data'] = {}
+        try: d['photos'] = json.loads(d.get('photos') or '[]')
+        except Exception: d['photos'] = []
+    else:
+        d = {'student_id': sid, 'visited': 0, 'visit_date': None, 'data': {}, 'photos': []}
+    d['student'] = student_d
+    return jsonify(d)
+
+@app.post('/api/home-visits/<int:sid>')
+@login_required
+def api_home_visit_save(sid):
+    """บันทึก/อัพเดทข้อมูลเยี่ยมบ้าน"""
+    u = current_user()
+    b = request.get_json() or {}
+    visited    = 1 if b.get('visited') else 0
+    visit_date = (b.get('visit_date') or '').strip() or None
+    data       = b.get('data') or {}
+    data_json  = json.dumps(data, ensure_ascii=False)
+
+    with get_db() as con:
+        student = con.execute('SELECT * FROM students WHERE id=?', (sid,)).fetchone()
+        if not student:
+            return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if not can_access_student(u, student):
+            return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+        existing = con.execute('SELECT id FROM home_visits WHERE student_id=?', (sid,)).fetchone()
+        if existing:
+            con.execute("""
+                UPDATE home_visits SET visited=?, visit_date=?, data=?,
+                       recorded_by=?, updated_at=datetime('now','localtime')
+                WHERE student_id=?
+            """, (visited, visit_date, data_json, u['id'], sid))
+        else:
+            con.execute("""
+                INSERT INTO home_visits (student_id, visited, visit_date, data, photos, recorded_by)
+                VALUES (?,?,?,?,?,?)
+            """, (sid, visited, visit_date, data_json, '[]', u['id']))
+        audit_log(con, 'save_home_visit', 'student', sid, {'visited': visited})
+    return jsonify(success=True, message='บันทึกข้อมูลเยี่ยมบ้านแล้ว')
+
+@app.post('/api/home-visits/<int:sid>/photo')
+@login_required
+def api_home_visit_photo(sid):
+    """อัพโหลดรูปเยี่ยมบ้าน (เพิ่มเข้า list)"""
+    if 'file' not in request.files:
+        return jsonify(success=False, message='ไม่พบไฟล์'), 400
+    f = request.files['file']
+    if not f.filename: return jsonify(success=False, message='ไม่พบไฟล์'), 400
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in ('.jpg', '.jpeg', '.png', '.webp'):
+        return jsonify(success=False, message='ต้องเป็นรูปภาพ jpg/png/webp'), 400
+
+    u = current_user()
+    with get_db() as con:
+        student = con.execute('SELECT * FROM students WHERE id=?', (sid,)).fetchone()
+        if not student: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if not can_access_student(u, student):
+            return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+
+        # filename ไม่ซ้ำ
+        filename = f'hv_{sid}_{secrets.token_hex(4)}{ext}'
+        f.save(os.path.join(PHOTOS_DIR, filename))
+
+        hv = con.execute('SELECT id, photos FROM home_visits WHERE student_id=?', (sid,)).fetchone()
+        if hv:
+            try: photos = json.loads(hv['photos'] or '[]')
+            except Exception: photos = []
+            photos.append(filename)
+            con.execute('UPDATE home_visits SET photos=?, updated_at=datetime(\'now\',\'localtime\') WHERE student_id=?',
+                        (json.dumps(photos, ensure_ascii=False), sid))
+        else:
+            con.execute("""
+                INSERT INTO home_visits (student_id, visited, photos, recorded_by)
+                VALUES (?, 0, ?, ?)
+            """, (sid, json.dumps([filename], ensure_ascii=False), u['id']))
+        audit_log(con, 'upload_hv_photo', 'student', sid, {'filename': filename})
+    return jsonify(success=True, message='อัพโหลดรูปสำเร็จ', photo=filename)
+
+@app.delete('/api/home-visits/<int:sid>/photo')
+@login_required
+def api_home_visit_photo_delete(sid):
+    """ลบรูปเยี่ยมบ้าน 1 รูป — Body: { filename }"""
+    u = current_user()
+    b = request.get_json() or {}
+    filename = b.get('filename')
+    if not filename: return jsonify(success=False, message='ไม่พบชื่อไฟล์'), 400
+    with get_db() as con:
+        student = con.execute('SELECT * FROM students WHERE id=?', (sid,)).fetchone()
+        if not student: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if not can_access_student(u, student):
+            return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+        hv = con.execute('SELECT photos FROM home_visits WHERE student_id=?', (sid,)).fetchone()
+        if hv:
+            try: photos = json.loads(hv['photos'] or '[]')
+            except Exception: photos = []
+            if filename in photos:
+                photos.remove(filename)
+                con.execute('UPDATE home_visits SET photos=? WHERE student_id=?',
+                            (json.dumps(photos, ensure_ascii=False), sid))
+                try: os.remove(os.path.join(PHOTOS_DIR, filename))
+                except OSError: pass
+    return jsonify(success=True, message='ลบรูปแล้ว')
 
 # ── PHOTO UPLOAD ──────────────────────────────────────────
 

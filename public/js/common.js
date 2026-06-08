@@ -260,6 +260,7 @@ async function loadCurrentUser() {
     upgradeBehaviorMenu();
     // Add Heatmap link (after รายงาน) if not present
     injectHeatmapLink();
+    injectHomeVisitLink();
     // Add global student search
     injectGlobalSearch();
     // Apply theme color and logo from settings
@@ -312,6 +313,19 @@ function injectHeatmapLink() {
   const isActive = location.pathname === '/heatmap.html';
   li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/heatmap.html"><i class="bi bi-calendar3-week me-1"></i>ปฏิทินมาเรียน</a>`;
   reportLi.parentNode.insertBefore(li, reportLi.nextSibling);
+}
+
+function injectHomeVisitLink() {
+  if (document.querySelector('a.nav-link[href="/home-visit.html"]')) return;
+  const anchor = document.querySelector('a.nav-link[href="/students.html"]');
+  if (!anchor) return;
+  const anchorLi = anchor.closest('li.nav-item');
+  if (!anchorLi) return;
+  const li = document.createElement('li');
+  li.className = 'nav-item';
+  const isActive = location.pathname === '/home-visit.html';
+  li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/home-visit.html"><i class="bi bi-house-heart me-1"></i>เยี่ยมบ้าน</a>`;
+  anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
 }
 
 function upgradeBehaviorMenu() {

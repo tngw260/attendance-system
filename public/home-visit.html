@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>เยี่ยมบ้านนักเรียน</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    .hv-student-row {
+      display:flex; align-items:center; gap:12px;
+      padding:10px 14px; border:1px solid var(--border,#dee2e6);
+      border-radius:10px; margin-bottom:8px; background:var(--surface,#fff);
+      cursor:pointer; transition:.15s;
+    }
+    .hv-student-row:hover { box-shadow:0 3px 12px rgba(0,0,0,.1); transform:translateY(-1px); }
+    .hv-student-row .num { width:30px; height:30px; border-radius:50%; background:var(--primary,#0d3b8e);
+      color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.85rem; flex-shrink:0; }
+    .hv-badge-done { background:#d4edda; color:#155724; padding:3px 10px; border-radius:50px; font-size:.8rem; font-weight:600; }
+    .hv-badge-pending { background:#fff3cd; color:#856404; padding:3px 10px; border-radius:50px; font-size:.8rem; font-weight:600; }
+    .hv-thumb { width:90px; height:90px; object-fit:cover; border-radius:8px; border:1px solid #ccc; }
+    .hv-thumb-wrap { position:relative; display:inline-block; }
+    .hv-thumb-del { position:absolute; top:-6px; right:-6px; background:#dc3545; color:#fff; border:none;
+      border-radius:50%; width:22px; height:22px; font-size:.75rem; cursor:pointer; line-height:1; }
+
+    /* ===== เอกสารพิมพ์ A4 ===== */
+    .doc-page {
+      width:210mm; min-height:297mm; margin:14px auto; background:#fff; color:#000;
+      padding:16mm 18mm; box-sizing:border-box; box-shadow:0 2px 14px rgba(0,0,0,.15);
+      font-family:'TH Sarabun PSK','Sarabun',sans-serif; font-size:14pt; line-height:1.5;
+    }
+    .doc-head { text-align:center; margin-bottom:5mm; }
+    .doc-head .logo { width:18mm; height:18mm; object-fit:contain; }
+    .doc-head h2 { font-size:17pt; font-weight:700; margin:1.5mm 0 0; }
+    .doc-head .sub { font-size:13pt; }
+    .info-grid { display:grid; grid-template-columns:38mm 1fr; gap:1mm 3mm; margin:3mm 0; }
+    .info-grid .lb { font-weight:600; }
+    .info-grid .vl { border-bottom:1px dotted #999; }
+    .doc-photos { display:grid; grid-template-columns:repeat(2,1fr); gap:4mm; margin-top:4mm; }
+    .doc-photos figure { margin:0; text-align:center; }
+    .doc-photos img { width:100%; height:55mm; object-fit:cover; border:1px solid #999; border-radius:2mm; }
+    .doc-photos figcaption { font-size:11pt; margin-top:1mm; }
+    .doc-sign { display:flex; justify-content:space-around; margin-top:12mm; text-align:center; font-size:13pt; }
+
+    @media print {
+      .no-print, nav { display:none !important; }
+      .doc-page { box-shadow:none; margin:0; }
+      @page { size:A4; margin:0; }
+    }
+    [data-theme="dark"] .doc-page { color:#000; background:#fff; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+        <li class="nav-item"><a class="nav-link" href="/students.html"><i class="bi bi-people me-1"></i>นักเรียน</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/home-visit.html"><i class="bi bi-house-heart me-1"></i>เยี่ยมบ้าน</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header no-print">
+  <div class="container">
+    <h1><i class="bi bi-house-heart-fill me-2"></i>เยี่ยมบ้านนักเรียน</h1>
+    <div class="subtitle">บันทึกข้อมูลเยี่ยมบ้าน + อัพโหลดรูป + พิมพ์แบบฟอร์ม แยกตามห้อง</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+
+  <!-- เลือกห้อง -->
+  <div class="card mb-3 no-print">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label small fw-600 mb-1">เลือกห้อง</label>
+          <select id="selClass" class="form-select" onchange="loadList()">
+            <option value="">-- เลือกห้อง --</option>
+          </select>
+        </div>
+        <div class="col-md-7">
+          <div id="progressBar" style="display:none;">
+            <label class="form-label small fw-600 mb-1">ความคืบหน้า</label>
+            <div class="progress" style="height:24px;">
+              <div id="progFill" class="progress-bar bg-success" style="width:0%">0%</div>
+            </div>
+            <small class="text-muted" id="progText"></small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- รายชื่อนักเรียน -->
+  <div id="studentList" class="no-print"></div>
+
+  <!-- เอกสารพิมพ์ (สร้างเมื่อกดพิมพ์) -->
+  <div id="printArea"></div>
+</div>
+
+<!-- Modal: ฟอร์มเยี่ยมบ้าน -->
+<div class="modal fade no-print" id="visitModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-house-heart me-2"></i><span id="mTitle">บันทึกเยี่ยมบ้าน</span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="mStudentId">
+
+        <!-- สถานะเยี่ยม -->
+        <div class="d-flex align-items-center gap-3 mb-3 p-2 rounded" style="background:#f0f4fb;">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="mVisited" style="transform:scale(1.4);cursor:pointer;">
+            <label class="form-check-label fw-600" for="mVisited">เยี่ยมบ้านแล้ว</label>
+          </div>
+          <div class="flex-grow-1">
+            <input type="date" id="mVisitDate" class="form-control form-control-sm" style="max-width:200px;">
+          </div>
+        </div>
+
+        <!-- ที่อยู่ + ผู้ปกครอง -->
+        <div class="row g-2 mb-2">
+          <div class="col-12"><label class="form-label small fw-600 mb-1">ที่อยู่</label>
+            <textarea id="f_address" class="form-control" rows="2" placeholder="บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด"></textarea></div>
+          <div class="col-md-6"><label class="form-label small fw-600 mb-1">ชื่อผู้ปกครอง</label>
+            <input id="f_parent_name" class="form-control"></div>
+          <div class="col-md-3"><label class="form-label small fw-600 mb-1">เกี่ยวข้องเป็น</label>
+            <input id="f_parent_relation" class="form-control" placeholder="บิดา/มารดา"></div>
+          <div class="col-md-3"><label class="form-label small fw-600 mb-1">เบอร์โทร</label>
+            <input id="f_parent_phone" class="form-control" inputmode="tel"></div>
+        </div>
+
+        <!-- อาชีพ + รายได้ -->
+        <div class="row g-2 mb-2">
+          <div class="col-md-6"><label class="form-label small fw-600 mb-1">อาชีพผู้ปกครอง</label>
+            <input id="f_occupation" class="form-control"></div>
+          <div class="col-md-6"><label class="form-label small fw-600 mb-1">รายได้ครอบครัว/เดือน</label>
+            <input id="f_income" class="form-control" placeholder="เช่น 10,000 บาท"></div>
+        </div>
+
+        <!-- สถานะครอบครัว -->
+        <div class="mb-2">
+          <label class="form-label small fw-600 mb-1">สถานภาพครอบครัว</label>
+          <select id="f_family_status" class="form-select">
+            <option value="">-</option>
+            <option>อยู่ด้วยกัน (บิดา-มารดา)</option>
+            <option>บิดา-มารดา หย่าร้าง/แยกกันอยู่</option>
+            <option>อาศัยกับบิดา</option>
+            <option>อาศัยกับมารดา</option>
+            <option>อาศัยกับญาติ</option>
+            <option>บิดาหรือมารดาเสียชีวิต</option>
+            <option>บิดาและมารดาเสียชีวิต</option>
+          </select>
+        </div>
+
+        <!-- การเดินทาง + สภาพบ้าน -->
+        <div class="row g-2 mb-2">
+          <div class="col-md-6"><label class="form-label small fw-600 mb-1">การเดินทางมาโรงเรียน</label>
+            <input id="f_travel" class="form-control" placeholder="เช่น รถจักรยานยนต์ / รถโรงเรียน"></div>
+          <div class="col-md-6"><label class="form-label small fw-600 mb-1">สภาพที่อยู่อาศัย</label>
+            <select id="f_house" class="form-select">
+              <option value="">-</option>
+              <option>บ้านตนเอง</option><option>บ้านเช่า</option><option>อาศัยกับผู้อื่น</option>
+            </select></div>
+        </div>
+
+        <!-- กลุ่มคัดกรอง -->
+        <div class="mb-2">
+          <label class="form-label small fw-600 mb-1">ผลการคัดกรอง</label>
+          <select id="f_screening" class="form-select">
+            <option value="">-</option>
+            <option>กลุ่มปกติ</option>
+            <option>กลุ่มเสี่ยง</option>
+            <option>กลุ่มมีปัญหา / ต้องช่วยเหลือเร่งด่วน</option>
+          </select>
+        </div>
+
+        <!-- หมายเหตุ -->
+        <div class="mb-3">
+          <label class="form-label small fw-600 mb-1">สภาพปัญหา / ข้อสังเกต / การช่วยเหลือ</label>
+          <textarea id="f_note" class="form-control" rows="3"></textarea>
+        </div>
+
+        <!-- รูปภาพ -->
+        <div class="mb-2">
+          <label class="form-label small fw-600 mb-1"><i class="bi bi-images me-1"></i>รูปภาพเยี่ยมบ้าน</label>
+          <div class="small text-muted mb-2">แนะนำ: หน้าบ้าน, ข้างบ้าน 2 ฝั่ง, นักเรียน+ผู้ปกครอง, นักเรียน+ผู้ปกครอง+ครู</div>
+          <div id="photoGrid" class="d-flex flex-wrap gap-2 mb-2"></div>
+          <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="uploadPhoto(this.files[0])">
+          <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('photoInput').click()">
+            <i class="bi bi-camera me-1"></i>เพิ่มรูป
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
+        <button class="btn btn-success" onclick="printOne()"><i class="bi bi-printer me-1"></i>พิมพ์ฟอร์ม</button>
+        <button class="btn btn-primary" onclick="saveVisit()"><i class="bi bi-save me-1"></i>บันทึก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const THAI_MONTHS_F = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+let theme = {}, allClasses = [], curStudents = [], visitModal = null, curVisit = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  try { theme = await (await fetch('/api/public/theme')).json(); } catch(e){}
+  try {
+    allClasses = await apiFetch('/api/classes');
+    const sel = document.getElementById('selClass');
+    const grouped = {};
+    allClasses.forEach(c => { (grouped[c.class_level] = grouped[c.class_level]||[]).push(c); });
+    Object.keys(grouped).sort((a,b)=>+a-+b).forEach(lv => {
+      const og = document.createElement('optgroup'); og.label = `มัธยมศึกษาปีที่ ${lv}`;
+      grouped[lv].forEach(c => {
+        const o = document.createElement('option');
+        o.value = `${c.class_level}_${c.room}`;
+        o.textContent = `ม.${c.class_level}/${c.room} (${c.count} คน)`;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+    if (currentUser?.role === 'teacher' && currentUser?.assigned_level) {
+      sel.value = `${currentUser.assigned_level}_${currentUser.assigned_room||''}`;
+      if (sel.value && sel.value !== '_') loadList();
+    }
+  } catch(e){ alert(e.message); }
+});
+
+async function loadList() {
+  const v = document.getElementById('selClass').value;
+  if (!v) return;
+  const [level, room] = v.split('_');
+  const box = document.getElementById('studentList');
+  box.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border"></div></div>';
+  try {
+    curStudents = await apiFetch(`/api/home-visits?level=${level}&room=${room}`);
+    renderList();
+  } catch(e){ box.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
+}
+
+function renderList() {
+  const done = curStudents.filter(s => s.visited).length;
+  const total = curStudents.length;
+  const pct = total ? Math.round(done/total*100) : 0;
+  document.getElementById('progressBar').style.display = '';
+  document.getElementById('progFill').style.width = pct+'%';
+  document.getElementById('progFill').textContent = pct+'%';
+  document.getElementById('progText').textContent = `เยี่ยมแล้ว ${done}/${total} คน`;
+
+  const box = document.getElementById('studentList');
+  box.innerHTML = curStudents.map(s => `
+    <div class="hv-student-row" onclick="openVisit(${s.id})">
+      <div class="num">${s.number ?? '-'}</div>
+      ${s.photo ? `<img src="/photos/${s.photo}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;">`
+                : '<i class="bi bi-person-circle fs-3 text-muted"></i>'}
+      <div class="flex-grow-1">
+        <div class="fw-600">${s.name}</div>
+        <div class="small text-muted">
+          ${s.photo_count ? `<i class="bi bi-images"></i> ${s.photo_count} รูป` : 'ยังไม่มีรูป'}
+          ${s.visit_date ? ' • '+pcDate(s.visit_date) : ''}
+        </div>
+      </div>
+      ${s.visited ? '<span class="hv-badge-done"><i class="bi bi-check-circle"></i> เยี่ยมแล้ว</span>'
+                  : '<span class="hv-badge-pending">ยังไม่เยี่ยม</span>'}
+    </div>`).join('');
+}
+
+async function openVisit(sid) {
+  if (!visitModal) visitModal = new bootstrap.Modal('#visitModal');
+  try {
+    curVisit = await apiFetch(`/api/home-visits/${sid}`);
+    const s = curVisit.student;
+    const d = curVisit.data || {};
+    document.getElementById('mStudentId').value = sid;
+    document.getElementById('mTitle').textContent = `${s.name} (ม.${s.class_level}/${s.room})`;
+    document.getElementById('mVisited').checked = !!curVisit.visited;
+    document.getElementById('mVisitDate').value = curVisit.visit_date || todayISO();
+    // prefill จาก data หรือข้อมูลนักเรียน
+    setVal('f_address', d.address ?? s.address);
+    setVal('f_parent_name', d.parent_name ?? s.parent_name);
+    setVal('f_parent_relation', d.parent_relation ?? s.parent_relation);
+    setVal('f_parent_phone', d.parent_phone ?? s.parent_phone);
+    setVal('f_occupation', d.occupation);
+    setVal('f_income', d.income);
+    setVal('f_family_status', d.family_status);
+    setVal('f_travel', d.travel);
+    setVal('f_house', d.house);
+    setVal('f_screening', d.screening);
+    setVal('f_note', d.note);
+    renderPhotos();
+    visitModal.show();
+  } catch(e){ alert(e.message); }
+}
+
+function setVal(id, v){ document.getElementById(id).value = v || ''; }
+function todayISO(){ return new Date().toISOString().split('T')[0]; }
+function pcDate(iso){ if(!iso) return ''; const dt=new Date(iso+'T00:00:00'); return `${dt.getDate()} ${THAI_MONTHS_F[dt.getMonth()].slice(0,3)} ${dt.getFullYear()+543}`; }
+
+function renderPhotos() {
+  const grid = document.getElementById('photoGrid');
+  const photos = curVisit.photos || [];
+  if (!photos.length) { grid.innerHTML = '<span class="text-muted small">ยังไม่มีรูป</span>'; return; }
+  grid.innerHTML = photos.map(p => `
+    <div class="hv-thumb-wrap">
+      <img class="hv-thumb" src="/photos/${p}">
+      <button class="hv-thumb-del" onclick="delPhoto('${p}')">✕</button>
+    </div>`).join('');
+}
+
+async function uploadPhoto(file) {
+  if (!file) return;
+  const sid = document.getElementById('mStudentId').value;
+  const fd = new FormData(); fd.append('file', file);
+  const grid = document.getElementById('photoGrid');
+  grid.insertAdjacentHTML('beforeend', '<div class="spinner-border spinner-border-sm text-primary" id="upSpin"></div>');
+  try {
+    const r = await fetch(`/api/home-visits/${sid}/photo`, { method:'POST', body:fd, credentials:'same-origin' });
+    const data = await r.json();
+    if (data.success) { curVisit.photos.push(data.photo); renderPhotos(); }
+    else alert(data.message);
+  } catch(e){ alert('อัพโหลดไม่สำเร็จ: '+e.message); }
+  document.getElementById('photoInput').value = '';
+  document.getElementById('upSpin')?.remove();
+}
+
+async function delPhoto(filename) {
+  if (!confirm('ลบรูปนี้?')) return;
+  const sid = document.getElementById('mStudentId').value;
+  try {
+    await apiFetch(`/api/home-visits/${sid}/photo`, { method:'DELETE', body: JSON.stringify({ filename }) });
+    curVisit.photos = curVisit.photos.filter(p => p !== filename);
+    renderPhotos();
+  } catch(e){ alert(e.message); }
+}
+
+async function saveVisit() {
+  const sid = document.getElementById('mStudentId').value;
+  const data = {
+    address: gv('f_address'), parent_name: gv('f_parent_name'),
+    parent_relation: gv('f_parent_relation'), parent_phone: gv('f_parent_phone'),
+    occupation: gv('f_occupation'), income: gv('f_income'),
+    family_status: gv('f_family_status'), travel: gv('f_travel'),
+    house: gv('f_house'), screening: gv('f_screening'), note: gv('f_note'),
+  };
+  try {
+    await apiFetch(`/api/home-visits/${sid}`, {
+      method:'POST',
+      body: JSON.stringify({
+        visited: document.getElementById('mVisited').checked,
+        visit_date: document.getElementById('mVisitDate').value,
+        data
+      })
+    });
+    visitModal.hide();
+    loadList();
+  } catch(e){ alert('บันทึกไม่สำเร็จ: '+e.message); }
+}
+function gv(id){ return document.getElementById(id).value.trim(); }
+
+function printOne() {
+  const s = curVisit.student;
+  const d = {
+    address: gv('f_address'), parent_name: gv('f_parent_name'),
+    parent_relation: gv('f_parent_relation'), parent_phone: gv('f_parent_phone'),
+    occupation: gv('f_occupation'), income: gv('f_income'),
+    family_status: gv('f_family_status'), travel: gv('f_travel'),
+    house: gv('f_house'), screening: gv('f_screening'), note: gv('f_note'),
+  };
+  const photos = curVisit.photos || [];
+  const logo = theme.school_logo ? `<img class="logo" src="${theme.school_logo}">` : '';
+  const photoHtml = photos.length ? `
+    <div class="doc-photos">${photos.map((p,i)=>`
+      <figure><img src="/photos/${p}"><figcaption>ภาพที่ ${i+1}</figcaption></figure>`).join('')}
+    </div>` : '';
+  const row = (lb, vl) => `<div class="lb">${lb}</div><div class="vl">${vl||'.................................'}</div>`;
+
+  document.getElementById('printArea').innerHTML = `
+    <div class="doc-page">
+      <div class="doc-head">
+        ${logo}
+        <h2>แบบบันทึกการเยี่ยมบ้านนักเรียน</h2>
+        <div class="sub">${theme.school_name||'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม'}</div>
+      </div>
+      <div class="info-grid">
+        ${row('ชื่อ-นามสกุล', s.name)}
+        ${row('ระดับชั้น', `ม.${s.class_level}/${s.room}  เลขที่ ${s.number??'-'}`)}
+        ${row('วันที่เยี่ยม', pcDate(document.getElementById('mVisitDate').value))}
+        ${row('ที่อยู่', d.address)}
+        ${row('ชื่อผู้ปกครอง', d.parent_name + (d.parent_relation?` (${d.parent_relation})`:''))}
+        ${row('เบอร์โทร', d.parent_phone)}
+        ${row('อาชีพผู้ปกครอง', d.occupation)}
+        ${row('รายได้/เดือน', d.income)}
+        ${row('สถานภาพครอบครัว', d.family_status)}
+        ${row('ที่อยู่อาศัย', d.house)}
+        ${row('การเดินทาง', d.travel)}
+        ${row('ผลการคัดกรอง', d.screening)}
+      </div>
+      <div style="margin-top:3mm;"><b>สภาพปัญหา / ข้อสังเกต / การช่วยเหลือ</b></div>
+      <div style="border:1px solid #999; border-radius:2mm; min-height:24mm; padding:2mm 3mm; margin-top:1mm;">${(d.note||'').replace(/\n/g,'<br>')}</div>
+      ${photoHtml}
+      <div class="doc-sign">
+        <div>
+          <div>ลงชื่อ ………………………………………</div>
+          <div>(……………………………………)</div>
+          <div>ครูที่ปรึกษา</div>
+        </div>
+        <div>
+          <div>ลงชื่อ ………………………………………</div>
+          <div>( ${theme.director_name||'นางสาวปัทมา จีนดี'} )</div>
+          <div>ผู้อำนวยการ${theme.school_name||'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม'}</div>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(() => window.print(), 200);
+}
+</script>
+</body>
+</html>
