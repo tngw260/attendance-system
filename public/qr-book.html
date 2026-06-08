@@ -38,14 +38,14 @@
 
     .qr-grid {
       display: grid;
-      gap: 2mm;
+      gap: 5mm 4mm;      /* เพิ่มช่องว่างระหว่าง QR — กันสแกนติด */
       flex: 1;
       align-content: start;
     }
     .qr-card {
-      border: 0.3mm dashed #999;
+      border: 0.4mm solid #1a5276;    /* เปลี่ยนจาก dashed สีเทา → solid สีเข้ม */
       border-radius: 2mm;
-      padding: 1.5mm 1mm;
+      padding: 2mm 1.5mm;
       text-align: center;
       display: flex; flex-direction: column;
       align-items: center;
@@ -54,11 +54,13 @@
       break-inside: avoid;
       box-sizing: border-box;
       overflow: hidden;
+      background: white;
     }
     .qr-card .qrimg {
       display: block;
       object-fit: contain;
       flex-shrink: 0;
+      /* QR ขอจาก server โดยมี margin=4 อยู่แล้ว = quiet zone เพียงพอ */
     }
     .qr-card .num { font-weight: bold; font-size: 9pt; margin-top: 0.8mm; line-height: 1; }
     .qr-card .name {
@@ -171,9 +173,10 @@ async function loadQR() {
   // จำนวน cols/rows + ขนาด row (mm) — คำนวณให้พอดี A4 (พื้นที่ใช้งาน ~277mm)
   // A4: 297 - padding 16 - header 14 - gaps = ~265mm ให้ rows
   let cols, rows, rowMm;
-  if (sizeMm <= 25)      { cols = 5; rows = 6; rowMm = 38; }  // 6×38=228
-  else if (sizeMm >= 50) { cols = 2; rows = 3; rowMm = 78; }  // 3×78=234
-  else                   { cols = 3; rows = 4; rowMm = 58; }  // 4×58=232
+  // ลด rows เผื่อ gap ใหม่ (5mm vertical) — กันล้น A4
+  if (sizeMm <= 25)      { cols = 5; rows = 6; rowMm = 34; }  // 6×34+5×5=229
+  else if (sizeMm >= 50) { cols = 2; rows = 3; rowMm = 75; }  // 3×75+5×2=235
+  else                   { cols = 3; rows = 4; rowMm = 54; }  // 4×54+5×3=231
   const perPage = cols * rows;
 
   document.getElementById('content').innerHTML =
@@ -215,7 +218,7 @@ function renderBook(students, level, room, sizeMm, cols, perPage, rowMm) {
       </div>
       <div class="qr-grid" style="grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, ${rowMm}mm);">`;
     page.forEach(s => {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx}x${qrPx}&margin=2&data=${s.id}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx}x${qrPx}&margin=4&data=${s.id}`;
       html += `<div class="qr-card">
         <img class="qrimg" src="${qrUrl}" alt="QR ${s.id}" style="width:${sizeMm}mm;height:${sizeMm}mm;">
         <div class="num">${s.number ?? '-'}</div>

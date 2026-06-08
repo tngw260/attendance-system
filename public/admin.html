@@ -108,14 +108,33 @@
 
     <!-- Backup -->
     <div class="tab-pane fade" id="backupTab">
+      <div class="alert alert-info small mb-3">
+        <i class="bi bi-info-circle me-1"></i>
+        <strong>ขนาด DB ปัจจุบัน:</strong> <span id="dbSize">-</span> MB
+        | นักเรียน <span id="dbStudents">-</span> | บันทึกเช็คชื่อ <span id="dbAttendance">-</span> | บันทึกพฤติกรรม <span id="dbBehavior">-</span>
+        <br><strong class="text-danger">แนะนำให้ดาวน์โหลด backup ทุกอาทิตย์</strong> เก็บไว้ใน Google Drive / Email ตัวเอง
+      </div>
       <div class="row g-4">
         <div class="col-md-6">
           <div class="card border-success">
-            <div class="card-header bg-success text-white"><i class="bi bi-cloud-arrow-down me-2"></i>Backup (ดาวน์โหลด)</div>
+            <div class="card-header bg-success text-white"><i class="bi bi-cloud-arrow-down me-2"></i>Backup (.zip รวมรูป)</div>
             <div class="card-body">
-              <p>ดาวน์โหลดข้อมูลทั้งหมด — ฐานข้อมูล + รูปนักเรียน + โลโก้</p>
-              <a href="/api/backup" class="btn btn-success btn-lg w-100">
-                <i class="bi bi-download me-2"></i>ดาวน์โหลด Backup (.zip)
+              <p class="small">ดาวน์โหลดข้อมูลทั้งหมด — ฐานข้อมูล + รูปนักเรียน + โลโก้<br>
+                <small class="text-muted">เหมาะกับ backup เต็มรูปแบบ (ขนาดใหญ่กว่า)</small></p>
+              <a href="/api/backup" class="btn btn-success w-100">
+                <i class="bi bi-download me-2"></i>ดาวน์โหลด .zip
+              </a>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card border-primary">
+            <div class="card-header bg-primary text-white"><i class="bi bi-database-down me-2"></i>Backup เฉพาะฐานข้อมูล (.db)</div>
+            <div class="card-body">
+              <p class="small">ดาวน์โหลดเฉพาะไฟล์ฐานข้อมูล SQLite<br>
+                <small class="text-muted">เล็กกว่า เปิดดูได้ด้วย DB Browser, restore ง่าย</small></p>
+              <a href="/api/admin/backup" class="btn btn-primary w-100">
+                <i class="bi bi-download me-2"></i>ดาวน์โหลด .db
               </a>
             </div>
           </div>
@@ -210,7 +229,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Tab events
   document.querySelector('[data-bs-target="#auditTab"]').addEventListener('shown.bs.tab', loadAudit);
+  document.querySelector('[data-bs-target="#backupTab"]').addEventListener('shown.bs.tab', loadBackupInfo);
 });
+
+async function loadBackupInfo() {
+  try {
+    const r = await apiFetch('/api/admin/backup/info');
+    document.getElementById('dbSize').textContent = r.size_mb;
+    document.getElementById('dbStudents').textContent = r.counts.students;
+    document.getElementById('dbAttendance').textContent = r.counts.attendance;
+    document.getElementById('dbBehavior').textContent = r.counts.behavior_logs;
+  } catch (e) {
+    document.getElementById('dbSize').textContent = '?';
+  }
+}
 
 async function loadHolidays() {
   const year = document.getElementById('yearFilter').value;
