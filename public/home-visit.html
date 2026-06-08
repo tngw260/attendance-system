@@ -25,6 +25,8 @@
     .hv-thumb-wrap { position:relative; display:inline-block; }
     .hv-thumb-del { position:absolute; top:-6px; right:-6px; background:#dc3545; color:#fff; border:none;
       border-radius:50%; width:22px; height:22px; font-size:.75rem; cursor:pointer; line-height:1; }
+    .hv-section-title { font-weight:700; color:var(--primary,#0d3b8e); margin:14px 0 6px;
+      padding-bottom:4px; border-bottom:2px solid color-mix(in srgb, var(--primary,#0d3b8e) 20%, transparent); }
 
     /* ===== เอกสารพิมพ์ A4 ===== */
     .doc-page {
@@ -133,67 +135,92 @@
           </div>
         </div>
 
-        <!-- ที่อยู่ + ผู้ปกครอง -->
+        <!-- หมวด: ข้อมูลนักเรียน -->
+        <div class="hv-section-title">👦 ข้อมูลนักเรียน</div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-4"><label class="form-label small fw-600 mb-1">ชื่อเล่น</label>
+            <input id="f_nickname" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label small fw-600 mb-1">เชื้อชาติ/สัญชาติ</label>
+            <input id="f_nationality" class="form-control" placeholder="ไทย/ไทย"></div>
+          <div class="col-md-4"><label class="form-label small fw-600 mb-1">ศาสนา</label>
+            <input id="f_religion" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label small fw-600 mb-1">หมู่เลือด</label>
+            <input id="f_blood" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label small fw-600 mb-1">โรคประจำตัว/แพ้ยา</label>
+            <input id="f_disease" class="form-control" placeholder="ไม่มี"></div>
+          <div class="col-md-4"><label class="form-label small fw-600 mb-1">จำนวนพี่น้อง (คน)</label>
+            <input id="f_siblings" class="form-control" placeholder="เช่น 2 / เป็นคนที่ 1"></div>
+        </div>
+
+        <!-- หมวด: ที่อยู่ -->
+        <div class="hv-section-title">🏠 ที่อยู่ปัจจุบัน</div>
         <div class="row g-2 mb-2">
           <div class="col-12"><label class="form-label small fw-600 mb-1">ที่อยู่</label>
-            <textarea id="f_address" class="form-control" rows="2" placeholder="บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด"></textarea></div>
-          <div class="col-md-6"><label class="form-label small fw-600 mb-1">ชื่อผู้ปกครอง</label>
-            <input id="f_parent_name" class="form-control"></div>
-          <div class="col-md-3"><label class="form-label small fw-600 mb-1">เกี่ยวข้องเป็น</label>
-            <input id="f_parent_relation" class="form-control" placeholder="บิดา/มารดา"></div>
-          <div class="col-md-3"><label class="form-label small fw-600 mb-1">เบอร์โทร</label>
-            <input id="f_parent_phone" class="form-control" inputmode="tel"></div>
-        </div>
-
-        <!-- อาชีพ + รายได้ -->
-        <div class="row g-2 mb-2">
-          <div class="col-md-6"><label class="form-label small fw-600 mb-1">อาชีพผู้ปกครอง</label>
-            <input id="f_occupation" class="form-control"></div>
-          <div class="col-md-6"><label class="form-label small fw-600 mb-1">รายได้ครอบครัว/เดือน</label>
-            <input id="f_income" class="form-control" placeholder="เช่น 10,000 บาท"></div>
-        </div>
-
-        <!-- สถานะครอบครัว -->
-        <div class="mb-2">
-          <label class="form-label small fw-600 mb-1">สถานภาพครอบครัว</label>
-          <select id="f_family_status" class="form-select">
-            <option value="">-</option>
-            <option>อยู่ด้วยกัน (บิดา-มารดา)</option>
-            <option>บิดา-มารดา หย่าร้าง/แยกกันอยู่</option>
-            <option>อาศัยกับบิดา</option>
-            <option>อาศัยกับมารดา</option>
-            <option>อาศัยกับญาติ</option>
-            <option>บิดาหรือมารดาเสียชีวิต</option>
-            <option>บิดาและมารดาเสียชีวิต</option>
-          </select>
-        </div>
-
-        <!-- การเดินทาง + สภาพบ้าน -->
-        <div class="row g-2 mb-2">
-          <div class="col-md-6"><label class="form-label small fw-600 mb-1">การเดินทางมาโรงเรียน</label>
-            <input id="f_travel" class="form-control" placeholder="เช่น รถจักรยานยนต์ / รถโรงเรียน"></div>
+            <textarea id="f_address" class="form-control" rows="2" placeholder="บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด รหัสไปรษณีย์"></textarea></div>
           <div class="col-md-6"><label class="form-label small fw-600 mb-1">สภาพที่อยู่อาศัย</label>
             <select id="f_house" class="form-select">
               <option value="">-</option>
-              <option>บ้านตนเอง</option><option>บ้านเช่า</option><option>อาศัยกับผู้อื่น</option>
+              <option>บ้านตนเอง</option><option>บ้านเช่า</option>
+              <option>บ้านพักราชการ/สวัสดิการ</option><option>อาศัยอยู่กับผู้อื่น</option>
             </select></div>
+          <div class="col-md-6"><label class="form-label small fw-600 mb-1">การเดินทางมาโรงเรียน</label>
+            <input id="f_travel" class="form-control" placeholder="เช่น รถจักรยานยนต์ / รถโรงเรียน / เดิน"></div>
         </div>
 
-        <!-- กลุ่มคัดกรอง -->
-        <div class="mb-2">
-          <label class="form-label small fw-600 mb-1">ผลการคัดกรอง</label>
-          <select id="f_screening" class="form-select">
-            <option value="">-</option>
-            <option>กลุ่มปกติ</option>
-            <option>กลุ่มเสี่ยง</option>
-            <option>กลุ่มมีปัญหา / ต้องช่วยเหลือเร่งด่วน</option>
-          </select>
+        <!-- หมวด: ครอบครัว -->
+        <div class="hv-section-title">👨‍👩‍👧 ข้อมูลครอบครัว</div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-8"><label class="form-label small fw-600 mb-1">ชื่อบิดา</label>
+            <input id="f_father_name" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label small fw-600 mb-1">อาชีพบิดา</label>
+            <input id="f_father_job" class="form-control"></div>
+          <div class="col-md-8"><label class="form-label small fw-600 mb-1">ชื่อมารดา</label>
+            <input id="f_mother_name" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label small fw-600 mb-1">อาชีพมารดา</label>
+            <input id="f_mother_job" class="form-control"></div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-6"><label class="form-label small fw-600 mb-1">ผู้ปกครอง (ที่นักเรียนอาศัยอยู่)</label>
+            <input id="f_parent_name" class="form-control"></div>
+          <div class="col-md-3"><label class="form-label small fw-600 mb-1">เกี่ยวข้องเป็น</label>
+            <input id="f_parent_relation" class="form-control" placeholder="บิดา/มารดา/ปู่ย่า"></div>
+          <div class="col-md-3"><label class="form-label small fw-600 mb-1">เบอร์โทรติดต่อ</label>
+            <input id="f_parent_phone" class="form-control" inputmode="tel"></div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-6"><label class="form-label small fw-600 mb-1">สถานภาพครอบครัว</label>
+            <select id="f_family_status" class="form-select">
+              <option value="">-</option>
+              <option>บิดา-มารดา อยู่ด้วยกัน</option>
+              <option>บิดา-มารดา หย่าร้าง/แยกกันอยู่</option>
+              <option>อาศัยอยู่กับบิดา</option>
+              <option>อาศัยอยู่กับมารดา</option>
+              <option>อาศัยอยู่กับญาติ</option>
+              <option>บิดาหรือมารดาเสียชีวิต</option>
+              <option>บิดาและมารดาเสียชีวิต</option>
+            </select></div>
+          <div class="col-md-6"><label class="form-label small fw-600 mb-1">รายได้ครอบครัว/เดือน</label>
+            <input id="f_income" class="form-control" placeholder="เช่น 10,000 บาท"></div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-6"><label class="form-label small fw-600 mb-1">ฐานะทางเศรษฐกิจ</label>
+            <select id="f_economic" class="form-select">
+              <option value="">-</option>
+              <option>ดี</option><option>ปานกลาง</option><option>ยากจน</option><option>ยากจนพิเศษ</option>
+            </select></div>
+          <div class="col-md-6"><label class="form-label small fw-600 mb-1">ทุน/ความช่วยเหลือที่ได้รับ</label>
+            <input id="f_aid" class="form-control" placeholder="เช่น เงินอุดหนุนยากจน / ไม่มี"></div>
         </div>
 
-        <!-- หมายเหตุ -->
-        <div class="mb-3">
-          <label class="form-label small fw-600 mb-1">สภาพปัญหา / ข้อสังเกต / การช่วยเหลือ</label>
-          <textarea id="f_note" class="form-control" rows="3"></textarea>
+        <!-- หมวด: พฤติกรรม/สรุป -->
+        <div class="hv-section-title">📝 สรุปผลการเยี่ยมบ้าน</div>
+        <div class="row g-2 mb-2">
+          <div class="col-12"><label class="form-label small fw-600 mb-1">พฤติกรรม/ความเป็นอยู่ของนักเรียนที่บ้าน</label>
+            <textarea id="f_behavior" class="form-control" rows="2"></textarea></div>
+          <div class="col-12"><label class="form-label small fw-600 mb-1">สภาพปัญหา / ข้อสังเกต / สิ่งที่ต้องช่วยเหลือ</label>
+            <textarea id="f_note" class="form-control" rows="3"></textarea></div>
+          <div class="col-12"><label class="form-label small fw-600 mb-1">ความคิดเห็น/ข้อเสนอแนะของผู้ปกครอง</label>
+            <textarea id="f_parent_opinion" class="form-control" rows="2"></textarea></div>
         </div>
 
         <!-- รูปภาพ -->
@@ -297,17 +324,29 @@ async function openVisit(sid) {
     document.getElementById('mVisited').checked = !!curVisit.visited;
     document.getElementById('mVisitDate').value = curVisit.visit_date || todayISO();
     // prefill จาก data หรือข้อมูลนักเรียน
+    setVal('f_nickname', d.nickname);
+    setVal('f_nationality', d.nationality);
+    setVal('f_religion', d.religion);
+    setVal('f_blood', d.blood);
+    setVal('f_disease', d.disease);
+    setVal('f_siblings', d.siblings);
     setVal('f_address', d.address ?? s.address);
+    setVal('f_house', d.house);
+    setVal('f_travel', d.travel);
+    setVal('f_father_name', d.father_name);
+    setVal('f_father_job', d.father_job);
+    setVal('f_mother_name', d.mother_name);
+    setVal('f_mother_job', d.mother_job);
     setVal('f_parent_name', d.parent_name ?? s.parent_name);
     setVal('f_parent_relation', d.parent_relation ?? s.parent_relation);
     setVal('f_parent_phone', d.parent_phone ?? s.parent_phone);
-    setVal('f_occupation', d.occupation);
-    setVal('f_income', d.income);
     setVal('f_family_status', d.family_status);
-    setVal('f_travel', d.travel);
-    setVal('f_house', d.house);
-    setVal('f_screening', d.screening);
+    setVal('f_income', d.income);
+    setVal('f_economic', d.economic);
+    setVal('f_aid', d.aid);
+    setVal('f_behavior', d.behavior);
     setVal('f_note', d.note);
+    setVal('f_parent_opinion', d.parent_opinion);
     renderPhotos();
     visitModal.show();
   } catch(e){ alert(e.message); }
@@ -354,22 +393,29 @@ async function delPhoto(filename) {
   } catch(e){ alert(e.message); }
 }
 
+function collectData() {
+  return {
+    nickname: gv('f_nickname'), nationality: gv('f_nationality'), religion: gv('f_religion'),
+    blood: gv('f_blood'), disease: gv('f_disease'), siblings: gv('f_siblings'),
+    address: gv('f_address'), house: gv('f_house'), travel: gv('f_travel'),
+    father_name: gv('f_father_name'), father_job: gv('f_father_job'),
+    mother_name: gv('f_mother_name'), mother_job: gv('f_mother_job'),
+    parent_name: gv('f_parent_name'), parent_relation: gv('f_parent_relation'),
+    parent_phone: gv('f_parent_phone'), family_status: gv('f_family_status'),
+    income: gv('f_income'), economic: gv('f_economic'), aid: gv('f_aid'),
+    behavior: gv('f_behavior'), note: gv('f_note'), parent_opinion: gv('f_parent_opinion'),
+  };
+}
+
 async function saveVisit() {
   const sid = document.getElementById('mStudentId').value;
-  const data = {
-    address: gv('f_address'), parent_name: gv('f_parent_name'),
-    parent_relation: gv('f_parent_relation'), parent_phone: gv('f_parent_phone'),
-    occupation: gv('f_occupation'), income: gv('f_income'),
-    family_status: gv('f_family_status'), travel: gv('f_travel'),
-    house: gv('f_house'), screening: gv('f_screening'), note: gv('f_note'),
-  };
   try {
     await apiFetch(`/api/home-visits/${sid}`, {
       method:'POST',
       body: JSON.stringify({
         visited: document.getElementById('mVisited').checked,
         visit_date: document.getElementById('mVisitDate').value,
-        data
+        data: collectData()
       })
     });
     visitModal.hide();
@@ -380,20 +426,17 @@ function gv(id){ return document.getElementById(id).value.trim(); }
 
 function printOne() {
   const s = curVisit.student;
-  const d = {
-    address: gv('f_address'), parent_name: gv('f_parent_name'),
-    parent_relation: gv('f_parent_relation'), parent_phone: gv('f_parent_phone'),
-    occupation: gv('f_occupation'), income: gv('f_income'),
-    family_status: gv('f_family_status'), travel: gv('f_travel'),
-    house: gv('f_house'), screening: gv('f_screening'), note: gv('f_note'),
-  };
+  const d = collectData();
   const photos = curVisit.photos || [];
   const logo = theme.school_logo ? `<img class="logo" src="${theme.school_logo}">` : '';
   const photoHtml = photos.length ? `
+    <div style="font-weight:600; margin-top:5mm;">ภาพถ่ายประกอบการเยี่ยมบ้าน</div>
     <div class="doc-photos">${photos.map((p,i)=>`
       <figure><img src="/photos/${p}"><figcaption>ภาพที่ ${i+1}</figcaption></figure>`).join('')}
     </div>` : '';
   const row = (lb, vl) => `<div class="lb">${lb}</div><div class="vl">${vl||'.................................'}</div>`;
+  const box = (lb, vl) => `<div style="margin-top:3mm;"><b>${lb}</b></div>
+    <div style="border:1px solid #999; border-radius:2mm; min-height:16mm; padding:2mm 3mm; margin-top:1mm;">${(vl||'').replace(/\n/g,'<br>')}</div>`;
 
   document.getElementById('printArea').innerHTML = `
     <div class="doc-page">
@@ -403,21 +446,25 @@ function printOne() {
         <div class="sub">${theme.school_name||'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม'}</div>
       </div>
       <div class="info-grid">
-        ${row('ชื่อ-นามสกุล', s.name)}
+        ${row('ชื่อ-นามสกุล', s.name + (d.nickname?` (${d.nickname})`:''))}
         ${row('ระดับชั้น', `ม.${s.class_level}/${s.room}  เลขที่ ${s.number??'-'}`)}
         ${row('วันที่เยี่ยม', pcDate(document.getElementById('mVisitDate').value))}
+        ${row('เชื้อชาติ/สัญชาติ/ศาสนา', [d.nationality, d.religion].filter(Boolean).join(' / '))}
+        ${row('หมู่เลือด / โรคประจำตัว', [d.blood, d.disease].filter(Boolean).join(' / '))}
+        ${row('จำนวนพี่น้อง', d.siblings)}
         ${row('ที่อยู่', d.address)}
-        ${row('ชื่อผู้ปกครอง', d.parent_name + (d.parent_relation?` (${d.parent_relation})`:''))}
-        ${row('เบอร์โทร', d.parent_phone)}
-        ${row('อาชีพผู้ปกครอง', d.occupation)}
-        ${row('รายได้/เดือน', d.income)}
+        ${row('สภาพที่อยู่อาศัย', d.house)}
+        ${row('การเดินทางมาโรงเรียน', d.travel)}
+        ${row('ชื่อบิดา (อาชีพ)', d.father_name + (d.father_job?` — ${d.father_job}`:''))}
+        ${row('ชื่อมารดา (อาชีพ)', d.mother_name + (d.mother_job?` — ${d.mother_job}`:''))}
+        ${row('ผู้ปกครอง', d.parent_name + (d.parent_relation?` (${d.parent_relation})`:'') + (d.parent_phone?`  โทร. ${d.parent_phone}`:''))}
         ${row('สถานภาพครอบครัว', d.family_status)}
-        ${row('ที่อยู่อาศัย', d.house)}
-        ${row('การเดินทาง', d.travel)}
-        ${row('ผลการคัดกรอง', d.screening)}
+        ${row('รายได้ครอบครัว/เดือน', d.income)}
+        ${row('ฐานะทางเศรษฐกิจ', d.economic + (d.aid?`  (ความช่วยเหลือ: ${d.aid})`:''))}
       </div>
-      <div style="margin-top:3mm;"><b>สภาพปัญหา / ข้อสังเกต / การช่วยเหลือ</b></div>
-      <div style="border:1px solid #999; border-radius:2mm; min-height:24mm; padding:2mm 3mm; margin-top:1mm;">${(d.note||'').replace(/\n/g,'<br>')}</div>
+      ${box('พฤติกรรม/ความเป็นอยู่ของนักเรียนที่บ้าน', d.behavior)}
+      ${box('สภาพปัญหา / ข้อสังเกต / สิ่งที่ต้องช่วยเหลือ', d.note)}
+      ${box('ความคิดเห็น/ข้อเสนอแนะของผู้ปกครอง', d.parent_opinion)}
       ${photoHtml}
       <div class="doc-sign">
         <div>
