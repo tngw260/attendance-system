@@ -10,12 +10,9 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="/css/style.css" rel="stylesheet">
   <style>
-    .hv-student-row {
-      display:flex; align-items:center; gap:12px;
-      padding:10px 14px; border:1px solid var(--border,#dee2e6);
-      border-radius:10px; margin-bottom:8px; background:var(--surface,#fff);
-      cursor:pointer; transition:.15s;
-    }
+    .hv-student-row { display:flex; align-items:center; gap:12px; padding:10px 14px;
+      border:1px solid var(--border,#dee2e6); border-radius:10px; margin-bottom:8px;
+      background:var(--surface,#fff); cursor:pointer; transition:.15s; }
     .hv-student-row:hover { box-shadow:0 3px 12px rgba(0,0,0,.1); transform:translateY(-1px); }
     .hv-student-row .num { width:30px; height:30px; border-radius:50%; background:var(--primary,#0d3b8e);
       color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.85rem; flex-shrink:0; }
@@ -25,25 +22,32 @@
     .hv-thumb-wrap { position:relative; display:inline-block; }
     .hv-thumb-del { position:absolute; top:-6px; right:-6px; background:#dc3545; color:#fff; border:none;
       border-radius:50%; width:22px; height:22px; font-size:.75rem; cursor:pointer; line-height:1; }
-    .hv-section-title { font-weight:700; color:var(--primary,#0d3b8e); margin:14px 0 6px;
-      padding-bottom:4px; border-bottom:2px solid color-mix(in srgb, var(--primary,#0d3b8e) 20%, transparent); }
+    .hv-section-title { font-weight:700; color:var(--primary,#0d3b8e); margin:16px 0 8px;
+      padding:6px 10px; background:color-mix(in srgb, var(--primary,#0d3b8e) 8%, transparent);
+      border-left:4px solid var(--primary,#0d3b8e); border-radius:4px; }
+    .hv-q { font-weight:600; margin:10px 0 4px; }
+    .hv-opts { display:flex; flex-wrap:wrap; gap:6px 16px; }
+    .hv-opts .form-check { margin:0; }
 
     /* ===== เอกสารพิมพ์ A4 ===== */
-    .doc-page {
-      width:210mm; min-height:297mm; margin:14px auto; background:#fff; color:#000;
-      padding:16mm 18mm; box-sizing:border-box; box-shadow:0 2px 14px rgba(0,0,0,.15);
-      font-family:'TH Sarabun PSK','Sarabun',sans-serif; font-size:14pt; line-height:1.5;
-    }
-    .doc-head { text-align:center; margin-bottom:5mm; }
+    .doc-page { width:210mm; min-height:297mm; margin:14px auto; background:#fff; color:#000;
+      padding:14mm 16mm; box-sizing:border-box; box-shadow:0 2px 14px rgba(0,0,0,.15);
+      font-family:'TH Sarabun PSK','Sarabun',sans-serif; font-size:14pt; line-height:1.5; }
+    .doc-page + .doc-page { page-break-before: always; }
+    .doc-head { text-align:center; margin-bottom:4mm; }
     .doc-head .logo { width:18mm; height:18mm; object-fit:contain; }
-    .doc-head h2 { font-size:17pt; font-weight:700; margin:1.5mm 0 0; }
+    .doc-head h2 { font-size:16pt; font-weight:700; margin:1.5mm 0 0; }
     .doc-head .sub { font-size:13pt; }
-    .info-grid { display:grid; grid-template-columns:38mm 1fr; gap:1mm 3mm; margin:3mm 0; }
-    .info-grid .lb { font-weight:600; }
-    .info-grid .vl { border-bottom:1px dotted #999; }
-    .doc-photos { display:grid; grid-template-columns:repeat(2,1fr); gap:4mm; margin-top:4mm; }
+    .doc-sec { font-weight:700; font-size:14pt; margin:4mm 0 1mm; border-bottom:0.3mm solid #000; padding-bottom:1mm; }
+    .doc-line { margin:1mm 0; }
+    .doc-line .lb { font-weight:600; }
+    .dot { border-bottom:1px dotted #555; padding:0 3px; }
+    .doc-opts { margin:1mm 0; }
+    .doc-opts .opt { display:inline-block; margin-right:8mm; white-space:nowrap; }
+    .doc-box { border:1px solid #999; border-radius:2mm; min-height:14mm; padding:2mm 3mm; margin:1mm 0 2mm; }
+    .doc-photos { display:grid; grid-template-columns:repeat(2,1fr); gap:4mm; margin-top:3mm; }
     .doc-photos figure { margin:0; text-align:center; }
-    .doc-photos img { width:100%; height:55mm; object-fit:cover; border:1px solid #999; border-radius:2mm; }
+    .doc-photos img { width:100%; height:60mm; object-fit:cover; border:1px solid #999; border-radius:2mm; }
     .doc-photos figcaption { font-size:11pt; margin-top:1mm; }
     .doc-sign { display:flex; justify-content:space-around; margin-top:12mm; text-align:center; font-size:13pt; }
 
@@ -82,8 +86,6 @@
 </div>
 
 <div class="container pb-5">
-
-  <!-- เลือกห้อง -->
   <div class="card mb-3 no-print">
     <div class="card-body">
       <div class="row g-2 align-items-end">
@@ -106,14 +108,11 @@
     </div>
   </div>
 
-  <!-- รายชื่อนักเรียน -->
   <div id="studentList" class="no-print"></div>
-
-  <!-- เอกสารพิมพ์ (สร้างเมื่อกดพิมพ์) -->
   <div id="printArea"></div>
 </div>
 
-<!-- Modal: ฟอร์มเยี่ยมบ้าน -->
+<!-- Modal -->
 <div class="modal fade no-print" id="visitModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -123,116 +122,24 @@
       </div>
       <div class="modal-body">
         <input type="hidden" id="mStudentId">
-
-        <!-- สถานะเยี่ยม -->
-        <div class="d-flex align-items-center gap-3 mb-3 p-2 rounded" style="background:#f0f4fb;">
+        <div class="d-flex align-items-center gap-3 mb-2 p-2 rounded" style="background:#f0f4fb;">
           <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" id="mVisited" style="transform:scale(1.4);cursor:pointer;">
             <label class="form-check-label fw-600" for="mVisited">เยี่ยมบ้านแล้ว</label>
           </div>
-          <div class="flex-grow-1">
-            <input type="date" id="mVisitDate" class="form-control form-control-sm" style="max-width:200px;">
-          </div>
+          <div><input type="date" id="mVisitDate" class="form-control form-control-sm"></div>
         </div>
-
-        <!-- หมวด: ข้อมูลนักเรียน -->
-        <div class="hv-section-title">👦 ข้อมูลนักเรียน</div>
-        <div class="row g-2 mb-2">
-          <div class="col-md-4"><label class="form-label small fw-600 mb-1">ชื่อเล่น</label>
-            <input id="f_nickname" class="form-control"></div>
-          <div class="col-md-4"><label class="form-label small fw-600 mb-1">เชื้อชาติ/สัญชาติ</label>
-            <input id="f_nationality" class="form-control" placeholder="ไทย/ไทย"></div>
-          <div class="col-md-4"><label class="form-label small fw-600 mb-1">ศาสนา</label>
-            <input id="f_religion" class="form-control"></div>
-          <div class="col-md-4"><label class="form-label small fw-600 mb-1">หมู่เลือด</label>
-            <input id="f_blood" class="form-control"></div>
-          <div class="col-md-4"><label class="form-label small fw-600 mb-1">โรคประจำตัว/แพ้ยา</label>
-            <input id="f_disease" class="form-control" placeholder="ไม่มี"></div>
-          <div class="col-md-4"><label class="form-label small fw-600 mb-1">จำนวนพี่น้อง (คน)</label>
-            <input id="f_siblings" class="form-control" placeholder="เช่น 2 / เป็นคนที่ 1"></div>
-        </div>
-
-        <!-- หมวด: ที่อยู่ -->
-        <div class="hv-section-title">🏠 ที่อยู่ปัจจุบัน</div>
-        <div class="row g-2 mb-2">
-          <div class="col-12"><label class="form-label small fw-600 mb-1">ที่อยู่</label>
-            <textarea id="f_address" class="form-control" rows="2" placeholder="บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด รหัสไปรษณีย์"></textarea></div>
-          <div class="col-md-6"><label class="form-label small fw-600 mb-1">สภาพที่อยู่อาศัย</label>
-            <select id="f_house" class="form-select">
-              <option value="">-</option>
-              <option>บ้านตนเอง</option><option>บ้านเช่า</option>
-              <option>บ้านพักราชการ/สวัสดิการ</option><option>อาศัยอยู่กับผู้อื่น</option>
-            </select></div>
-          <div class="col-md-6"><label class="form-label small fw-600 mb-1">การเดินทางมาโรงเรียน</label>
-            <input id="f_travel" class="form-control" placeholder="เช่น รถจักรยานยนต์ / รถโรงเรียน / เดิน"></div>
-        </div>
-
-        <!-- หมวด: ครอบครัว -->
-        <div class="hv-section-title">👨‍👩‍👧 ข้อมูลครอบครัว</div>
-        <div class="row g-2 mb-2">
-          <div class="col-md-8"><label class="form-label small fw-600 mb-1">ชื่อบิดา</label>
-            <input id="f_father_name" class="form-control"></div>
-          <div class="col-md-4"><label class="form-label small fw-600 mb-1">อาชีพบิดา</label>
-            <input id="f_father_job" class="form-control"></div>
-          <div class="col-md-8"><label class="form-label small fw-600 mb-1">ชื่อมารดา</label>
-            <input id="f_mother_name" class="form-control"></div>
-          <div class="col-md-4"><label class="form-label small fw-600 mb-1">อาชีพมารดา</label>
-            <input id="f_mother_job" class="form-control"></div>
-        </div>
-        <div class="row g-2 mb-2">
-          <div class="col-md-6"><label class="form-label small fw-600 mb-1">ผู้ปกครอง (ที่นักเรียนอาศัยอยู่)</label>
-            <input id="f_parent_name" class="form-control"></div>
-          <div class="col-md-3"><label class="form-label small fw-600 mb-1">เกี่ยวข้องเป็น</label>
-            <input id="f_parent_relation" class="form-control" placeholder="บิดา/มารดา/ปู่ย่า"></div>
-          <div class="col-md-3"><label class="form-label small fw-600 mb-1">เบอร์โทรติดต่อ</label>
-            <input id="f_parent_phone" class="form-control" inputmode="tel"></div>
-        </div>
-        <div class="row g-2 mb-2">
-          <div class="col-md-6"><label class="form-label small fw-600 mb-1">สถานภาพครอบครัว</label>
-            <select id="f_family_status" class="form-select">
-              <option value="">-</option>
-              <option>บิดา-มารดา อยู่ด้วยกัน</option>
-              <option>บิดา-มารดา หย่าร้าง/แยกกันอยู่</option>
-              <option>อาศัยอยู่กับบิดา</option>
-              <option>อาศัยอยู่กับมารดา</option>
-              <option>อาศัยอยู่กับญาติ</option>
-              <option>บิดาหรือมารดาเสียชีวิต</option>
-              <option>บิดาและมารดาเสียชีวิต</option>
-            </select></div>
-          <div class="col-md-6"><label class="form-label small fw-600 mb-1">รายได้ครอบครัว/เดือน</label>
-            <input id="f_income" class="form-control" placeholder="เช่น 10,000 บาท"></div>
-        </div>
-        <div class="row g-2 mb-2">
-          <div class="col-md-6"><label class="form-label small fw-600 mb-1">ฐานะทางเศรษฐกิจ</label>
-            <select id="f_economic" class="form-select">
-              <option value="">-</option>
-              <option>ดี</option><option>ปานกลาง</option><option>ยากจน</option><option>ยากจนพิเศษ</option>
-            </select></div>
-          <div class="col-md-6"><label class="form-label small fw-600 mb-1">ทุน/ความช่วยเหลือที่ได้รับ</label>
-            <input id="f_aid" class="form-control" placeholder="เช่น เงินอุดหนุนยากจน / ไม่มี"></div>
-        </div>
-
-        <!-- หมวด: พฤติกรรม/สรุป -->
-        <div class="hv-section-title">📝 สรุปผลการเยี่ยมบ้าน</div>
-        <div class="row g-2 mb-2">
-          <div class="col-12"><label class="form-label small fw-600 mb-1">พฤติกรรม/ความเป็นอยู่ของนักเรียนที่บ้าน</label>
-            <textarea id="f_behavior" class="form-control" rows="2"></textarea></div>
-          <div class="col-12"><label class="form-label small fw-600 mb-1">สภาพปัญหา / ข้อสังเกต / สิ่งที่ต้องช่วยเหลือ</label>
-            <textarea id="f_note" class="form-control" rows="3"></textarea></div>
-          <div class="col-12"><label class="form-label small fw-600 mb-1">ความคิดเห็น/ข้อเสนอแนะของผู้ปกครอง</label>
-            <textarea id="f_parent_opinion" class="form-control" rows="2"></textarea></div>
-        </div>
+        <!-- ฟอร์มสร้างจาก schema -->
+        <div id="formFields"></div>
 
         <!-- รูปภาพ -->
-        <div class="mb-2">
-          <label class="form-label small fw-600 mb-1"><i class="bi bi-images me-1"></i>รูปภาพเยี่ยมบ้าน</label>
-          <div class="small text-muted mb-2">แนะนำ: หน้าบ้าน, ข้างบ้าน 2 ฝั่ง, นักเรียน+ผู้ปกครอง, นักเรียน+ผู้ปกครอง+ครู</div>
-          <div id="photoGrid" class="d-flex flex-wrap gap-2 mb-2"></div>
-          <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="uploadPhoto(this.files[0])">
-          <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('photoInput').click()">
-            <i class="bi bi-camera me-1"></i>เพิ่มรูป
-          </button>
-        </div>
+        <div class="hv-section-title">📷 ภาพถ่ายประกอบการเยี่ยมบ้าน</div>
+        <div class="small text-muted mb-2">หน้าบ้าน 1 + ข้างบ้าน 2 ฝั่ง + นักเรียนกับผู้ปกครอง + นักเรียน ผู้ปกครอง ครู</div>
+        <div id="photoGrid" class="d-flex flex-wrap gap-2 mb-2"></div>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="uploadPhoto(this.files[0])">
+        <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('photoInput').click()">
+          <i class="bi bi-camera me-1"></i>เพิ่มรูป
+        </button>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
@@ -247,16 +154,79 @@
 <script src="/js/common.js"></script>
 <script>
 const THAI_MONTHS_F = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-let theme = {}, allClasses = [], curStudents = [], visitModal = null, curVisit = null;
+let theme={}, allClasses=[], curStudents=[], visitModal=null, curVisit=null;
+
+/* ===== SCHEMA แบบฟอร์มเยี่ยมบ้าน (ตามฟอร์มจริง ตัด ตอน2 คัดกรอง + SDQ + EQ) =====
+   type: text | textarea | radio | checkbox
+   key = ชื่อ field เก็บใน data
+*/
+const SCHEMA = [
+  { section: 'ตอนที่ 1 ข้อมูลพื้นฐาน' },
+  { q:'1. ข้อมูลพื้นฐานนักเรียน' },
+  { type:'text', key:'nickname', label:'ชื่อเล่น', col:4 },
+  { type:'text', key:'nationality', label:'สัญชาติ', col:4 },
+  { type:'text', key:'ethnicity', label:'เชื้อชาติ', col:4 },
+  { type:'text', key:'religion', label:'ศาสนา', col:4 },
+  { type:'text', key:'birthdate', label:'วัน/เดือน/ปีเกิด', col:4 },
+  { type:'text', key:'age', label:'อายุ', col:4 },
+
+  { q:'2. ประวัติการเรียน (โรงเรียนเดิม)' },
+  { type:'text', key:'prev_school', label:'จบจากโรงเรียน', col:6 },
+  { type:'text', key:'prev_gpa', label:'ผลการเรียนเฉลี่ย', col:6 },
+
+  { q:'3. ข้อมูลสุขภาพ' },
+  { type:'text', key:'weight', label:'น้ำหนัก (กก.)', col:4 },
+  { type:'text', key:'height', label:'ส่วนสูง (ซม.)', col:4 },
+  { type:'text', key:'blood', label:'หมู่เลือด', col:4 },
+  { type:'text', key:'disease', label:'โรคประจำตัว (ถ้าไม่มีใส่ "ไม่มี")', col:12 },
+
+  { q:'4. ที่อยู่ของนักเรียน' },
+  { type:'textarea', key:'address', label:'ที่อยู่ปัจจุบัน', rows:2 },
+
+  { section: 'ตอนที่ 3 ข้อมูลสถานะครัวเรือน' },
+  { type:'radio', key:'q13_house', label:'13. สถานะที่อยู่อาศัย',
+    opts:['บ้านของตนเอง/เจ้าของบ้าน','บ้านเช่า (เสียค่าเช่า)','อาศัยอยู่กับผู้อื่น/อยู่โดยไม่ค่าใช้จ่าย','บ้านพัก/หอพัก','อื่น ๆ'] },
+  { type:'radio', key:'q14_house_type', label:'14. ลักษณะกายภาพของบ้าน',
+    opts:['บ้านชั้นเดียว','บ้านสองชั้น','ทาวน์เฮ้าส์','อื่น ๆ'] },
+  { type:'checkbox', key:'q15_burden', label:'15. ครัวเรือนมีภาระพึ่งพิง',
+    opts:['มีคนพิการ/เจ็บป่วยเรื้อรัง','มีผู้สูงอายุ (มากกว่า 60 ปี)','มีคนอายุ 15-60 ปีที่ว่างงาน','เป็นบิดา/มารดาเลี้ยงเดี่ยว','ครัวเรือนไม่มีภาระพึ่งพิง'] },
+  { type:'radio', key:'q16_safety', label:'16. ความปลอดภัยของที่อยู่อาศัยและสภาพแวดล้อมบริเวณบ้าน',
+    opts:['ดี/มั่นคง/ปลอดภัย/เป็นสัดส่วน','เสี่ยง'] },
+  { type:'radio', key:'q17_living_with', label:'17. นักเรียนพักอาศัยอยู่กับ (ตอบเพียง 1 ข้อ)',
+    opts:['บิดาและมารดา','บิดา','มารดา','พี่/น้อง (ไม่ได้อยู่กับบิดา-มารดา)','เพื่อน/คนรู้จัก','ผู้ปกครองที่ไม่ใช่บิดา-มารดา','พักอยู่ที่โรงเรียน','พักอยู่คนเดียว','พักอยู่กับมูลนิธิ/วัด/นายจ้าง','อื่น ๆ'] },
+  { type:'radio', key:'q18_travel', label:'18. การเดินทางมาโรงเรียนของนักเรียน',
+    opts:['เดิน','จักรยาน','รถโรงเรียน','จักรยานยนต์ส่วนตัว','รถส่วนตัว','เรือส่วนตัว','จักรยานยนต์รับจ้าง','รถโดยสารประจำทาง/รับจ้าง','เรือโดยสารประจำทาง/รับจ้าง','เดินทางโดยรถไฟ','เดินทางโดยรถไฟฟ้า','อื่น ๆ'] },
+  { type:'text', key:'q18_cost', label:'ค่าใช้จ่ายในการเดินทาง ไป-กลับ (บาท/เดือน)', col:6 },
+  { type:'radio', key:'q19_distance', label:'19. ระยะทางจากบ้านถึงโรงเรียน',
+    opts:['0-5 กิโลเมตร','6-10 กิโลเมตร','11-15 กิโลเมตร','16-20 กิโลเมตร','21-40 กิโลเมตร','40 กิโลเมตรขึ้นไป'] },
+  { type:'radio', key:'q20_time', label:'20. ระยะเวลาในการเดินทางจากบ้านถึงโรงเรียน',
+    opts:['น้อยกว่า 30 นาที','30-50 นาที','1-3 ชั่วโมง','มากกว่า 3 ชั่วโมง'] },
+  { type:'radio', key:'q21_route_safety', label:'21. สภาพแวดล้อมระหว่างการเดินทางจากที่พักมาโรงเรียน',
+    opts:['ปลอดภัย','เสี่ยงอันตราย'] },
+  { type:'checkbox', key:'q22_electric', label:'22. แหล่งไฟฟ้าหลัก',
+    opts:['ไม่มีไฟฟ้า','มีไฟฟ้า (เครื่องปั่นไฟ/โซลาเซลล์)','มีไฟฟ้า (ไฟต่อพ่วง/แบตเตอรี่)','มีไฟฟ้า (ไฟบ้านหรือมิเตอร์)'] },
+  { type:'checkbox', key:'q23_water', label:'23. แหล่งน้ำดื่ม',
+    opts:['น้ำดื่มบรรจุขวด/ตู้หยอดน้ำ','น้ำบ่อ/น้ำบาดาล','น้ำฝน/น้ำประปาภูเขา/ลำธาร','น้ำประปา'] },
+  { type:'radio', key:'q24_disaster', label:'24. สภาพที่พักอาศัยและความปลอดภัยด้านภัยพิบัติ',
+    opts:['ไม่มีความเสี่ยง','มีความเสี่ยง'] },
+
+  { section: 'ตอนที่ 4 ข้อมูลเชิงลึก' },
+  { type:'text', key:'q25_friend', label:'25. เพื่อนสนิทของนักเรียน', col:12 },
+
+  { section: 'ตอนที่ 5 ความคิดเห็นครู' },
+  { type:'textarea', key:'q27_need', label:'27. สภาพที่น่าเป็นห่วงและความต้องการจำเป็น (การให้ความช่วยเหลือเบื้องต้น)', rows:2 },
+  { type:'textarea', key:'q27_summary', label:'ข้อสรุปจากการเยี่ยมบ้าน', rows:3 },
+];
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
   try { theme = await (await fetch('/api/public/theme')).json(); } catch(e){}
+  buildForm();
   try {
     allClasses = await apiFetch('/api/classes');
     const sel = document.getElementById('selClass');
     const grouped = {};
-    allClasses.forEach(c => { (grouped[c.class_level] = grouped[c.class_level]||[]).push(c); });
+    allClasses.forEach(c => { (grouped[c.class_level]=grouped[c.class_level]||[]).push(c); });
     Object.keys(grouped).sort((a,b)=>+a-+b).forEach(lv => {
       const og = document.createElement('optgroup'); og.label = `มัธยมศึกษาปีที่ ${lv}`;
       grouped[lv].forEach(c => {
@@ -267,12 +237,40 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       sel.appendChild(og);
     });
-    if (currentUser?.role === 'teacher' && currentUser?.assigned_level) {
+    if (currentUser?.role==='teacher' && currentUser?.assigned_level) {
       sel.value = `${currentUser.assigned_level}_${currentUser.assigned_room||''}`;
-      if (sel.value && sel.value !== '_') loadList();
+      if (sel.value && sel.value!=='_') loadList();
     }
   } catch(e){ alert(e.message); }
 });
+
+function buildForm() {
+  const box = document.getElementById('formFields');
+  let html = '';
+  SCHEMA.forEach((item, i) => {
+    if (item.section) { html += `<div class="hv-section-title">${item.section}</div>`; return; }
+    if (item.q) { html += `<div class="hv-q">${item.q}</div>`; return; }
+    if (item.type === 'text') {
+      html += `<div class="d-inline-block me-3 mb-2" style="min-width:${item.col>=12?'100%':item.col>=6?'48%':'31%'}">
+        <label class="form-label small fw-600 mb-1">${item.label}</label>
+        <input id="hv_${item.key}" class="form-control form-control-sm"></div>`;
+    } else if (item.type === 'textarea') {
+      html += `<div class="mb-2"><label class="form-label small fw-600 mb-1">${item.label}</label>
+        <textarea id="hv_${item.key}" class="form-control" rows="${item.rows||2}"></textarea></div>`;
+    } else if (item.type === 'radio' || item.type === 'checkbox') {
+      html += `<div class="hv-q">${item.label}</div><div class="hv-opts mb-2">`;
+      item.opts.forEach((op, j) => {
+        const id = `hv_${item.key}_${j}`;
+        const inputType = item.type === 'radio' ? 'radio' : 'checkbox';
+        html += `<div class="form-check">
+          <input class="form-check-input" type="${inputType}" name="hv_${item.key}" id="${id}" value="${op}">
+          <label class="form-check-label small" for="${id}">${op}</label></div>`;
+      });
+      html += `</div>`;
+    }
+  });
+  box.innerHTML = html;
+}
 
 async function loadList() {
   const v = document.getElementById('selClass').value;
@@ -287,26 +285,20 @@ async function loadList() {
 }
 
 function renderList() {
-  const done = curStudents.filter(s => s.visited).length;
-  const total = curStudents.length;
+  const done = curStudents.filter(s=>s.visited).length, total = curStudents.length;
   const pct = total ? Math.round(done/total*100) : 0;
-  document.getElementById('progressBar').style.display = '';
-  document.getElementById('progFill').style.width = pct+'%';
-  document.getElementById('progFill').textContent = pct+'%';
-  document.getElementById('progText').textContent = `เยี่ยมแล้ว ${done}/${total} คน`;
-
-  const box = document.getElementById('studentList');
-  box.innerHTML = curStudents.map(s => `
+  document.getElementById('progressBar').style.display='';
+  document.getElementById('progFill').style.width=pct+'%';
+  document.getElementById('progFill').textContent=pct+'%';
+  document.getElementById('progText').textContent=`เยี่ยมแล้ว ${done}/${total} คน`;
+  document.getElementById('studentList').innerHTML = curStudents.map(s=>`
     <div class="hv-student-row" onclick="openVisit(${s.id})">
       <div class="num">${s.number ?? '-'}</div>
       ${s.photo ? `<img src="/photos/${s.photo}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;">`
                 : '<i class="bi bi-person-circle fs-3 text-muted"></i>'}
       <div class="flex-grow-1">
         <div class="fw-600">${s.name}</div>
-        <div class="small text-muted">
-          ${s.photo_count ? `<i class="bi bi-images"></i> ${s.photo_count} รูป` : 'ยังไม่มีรูป'}
-          ${s.visit_date ? ' • '+pcDate(s.visit_date) : ''}
-        </div>
+        <div class="small text-muted">${s.photo_count ? `<i class="bi bi-images"></i> ${s.photo_count} รูป` : 'ยังไม่มีรูป'}${s.visit_date ? ' • '+pcDate(s.visit_date):''}</div>
       </div>
       ${s.visited ? '<span class="hv-badge-done"><i class="bi bi-check-circle"></i> เยี่ยมแล้ว</span>'
                   : '<span class="hv-badge-pending">ยังไม่เยี่ยม</span>'}
@@ -317,54 +309,74 @@ async function openVisit(sid) {
   if (!visitModal) visitModal = new bootstrap.Modal('#visitModal');
   try {
     curVisit = await apiFetch(`/api/home-visits/${sid}`);
-    const s = curVisit.student;
-    const d = curVisit.data || {};
+    const s = curVisit.student, d = curVisit.data || {};
     document.getElementById('mStudentId').value = sid;
     document.getElementById('mTitle').textContent = `${s.name} (ม.${s.class_level}/${s.room})`;
     document.getElementById('mVisited').checked = !!curVisit.visited;
     document.getElementById('mVisitDate').value = curVisit.visit_date || todayISO();
-    // prefill จาก data หรือข้อมูลนักเรียน
-    setVal('f_nickname', d.nickname);
-    setVal('f_nationality', d.nationality);
-    setVal('f_religion', d.religion);
-    setVal('f_blood', d.blood);
-    setVal('f_disease', d.disease);
-    setVal('f_siblings', d.siblings);
-    setVal('f_address', d.address ?? s.address);
-    setVal('f_house', d.house);
-    setVal('f_travel', d.travel);
-    setVal('f_father_name', d.father_name);
-    setVal('f_father_job', d.father_job);
-    setVal('f_mother_name', d.mother_name);
-    setVal('f_mother_job', d.mother_job);
-    setVal('f_parent_name', d.parent_name ?? s.parent_name);
-    setVal('f_parent_relation', d.parent_relation ?? s.parent_relation);
-    setVal('f_parent_phone', d.parent_phone ?? s.parent_phone);
-    setVal('f_family_status', d.family_status);
-    setVal('f_income', d.income);
-    setVal('f_economic', d.economic);
-    setVal('f_aid', d.aid);
-    setVal('f_behavior', d.behavior);
-    setVal('f_note', d.note);
-    setVal('f_parent_opinion', d.parent_opinion);
+    // prefill ตาม schema
+    SCHEMA.forEach(item => {
+      if (!item.key) return;
+      let val = d[item.key];
+      // auto-fill จากข้อมูลนักเรียนถ้ายังว่าง
+      if (val==null || val==='') {
+        if (item.key==='address') val = s.address;
+        if (item.key==='birthdate') val = s.birthdate ? pcDate(s.birthdate) : '';
+      }
+      if (item.type==='text' || item.type==='textarea') {
+        const el = document.getElementById('hv_'+item.key); if (el) el.value = val||'';
+      } else if (item.type==='radio') {
+        document.querySelectorAll(`input[name="hv_${item.key}"]`).forEach(r => r.checked = (r.value===val));
+      } else if (item.type==='checkbox') {
+        const arr = Array.isArray(val) ? val : [];
+        document.querySelectorAll(`input[name="hv_${item.key}"]`).forEach(c => c.checked = arr.includes(c.value));
+      }
+    });
     renderPhotos();
     visitModal.show();
   } catch(e){ alert(e.message); }
 }
 
-function setVal(id, v){ document.getElementById(id).value = v || ''; }
+function collectData() {
+  const d = {};
+  SCHEMA.forEach(item => {
+    if (!item.key) return;
+    if (item.type==='text' || item.type==='textarea') {
+      d[item.key] = (document.getElementById('hv_'+item.key)?.value||'').trim();
+    } else if (item.type==='radio') {
+      const c = document.querySelector(`input[name="hv_${item.key}"]:checked`);
+      d[item.key] = c ? c.value : '';
+    } else if (item.type==='checkbox') {
+      d[item.key] = [...document.querySelectorAll(`input[name="hv_${item.key}"]:checked`)].map(c=>c.value);
+    }
+  });
+  return d;
+}
+
+async function saveVisit() {
+  const sid = document.getElementById('mStudentId').value;
+  try {
+    await apiFetch(`/api/home-visits/${sid}`, { method:'POST',
+      body: JSON.stringify({
+        visited: document.getElementById('mVisited').checked,
+        visit_date: document.getElementById('mVisitDate').value,
+        data: collectData()
+      })});
+    visitModal.hide(); loadList();
+  } catch(e){ alert('บันทึกไม่สำเร็จ: '+e.message); }
+}
+
+function setVal(id,v){ const el=document.getElementById(id); if(el) el.value=v||''; }
 function todayISO(){ return new Date().toISOString().split('T')[0]; }
-function pcDate(iso){ if(!iso) return ''; const dt=new Date(iso+'T00:00:00'); return `${dt.getDate()} ${THAI_MONTHS_F[dt.getMonth()].slice(0,3)} ${dt.getFullYear()+543}`; }
+function pcDate(iso){ if(!iso) return ''; const dt=new Date(iso+'T00:00:00'); if(isNaN(dt))return iso; return `${dt.getDate()} ${THAI_MONTHS_F[dt.getMonth()].slice(0,3)} ${dt.getFullYear()+543}`; }
 
 function renderPhotos() {
   const grid = document.getElementById('photoGrid');
   const photos = curVisit.photos || [];
-  if (!photos.length) { grid.innerHTML = '<span class="text-muted small">ยังไม่มีรูป</span>'; return; }
-  grid.innerHTML = photos.map(p => `
-    <div class="hv-thumb-wrap">
-      <img class="hv-thumb" src="/photos/${p}">
-      <button class="hv-thumb-del" onclick="delPhoto('${p}')">✕</button>
-    </div>`).join('');
+  grid.innerHTML = photos.length ? photos.map(p=>`
+    <div class="hv-thumb-wrap"><img class="hv-thumb" src="/photos/${p}">
+      <button class="hv-thumb-del" onclick="delPhoto('${p}')">✕</button></div>`).join('')
+    : '<span class="text-muted small">ยังไม่มีรูป</span>';
 }
 
 async function uploadPhoto(file) {
@@ -372,14 +384,13 @@ async function uploadPhoto(file) {
   const sid = document.getElementById('mStudentId').value;
   const fd = new FormData(); fd.append('file', file);
   const grid = document.getElementById('photoGrid');
-  grid.insertAdjacentHTML('beforeend', '<div class="spinner-border spinner-border-sm text-primary" id="upSpin"></div>');
+  grid.insertAdjacentHTML('beforeend','<div class="spinner-border spinner-border-sm text-primary" id="upSpin"></div>');
   try {
-    const r = await fetch(`/api/home-visits/${sid}/photo`, { method:'POST', body:fd, credentials:'same-origin' });
+    const r = await fetch(`/api/home-visits/${sid}/photo`, {method:'POST',body:fd,credentials:'same-origin'});
     const data = await r.json();
-    if (data.success) { curVisit.photos.push(data.photo); renderPhotos(); }
-    else alert(data.message);
+    if (data.success){ curVisit.photos.push(data.photo); renderPhotos(); } else alert(data.message);
   } catch(e){ alert('อัพโหลดไม่สำเร็จ: '+e.message); }
-  document.getElementById('photoInput').value = '';
+  document.getElementById('photoInput').value='';
   document.getElementById('upSpin')?.remove();
 }
 
@@ -387,99 +398,58 @@ async function delPhoto(filename) {
   if (!confirm('ลบรูปนี้?')) return;
   const sid = document.getElementById('mStudentId').value;
   try {
-    await apiFetch(`/api/home-visits/${sid}/photo`, { method:'DELETE', body: JSON.stringify({ filename }) });
-    curVisit.photos = curVisit.photos.filter(p => p !== filename);
-    renderPhotos();
+    await apiFetch(`/api/home-visits/${sid}/photo`, {method:'DELETE',body:JSON.stringify({filename})});
+    curVisit.photos = curVisit.photos.filter(p=>p!==filename); renderPhotos();
   } catch(e){ alert(e.message); }
 }
 
-function collectData() {
-  return {
-    nickname: gv('f_nickname'), nationality: gv('f_nationality'), religion: gv('f_religion'),
-    blood: gv('f_blood'), disease: gv('f_disease'), siblings: gv('f_siblings'),
-    address: gv('f_address'), house: gv('f_house'), travel: gv('f_travel'),
-    father_name: gv('f_father_name'), father_job: gv('f_father_job'),
-    mother_name: gv('f_mother_name'), mother_job: gv('f_mother_job'),
-    parent_name: gv('f_parent_name'), parent_relation: gv('f_parent_relation'),
-    parent_phone: gv('f_parent_phone'), family_status: gv('f_family_status'),
-    income: gv('f_income'), economic: gv('f_economic'), aid: gv('f_aid'),
-    behavior: gv('f_behavior'), note: gv('f_note'), parent_opinion: gv('f_parent_opinion'),
-  };
-}
-
-async function saveVisit() {
-  const sid = document.getElementById('mStudentId').value;
-  try {
-    await apiFetch(`/api/home-visits/${sid}`, {
-      method:'POST',
-      body: JSON.stringify({
-        visited: document.getElementById('mVisited').checked,
-        visit_date: document.getElementById('mVisitDate').value,
-        data: collectData()
-      })
-    });
-    visitModal.hide();
-    loadList();
-  } catch(e){ alert('บันทึกไม่สำเร็จ: '+e.message); }
-}
-function gv(id){ return document.getElementById(id).value.trim(); }
-
 function printOne() {
-  const s = curVisit.student;
-  const d = collectData();
+  const s = curVisit.student, d = collectData();
   const photos = curVisit.photos || [];
   const logo = theme.school_logo ? `<img class="logo" src="${theme.school_logo}">` : '';
+  const dot = v => `<span class="dot">${v||'.....................................'}</span>`;
+  let body = '';
+  SCHEMA.forEach(item => {
+    if (item.section) { body += `<div class="doc-sec">${item.section}</div>`; return; }
+    if (item.q) { body += `<div class="doc-line"><b>${item.q}</b></div>`; return; }
+    const val = d[item.key];
+    if (item.type==='text') {
+      body += `<div class="doc-line"><span class="lb">${item.label}</span> ${dot(val)}</div>`;
+    } else if (item.type==='textarea') {
+      body += `<div class="doc-line"><span class="lb">${item.label}</span></div><div class="doc-box">${(val||'').replace(/\n/g,'<br>')}</div>`;
+    } else if (item.type==='radio') {
+      body += `<div class="doc-line"><span class="lb">${item.label}</span></div><div class="doc-opts">`
+            + item.opts.map(op => `<span class="opt">${val===op?'☑':'☐'} ${op}</span>`).join('') + `</div>`;
+    } else if (item.type==='checkbox') {
+      const arr = Array.isArray(val)?val:[];
+      body += `<div class="doc-line"><span class="lb">${item.label}</span></div><div class="doc-opts">`
+            + item.opts.map(op => `<span class="opt">${arr.includes(op)?'☑':'☐'} ${op}</span>`).join('') + `</div>`;
+    }
+  });
   const photoHtml = photos.length ? `
-    <div style="font-weight:600; margin-top:5mm;">ภาพถ่ายประกอบการเยี่ยมบ้าน</div>
-    <div class="doc-photos">${photos.map((p,i)=>`
-      <figure><img src="/photos/${p}"><figcaption>ภาพที่ ${i+1}</figcaption></figure>`).join('')}
-    </div>` : '';
-  const row = (lb, vl) => `<div class="lb">${lb}</div><div class="vl">${vl||'.................................'}</div>`;
-  const box = (lb, vl) => `<div style="margin-top:3mm;"><b>${lb}</b></div>
-    <div style="border:1px solid #999; border-radius:2mm; min-height:16mm; padding:2mm 3mm; margin-top:1mm;">${(vl||'').replace(/\n/g,'<br>')}</div>`;
+    <div class="doc-sec">ภาพถ่ายประกอบการเยี่ยมบ้าน</div>
+    <div class="doc-photos">${photos.map((p,i)=>`<figure><img src="/photos/${p}"><figcaption>ภาพที่ ${i+1}</figcaption></figure>`).join('')}</div>` : '';
 
   document.getElementById('printArea').innerHTML = `
     <div class="doc-page">
-      <div class="doc-head">
-        ${logo}
-        <h2>แบบบันทึกการเยี่ยมบ้านนักเรียน</h2>
+      <div class="doc-head">${logo}
+        <h2>แบบเก็บข้อมูลเยี่ยมบ้านนักเรียนรายบุคคล</h2>
         <div class="sub">${theme.school_name||'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม'}</div>
       </div>
-      <div class="info-grid">
-        ${row('ชื่อ-นามสกุล', s.name + (d.nickname?` (${d.nickname})`:''))}
-        ${row('ระดับชั้น', `ม.${s.class_level}/${s.room}  เลขที่ ${s.number??'-'}`)}
-        ${row('วันที่เยี่ยม', pcDate(document.getElementById('mVisitDate').value))}
-        ${row('เชื้อชาติ/สัญชาติ/ศาสนา', [d.nationality, d.religion].filter(Boolean).join(' / '))}
-        ${row('หมู่เลือด / โรคประจำตัว', [d.blood, d.disease].filter(Boolean).join(' / '))}
-        ${row('จำนวนพี่น้อง', d.siblings)}
-        ${row('ที่อยู่', d.address)}
-        ${row('สภาพที่อยู่อาศัย', d.house)}
-        ${row('การเดินทางมาโรงเรียน', d.travel)}
-        ${row('ชื่อบิดา (อาชีพ)', d.father_name + (d.father_job?` — ${d.father_job}`:''))}
-        ${row('ชื่อมารดา (อาชีพ)', d.mother_name + (d.mother_job?` — ${d.mother_job}`:''))}
-        ${row('ผู้ปกครอง', d.parent_name + (d.parent_relation?` (${d.parent_relation})`:'') + (d.parent_phone?`  โทร. ${d.parent_phone}`:''))}
-        ${row('สถานภาพครอบครัว', d.family_status)}
-        ${row('รายได้ครอบครัว/เดือน', d.income)}
-        ${row('ฐานะทางเศรษฐกิจ', d.economic + (d.aid?`  (ความช่วยเหลือ: ${d.aid})`:''))}
+      <div class="doc-line">
+        <span class="lb">ชื่อ-นามสกุล</span> ${dot(s.name)}
+        <span class="lb">ชั้น</span> ${dot('ม.'+s.class_level+'/'+s.room)}
+        <span class="lb">เลขที่</span> ${dot(s.number??'')}
+        <span class="lb">วันที่เยี่ยม</span> ${dot(pcDate(document.getElementById('mVisitDate').value))}
       </div>
-      ${box('พฤติกรรม/ความเป็นอยู่ของนักเรียนที่บ้าน', d.behavior)}
-      ${box('สภาพปัญหา / ข้อสังเกต / สิ่งที่ต้องช่วยเหลือ', d.note)}
-      ${box('ความคิดเห็น/ข้อเสนอแนะของผู้ปกครอง', d.parent_opinion)}
+      ${body}
       ${photoHtml}
       <div class="doc-sign">
-        <div>
-          <div>ลงชื่อ ………………………………………</div>
-          <div>(……………………………………)</div>
-          <div>ครูที่ปรึกษา</div>
-        </div>
-        <div>
-          <div>ลงชื่อ ………………………………………</div>
-          <div>( ${theme.director_name||'นางสาวปัทมา จีนดี'} )</div>
-          <div>ผู้อำนวยการ${theme.school_name||'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม'}</div>
-        </div>
+        <div><div>ลงชื่อ ………………………………………</div><div>(……………………………………)</div><div>ครูที่ปรึกษา</div></div>
+        <div><div>ลงชื่อ ………………………………………</div><div>( ${theme.director_name||'นางสาวปัทมา จีนดี'} )</div><div>ผู้อำนวยการ${theme.school_name||'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม'}</div></div>
       </div>
     </div>`;
-  setTimeout(() => window.print(), 200);
+  setTimeout(()=>window.print(), 250);
 }
 </script>
 </body>
