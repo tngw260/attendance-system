@@ -1045,6 +1045,18 @@ def api_student_get(sid):
             return jsonify(error='ไม่มีสิทธิ์ดูข้อมูลห้องนี้'), 403
     return jsonify(dict(s))
 
+@app.get('/api/students/<int:sid>/basic')
+@login_required
+def api_student_basic(sid):
+    """ข้อมูลพื้นฐานสำหรับ confirm ตอนสแกนมาสาย — ทุกคนดูได้ทุกห้อง (ไม่รวมข้อมูลอ่อนไหว)"""
+    with get_db() as con:
+        s = con.execute(
+            'SELECT id, number, student_code, name, class_level, room, photo FROM students WHERE id=?',
+            (sid,)).fetchone()
+    if not s:
+        return jsonify(error='ไม่พบนักเรียน'), 404
+    return jsonify(dict(s))
+
 @app.delete('/api/students/<int:sid>')
 @admin_required
 def api_student_delete(sid):
@@ -1476,12 +1488,12 @@ def api_attendance_scan():
         if not student:
             return jsonify(success=False, message='ไม่พบนักเรียน'), 404
 
-        # ครูที่มี assigned_room scan ได้เฉพาะห้องตัวเอง
-        if u['role'] == 'teacher' and u.get('assigned_level'):
+        # ครูเวรเช็ค "มาสาย" ได้ทุกห้อง (งานหน้าประตู) — สถานะอื่นจำกัดเฉพาะห้องที่ปรึกษา
+        if status != 'late' and u['role'] == 'teacher' and u.get('assigned_level'):
             if student['class_level'] != u['assigned_level']:
-                return jsonify(success=False, message='ไม่มีสิทธิ์เช็คชื่อห้องนี้'), 403
+                return jsonify(success=False, message='ไม่มีสิทธิ์เช็คชื่อห้องนี้ (เช็คได้เฉพาะมาสาย)'), 403
             if u.get('assigned_room') and student['room'] != u['assigned_room']:
-                return jsonify(success=False, message='ไม่มีสิทธิ์เช็คชื่อห้องนี้'), 403
+                return jsonify(success=False, message='ไม่มีสิทธิ์เช็คชื่อห้องนี้ (เช็คได้เฉพาะมาสาย)'), 403
 
         # ตรวจสอบว่ามี attendance ของวันนี้แล้วหรือยัง
         existing = con.execute(

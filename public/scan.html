@@ -166,6 +166,9 @@
     <div class="small text-warning mt-2" id="dateInfo">
       <i class="bi bi-calendar3 me-1"></i><span id="dateText">-</span>
     </div>
+    <div class="small mt-1" id="lateHint" style="color:#8fd19e;">
+      <i class="bi bi-shield-check me-1"></i>โหมด "มาสาย" — ครูเวรสแกนได้ทุกห้อง
+    </div>
   </div>
 
   <!-- Safety options -->
@@ -263,7 +266,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const savedBoxSize = localStorage.getItem('scanBoxSize') || '0.55';
   const r = document.querySelector(`input[name="boxSize"][value="${savedBoxSize}"]`);
   if (r) r.checked = true;
-  document.getElementById('confirmMode').checked = localStorage.getItem('scanConfirm') === '1';
+  // ยืนยันก่อนบันทึก = เปิดเป็นค่าเริ่มต้น (UI ปลอดภัย) ยกเว้นผู้ใช้เคยปิดเอง
+  document.getElementById('confirmMode').checked = (localStorage.getItem('scanConfirm') !== '0');
 
   // Save preferences เมื่อเปลี่ยน
   document.querySelectorAll('input[name="boxSize"]').forEach(el => {
@@ -274,6 +278,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('confirmMode').addEventListener('change', e => {
     localStorage.setItem('scanConfirm', e.target.checked ? '1' : '0');
+  });
+
+  // แสดง/ซ่อน hint "ครูเวรสแกนได้ทุกห้อง" ตามสถานะ
+  document.querySelectorAll('input[name="scanStatus"]').forEach(el => {
+    el.addEventListener('change', () => {
+      const isLate = document.querySelector('input[name="scanStatus"]:checked').value === 'late';
+      const hint = document.getElementById('lateHint');
+      if (hint) hint.style.display = isLate ? '' : 'none';
+    });
   });
 
   startScanner();
@@ -356,7 +369,7 @@ async function onScanSuccess(decodedText) {
   if (confirmMode) {
     // ไม่ส่งทันที — ดึงข้อมูลนักเรียนก่อนเพื่อแสดงใน banner
     try {
-      const stu = await apiFetch(`/api/students/${sid}`);
+      const stu = await apiFetch(`/api/students/${sid}/basic`);
       showConfirmBanner(stu, status);
     } catch (e) {
       addRecent({ name: e.message, detail: 'sid: ' + sid }, 'error');
