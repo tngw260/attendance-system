@@ -253,7 +253,6 @@ def init_db():
                 updated_at    TEXT DEFAULT (datetime('now','localtime'))
             );
             CREATE INDEX IF NOT EXISTS idx_hv_student ON home_visits(student_id);
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_hv_fillcode ON home_visits(fill_code);
 
             CREATE TABLE IF NOT EXISTS holidays (
                 date       TEXT PRIMARY KEY,
