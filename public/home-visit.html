@@ -149,6 +149,23 @@
           </div>
           <div><input type="date" id="mVisitDate" class="form-control form-control-sm"></div>
         </div>
+
+        <!-- ลิงก์ให้นักเรียนกรอก + แจ้งสถานะรอตรวจ -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2 p-2 rounded" style="background:#e7f1ff;">
+          <button class="btn btn-sm btn-outline-primary" onclick="genFillLink()">
+            <i class="bi bi-link-45deg me-1"></i>สร้างลิงก์ให้นักเรียนกรอก
+          </button>
+          <div id="fillLinkBox" class="small flex-grow-1" style="display:none;">
+            <div class="input-group input-group-sm">
+              <input id="fillLinkInput" class="form-control" readonly style="font-size:.8rem;">
+              <button class="btn btn-primary" onclick="copyFillLink()"><i class="bi bi-clipboard"></i></button>
+            </div>
+          </div>
+          <span id="submittedBadge" class="badge bg-warning text-dark" style="display:none;">
+            <i class="bi bi-hourglass-split"></i> นักเรียนกรอกแล้ว — รอตรวจ
+          </span>
+        </div>
+
         <!-- ฟอร์มสร้างจาก schema -->
         <div id="formFields"></div>
 
@@ -164,6 +181,9 @@
       <div class="modal-footer flex-wrap">
         <button class="btn btn-outline-info" onclick="openCopyHelper()" title="คัดลอกทีละช่อง ไปกรอก Hero Obec Care">
           <i class="bi bi-clipboard-check me-1"></i>คัดลอกสำหรับ Hero
+        </button>
+        <button class="btn btn-warning" id="confirmBtn" onclick="confirmVisit()" style="display:none;">
+          <i class="bi bi-check2-circle me-1"></i>ยืนยันข้อมูล
         </button>
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
         <button class="btn btn-success" onclick="printOne()"><i class="bi bi-printer me-1"></i>พิมพ์ฟอร์ม</button>
@@ -351,9 +371,15 @@ function renderList() {
         <div class="fw-600">${s.name}</div>
         <div class="small text-muted">${s.photo_count ? `<i class="bi bi-images"></i> ${s.photo_count} รูป` : 'ยังไม่มีรูป'}${s.visit_date ? ' • '+pcDate(s.visit_date):''}</div>
       </div>
-      ${s.visited ? '<span class="hv-badge-done"><i class="bi bi-check-circle"></i> เยี่ยมแล้ว</span>'
-                  : '<span class="hv-badge-pending">ยังไม่เยี่ยม</span>'}
+      ${hvBadge(s)}
     </div>`).join('');
+}
+
+function hvBadge(s) {
+  if (s.confirmed) return '<span class="hv-badge-done"><i class="bi bi-check-circle"></i> เยี่ยมแล้ว</span>';
+  if (s.submitted) return '<span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split"></i> รอตรวจ</span>';
+  if (s.visited)   return '<span class="hv-badge-done"><i class="bi bi-check-circle"></i> เยี่ยมแล้ว</span>';
+  return '<span class="hv-badge-pending">ยังไม่เยี่ยม</span>';
 }
 
 async function openVisit(sid) {
@@ -383,9 +409,50 @@ async function openVisit(sid) {
         document.querySelectorAll(`input[name="hv_${item.key}"]`).forEach(c => c.checked = arr.includes(c.value));
       }
     });
+    // สถานะ: นักเรียนกรอกแล้ว/รอตรวจ + ปุ่มยืนยัน + ลิงก์
+    document.getElementById('submittedBadge').style.display = (curVisit.submitted && !curVisit.confirmed) ? '' : 'none';
+    document.getElementById('confirmBtn').style.display = (curVisit.submitted && !curVisit.confirmed) ? '' : 'none';
+    // reset ลิงก์
+    document.getElementById('fillLinkBox').style.display = 'none';
     renderPhotos();
     visitModal.show();
   } catch(e){ alert(e.message); }
+}
+
+async function genFillLink() {
+  const sid = document.getElementById('mStudentId').value;
+  try {
+    const r = await apiFetch(`/api/home-visits/${sid}/fill-link`, { method:'POST' });
+    const url = location.origin + r.url;
+    document.getElementById('fillLinkInput').value = url;
+    document.getElementById('fillLinkBox').style.display = '';
+  } catch(e){ alert(e.message); }
+}
+
+function copyFillLink() {
+  const inp = document.getElementById('fillLinkInput');
+  navigator.clipboard.writeText(inp.value).then(()=>{
+    showHvToast('คัดลอกลิงก์แล้ว — ส่งให้นักเรียนได้เลย');
+  }).catch(()=>{ inp.select(); document.execCommand('copy'); });
+}
+
+async function confirmVisit() {
+  if (!confirm('ยืนยันข้อมูลที่นักเรียนกรอก? (นักเรียนจะแก้ไขไม่ได้อีก)')) return;
+  const sid = document.getElementById('mStudentId').value;
+  try {
+    // บันทึกการแก้ไขของครูก่อน แล้วค่อย confirm
+    await apiFetch(`/api/home-visits/${sid}`, { method:'POST',
+      body: JSON.stringify({ visited:true, visit_date:document.getElementById('mVisitDate').value, data:collectData() })});
+    await apiFetch(`/api/home-visits/${sid}/confirm`, { method:'POST' });
+    visitModal.hide(); loadList();
+  } catch(e){ alert('ยืนยันไม่สำเร็จ: '+e.message); }
+}
+
+function showHvToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'position-fixed bottom-0 end-0 m-3 alert alert-success shadow';
+  t.style.zIndex = 9999; t.innerHTML = `<i class="bi bi-check-circle me-1"></i>${msg}`;
+  document.body.appendChild(t); setTimeout(()=>t.remove(), 2500);
 }
 
 function collectData() {

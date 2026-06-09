@@ -245,11 +245,15 @@ def init_db():
                 visit_date    TEXT,
                 data          TEXT,                       -- JSON: ที่อยู่/ผู้ปกครอง/สภาพบ้าน/เศรษฐกิจ ฯลฯ
                 photos        TEXT,                       -- JSON array ของชื่อไฟล์รูป
+                fill_code     TEXT,                       -- รหัสลิงก์ให้นักเรียนกรอกเอง
+                submitted     INTEGER DEFAULT 0,          -- นักเรียนกรอก+ส่งแล้ว=1 (รอครูยืนยัน)
+                confirmed     INTEGER DEFAULT 0,          -- ครูยืนยันแล้ว=1
                 recorded_by   INTEGER REFERENCES users(id),
                 created_at    TEXT DEFAULT (datetime('now','localtime')),
                 updated_at    TEXT DEFAULT (datetime('now','localtime'))
             );
             CREATE INDEX IF NOT EXISTS idx_hv_student ON home_visits(student_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_hv_fillcode ON home_visits(fill_code);
 
             CREATE TABLE IF NOT EXISTS holidays (
                 date       TEXT PRIMARY KEY,
@@ -312,6 +316,17 @@ def init_db():
             con.execute('ALTER TABLE students ADD COLUMN parent_phone TEXT')
         if 'address' not in scols:
             con.execute('ALTER TABLE students ADD COLUMN address TEXT')
+
+        # Migrate: home_visits - add fill_code/submitted/confirmed (สำหรับลิงก์ให้นักเรียนกรอก)
+        hvcols = [r['name'] for r in con.execute('PRAGMA table_info(home_visits)').fetchall()]
+        if hvcols:  # ตารางมีอยู่แล้ว
+            if 'fill_code' not in hvcols:
+                con.execute('ALTER TABLE home_visits ADD COLUMN fill_code TEXT')
+                con.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_hv_fillcode ON home_visits(fill_code)')
+            if 'submitted' not in hvcols:
+                con.execute('ALTER TABLE home_visits ADD COLUMN submitted INTEGER DEFAULT 0')
+            if 'confirmed' not in hvcols:
+                con.execute('ALTER TABLE home_visits ADD COLUMN confirmed INTEGER DEFAULT 0')
 
         # Migrate: behavior_logs - add note column
         bcols = [r['name'] for r in con.execute('PRAGMA table_info(behavior_logs)').fetchall()]
@@ -3071,7 +3086,7 @@ def api_home_visits_list():
         rows = con.execute(f"""
             SELECT s.id, s.number, s.student_code, s.name, s.class_level, s.room, s.photo,
                    hv.id AS visit_id, hv.visited, hv.visit_date,
-                   hv.photos
+                   hv.photos, hv.submitted, hv.confirmed
             FROM students s
             LEFT JOIN home_visits hv ON hv.student_id = s.id
             WHERE 1=1 {where}
@@ -3218,6 +3233,122 @@ def api_home_visit_save(sid):
             """, (sid, visited, visit_date, data_json, '[]', u['id']))
         audit_log(con, 'save_home_visit', 'student', sid, {'visited': visited})
     return jsonify(success=True, message='บันทึกข้อมูลเยี่ยมบ้านแล้ว')
+
+@app.post('/api/home-visits/<int:sid>/fill-link')
+@login_required
+def api_home_visit_gen_link(sid):
+    """สร้าง/ดึงรหัสลิงก์ให้นักเรียนกรอกเอง"""
+    u = current_user()
+    with get_db() as con:
+        student = con.execute('SELECT * FROM students WHERE id=?', (sid,)).fetchone()
+        if not student: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if not can_access_student(u, student):
+            return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+        hv = con.execute('SELECT id, fill_code FROM home_visits WHERE student_id=?', (sid,)).fetchone()
+        code = hv['fill_code'] if hv and hv['fill_code'] else None
+        if not code:
+            for _ in range(5):
+                code = secrets.token_urlsafe(8)
+                try:
+                    if hv:
+                        con.execute('UPDATE home_visits SET fill_code=? WHERE student_id=?', (code, sid))
+                    else:
+                        con.execute('INSERT INTO home_visits (student_id, fill_code, photos) VALUES (?,?,?)',
+                                    (sid, code, '[]'))
+                    break
+                except sqlite3.IntegrityError:
+                    code = None; continue
+        audit_log(con, 'gen_hv_fill_link', 'student', sid, None)
+    return jsonify(success=True, code=code, url=f'/hv-fill.html?code={code}')
+
+@app.post('/api/home-visits/<int:sid>/confirm')
+@login_required
+def api_home_visit_confirm(sid):
+    """ครูยืนยันข้อมูลที่นักเรียนกรอก"""
+    u = current_user()
+    with get_db() as con:
+        student = con.execute('SELECT * FROM students WHERE id=?', (sid,)).fetchone()
+        if not student: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if not can_access_student(u, student):
+            return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+        con.execute("UPDATE home_visits SET confirmed=1, visited=1, recorded_by=?, "
+                    "updated_at=datetime('now','localtime') WHERE student_id=?", (u['id'], sid))
+        audit_log(con, 'confirm_home_visit', 'student', sid, None)
+    return jsonify(success=True, message='ยืนยันข้อมูลแล้ว')
+
+# ----- PUBLIC: นักเรียนกรอกเองด้วย fill_code (ไม่ต้องล็อกอิน) -----
+
+def _hv_by_code(con, code):
+    return con.execute("""
+        SELECT hv.*, s.name AS student_name, s.class_level, s.room, s.number,
+               s.student_code, s.birthdate, s.address
+        FROM home_visits hv JOIN students s ON s.id=hv.student_id
+        WHERE hv.fill_code=?
+    """, (code,)).fetchone()
+
+@app.get('/api/hv-fill/<code>')
+def api_hv_fill_get(code):
+    """ดึงข้อมูลฟอร์มสำหรับนักเรียนกรอก (public)"""
+    with get_db() as con:
+        hv = _hv_by_code(con, code)
+    if not hv:
+        return jsonify(error='ลิงก์ไม่ถูกต้องหรือหมดอายุ'), 404
+    d = dict(hv)
+    try: d['data'] = json.loads(d.get('data') or '{}')
+    except Exception: d['data'] = {}
+    try: d['photos'] = json.loads(d.get('photos') or '[]')
+    except Exception: d['photos'] = []
+    # ส่งเฉพาะที่จำเป็น (ไม่หลุดข้อมูลอ่อนไหว)
+    return jsonify(
+        student={'name': d['student_name'], 'class_level': d['class_level'],
+                 'room': d['room'], 'number': d['number'],
+                 'birthdate': d['birthdate'], 'address': d['address']},
+        data=d['data'], photos=d['photos'],
+        submitted=d['submitted'], confirmed=d['confirmed'],
+    )
+
+@app.post('/api/hv-fill/<code>')
+def api_hv_fill_save(code):
+    """นักเรียนกรอก+ส่ง (public) — set submitted=1 รอครูยืนยัน"""
+    b = request.get_json() or {}
+    data = b.get('data') or {}
+    visit_date = (b.get('visit_date') or '').strip() or None
+    with get_db() as con:
+        hv = _hv_by_code(con, code)
+        if not hv:
+            return jsonify(success=False, message='ลิงก์ไม่ถูกต้อง'), 404
+        if hv['confirmed']:
+            return jsonify(success=False, message='ครูยืนยันข้อมูลแล้ว ไม่สามารถแก้ไขได้'), 403
+        con.execute("""
+            UPDATE home_visits SET data=?, visit_date=COALESCE(?,visit_date), submitted=1,
+                   updated_at=datetime('now','localtime')
+            WHERE fill_code=?
+        """, (json.dumps(data, ensure_ascii=False), visit_date, code))
+    return jsonify(success=True, message='ส่งข้อมูลเรียบร้อย ขอบคุณค่ะ/ครับ')
+
+@app.post('/api/hv-fill/<code>/photo')
+def api_hv_fill_photo(code):
+    """นักเรียนอัพรูป (public)"""
+    if 'file' not in request.files:
+        return jsonify(success=False, message='ไม่พบไฟล์'), 400
+    f = request.files['file']
+    if not f.filename: return jsonify(success=False, message='ไม่พบไฟล์'), 400
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in ('.jpg', '.jpeg', '.png', '.webp'):
+        return jsonify(success=False, message='ต้องเป็นรูปภาพ'), 400
+    with get_db() as con:
+        hv = _hv_by_code(con, code)
+        if not hv: return jsonify(success=False, message='ลิงก์ไม่ถูกต้อง'), 404
+        if hv['confirmed']:
+            return jsonify(success=False, message='ยืนยันแล้ว แก้ไขไม่ได้'), 403
+        filename = f'hv_{hv["student_id"]}_{secrets.token_hex(4)}{ext}'
+        f.save(os.path.join(PHOTOS_DIR, filename))
+        try: photos = json.loads(hv['photos'] or '[]')
+        except Exception: photos = []
+        photos.append(filename)
+        con.execute('UPDATE home_visits SET photos=? WHERE fill_code=?',
+                    (json.dumps(photos, ensure_ascii=False), code))
+    return jsonify(success=True, photo=filename)
 
 @app.post('/api/home-visits/<int:sid>/photo')
 @login_required

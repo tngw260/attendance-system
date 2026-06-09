@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>กรอกข้อมูลเยี่ยมบ้าน</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { font-family:'Sarabun',sans-serif; background:#eef2f7; padding-bottom:80px; }
+    .topbar { background:linear-gradient(135deg,#0d3b8e,#2980b9); color:#fff; padding:18px 0; }
+    .card-wrap { max-width:680px; margin:16px auto; padding:0 12px; }
+    .hv-section-title { font-weight:700; color:#0d3b8e; margin:18px 0 8px;
+      padding:8px 12px; background:#dfe9f6; border-left:4px solid #0d3b8e; border-radius:6px; }
+    .hv-q { font-weight:600; margin:12px 0 4px; }
+    .form-check { margin-bottom:3px; }
+    .save-bar { position:fixed; bottom:0; left:0; right:0; background:#fff;
+      border-top:1px solid #ddd; padding:10px 12px; box-shadow:0 -2px 10px rgba(0,0,0,.1); z-index:50; }
+    .save-bar .container { max-width:680px; }
+    .hv-thumb { width:80px; height:80px; object-fit:cover; border-radius:8px; border:1px solid #ccc; }
+    #doneScreen { display:none; text-align:center; padding:60px 20px; }
+  </style>
+</head>
+<body>
+
+<div class="topbar text-center">
+  <div class="card-wrap">
+    <h4 class="mb-1"><i class="bi bi-house-heart-fill me-2"></i>แบบกรอกข้อมูลเยี่ยมบ้าน</h4>
+    <div class="small opacity-75" id="schoolName">โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</div>
+  </div>
+</div>
+
+<div class="card-wrap">
+  <div id="loadingMsg" class="text-center text-muted py-5">
+    <div class="spinner-border"></div><div class="mt-2">กำลังโหลด...</div>
+  </div>
+
+  <div id="formWrap" style="display:none;">
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="fw-700 fs-5" id="stuName">-</div>
+        <div class="text-muted" id="stuClass">-</div>
+        <div class="mt-2">
+          <label class="form-label small fw-600 mb-1">วันที่กรอก</label>
+          <input type="date" id="visitDate" class="form-control">
+        </div>
+      </div>
+    </div>
+    <div class="alert alert-warning small">
+      <i class="bi bi-info-circle me-1"></i>กรอกข้อมูลตามจริง เมื่อเสร็จกด <b>ส่งข้อมูล</b> ด้านล่าง — ครูจะตรวจสอบอีกครั้ง
+    </div>
+    <div id="formFields"></div>
+
+    <!-- รูปภาพ -->
+    <div class="hv-section-title">📷 ภาพถ่ายบ้าน (ถ้ามี)</div>
+    <div class="small text-muted mb-2">หน้าบ้าน / ข้างบ้าน / นักเรียนกับผู้ปกครอง</div>
+    <div id="photoGrid" class="d-flex flex-wrap gap-2 mb-2"></div>
+    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="uploadPhoto(this.files[0])">
+    <button class="btn btn-outline-primary btn-sm mb-3" onclick="document.getElementById('photoInput').click()">
+      <i class="bi bi-camera me-1"></i>เพิ่มรูป
+    </button>
+  </div>
+
+  <div id="doneScreen">
+    <i class="bi bi-check-circle-fill text-success" style="font-size:4rem;"></i>
+    <h4 class="mt-3">ส่งข้อมูลเรียบร้อย</h4>
+    <p class="text-muted">ขอบคุณที่กรอกข้อมูลครับ/ค่ะ<br>ครูจะตรวจสอบอีกครั้ง</p>
+    <button class="btn btn-outline-primary" onclick="location.reload()">แก้ไขข้อมูลอีกครั้ง</button>
+  </div>
+
+  <div id="errScreen" style="display:none;" class="text-center py-5">
+    <i class="bi bi-x-circle-fill text-danger" style="font-size:3rem;"></i>
+    <h5 class="mt-3" id="errMsg">ลิงก์ไม่ถูกต้อง</h5>
+    <p class="text-muted">กรุณาขอลิงก์ใหม่จากครูที่ปรึกษา</p>
+  </div>
+</div>
+
+<div class="save-bar" id="saveBar" style="display:none;">
+  <div class="container d-flex gap-2">
+    <button class="btn btn-success btn-lg flex-grow-1" onclick="submitForm()">
+      <i class="bi bi-send me-1"></i>ส่งข้อมูล
+    </button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const THAI_MONTHS_F=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const code = new URLSearchParams(location.search).get('code');
+let curData = {}, curPhotos = [];
+
+/* SCHEMA — เหมือนฝั่งครู แต่ตัด "ตอนที่ 5 ความคิดเห็นครู" ออก (เป็นส่วนของครู) */
+const SCHEMA = [
+  { section:'ตอนที่ 1 ข้อมูลพื้นฐาน' },
+  { q:'1. ข้อมูลพื้นฐานนักเรียน' },
+  { type:'text', key:'nickname', label:'ชื่อเล่น' },
+  { type:'text', key:'nationality', label:'สัญชาติ' },
+  { type:'text', key:'ethnicity', label:'เชื้อชาติ' },
+  { type:'text', key:'religion', label:'ศาสนา' },
+  { type:'text', key:'birthdate', label:'วัน/เดือน/ปีเกิด' },
+  { type:'text', key:'age', label:'อายุ' },
+  { q:'2. ประวัติการเรียน (โรงเรียนเดิม)' },
+  { type:'text', key:'prev_school', label:'จบจากโรงเรียน' },
+  { type:'text', key:'prev_gpa', label:'ผลการเรียนเฉลี่ย' },
+  { q:'3. ข้อมูลสุขภาพ' },
+  { type:'text', key:'weight', label:'น้ำหนัก (กก.)' },
+  { type:'text', key:'height', label:'ส่วนสูง (ซม.)' },
+  { type:'text', key:'blood', label:'หมู่เลือด' },
+  { type:'text', key:'disease', label:'โรคประจำตัว (ถ้าไม่มีใส่ "ไม่มี")' },
+  { q:'4. ที่อยู่ของนักเรียน' },
+  { type:'textarea', key:'address', label:'ที่อยู่ปัจจุบัน', rows:2 },
+
+  { section:'ตอนที่ 3 ข้อมูลสถานะครัวเรือน' },
+  { type:'radio', key:'q13_house', label:'13. สถานะที่อยู่อาศัย',
+    opts:['บ้านของตนเอง/เจ้าของบ้าน','บ้านเช่า (เสียค่าเช่า)','อาศัยอยู่กับผู้อื่น/อยู่โดยไม่ค่าใช้จ่าย','บ้านพัก/หอพัก','อื่น ๆ'] },
+  { type:'radio', key:'q14_house_type', label:'14. ลักษณะกายภาพของบ้าน',
+    opts:['บ้านชั้นเดียว','บ้านสองชั้น','ทาวน์เฮ้าส์','อื่น ๆ'] },
+  { type:'checkbox', key:'q15_burden', label:'15. ครัวเรือนมีภาระพึ่งพิง',
+    opts:['มีคนพิการ/เจ็บป่วยเรื้อรัง','มีผู้สูงอายุ (มากกว่า 60 ปี)','มีคนอายุ 15-60 ปีที่ว่างงาน','เป็นบิดา/มารดาเลี้ยงเดี่ยว','ครัวเรือนไม่มีภาระพึ่งพิง'] },
+  { type:'radio', key:'q16_safety', label:'16. ความปลอดภัยของที่อยู่อาศัยและสภาพแวดล้อมบริเวณบ้าน',
+    opts:['ดี/มั่นคง/ปลอดภัย/เป็นสัดส่วน','เสี่ยง'] },
+  { type:'radio', key:'q17_living_with', label:'17. นักเรียนพักอาศัยอยู่กับ (ตอบเพียง 1 ข้อ)',
+    opts:['บิดาและมารดา','บิดา','มารดา','พี่/น้อง (ไม่ได้อยู่กับบิดา-มารดา)','เพื่อน/คนรู้จัก','ผู้ปกครองที่ไม่ใช่บิดา-มารดา','พักอยู่ที่โรงเรียน','พักอยู่คนเดียว','พักอยู่กับมูลนิธิ/วัด/นายจ้าง','อื่น ๆ'] },
+  { type:'radio', key:'q18_travel', label:'18. การเดินทางมาโรงเรียนของนักเรียน',
+    opts:['เดิน','จักรยาน','รถโรงเรียน','จักรยานยนต์ส่วนตัว','รถส่วนตัว','เรือส่วนตัว','จักรยานยนต์รับจ้าง','รถโดยสารประจำทาง/รับจ้าง','เรือโดยสารประจำทาง/รับจ้าง','เดินทางโดยรถไฟ','เดินทางโดยรถไฟฟ้า','อื่น ๆ'] },
+  { type:'text', key:'q18_cost', label:'ค่าใช้จ่ายในการเดินทาง ไป-กลับ (บาท/เดือน)' },
+  { type:'radio', key:'q19_distance', label:'19. ระยะทางจากบ้านถึงโรงเรียน',
+    opts:['0-5 กิโลเมตร','6-10 กิโลเมตร','11-15 กิโลเมตร','16-20 กิโลเมตร','21-40 กิโลเมตร','40 กิโลเมตรขึ้นไป'] },
+  { type:'radio', key:'q20_time', label:'20. ระยะเวลาในการเดินทางจากบ้านถึงโรงเรียน',
+    opts:['น้อยกว่า 30 นาที','30-50 นาที','1-3 ชั่วโมง','มากกว่า 3 ชั่วโมง'] },
+  { type:'radio', key:'q21_route_safety', label:'21. สภาพแวดล้อมระหว่างการเดินทางจากที่พักมาโรงเรียน',
+    opts:['ปลอดภัย','เสี่ยงอันตราย'] },
+  { type:'checkbox', key:'q22_electric', label:'22. แหล่งไฟฟ้าหลัก',
+    opts:['ไม่มีไฟฟ้า','มีไฟฟ้า (เครื่องปั่นไฟ/โซลาเซลล์)','มีไฟฟ้า (ไฟต่อพ่วง/แบตเตอรี่)','มีไฟฟ้า (ไฟบ้านหรือมิเตอร์)'] },
+  { type:'checkbox', key:'q23_water', label:'23. แหล่งน้ำดื่ม',
+    opts:['น้ำดื่มบรรจุขวด/ตู้หยอดน้ำ','น้ำบ่อ/น้ำบาดาล','น้ำฝน/น้ำประปาภูเขา/ลำธาร','น้ำประปา'] },
+  { type:'radio', key:'q24_disaster', label:'24. สภาพที่พักอาศัยและความปลอดภัยด้านภัยพิบัติ',
+    opts:['ไม่มีความเสี่ยง','มีความเสี่ยง'] },
+
+  { section:'ตอนที่ 4 ข้อมูลเชิงลึก' },
+  { type:'text', key:'q25_friend', label:'25. เพื่อนสนิทของนักเรียน' },
+];
+
+document.addEventListener('DOMContentLoaded', load);
+
+async function load() {
+  if (!code) return showErr('ไม่พบรหัสลิงก์');
+  try {
+    const r = await fetch('/api/hv-fill/'+encodeURIComponent(code));
+    if (!r.ok) { const e = await r.json().catch(()=>({})); return showErr(e.error||'ลิงก์ไม่ถูกต้อง'); }
+    const d = await r.json();
+    curData = d.data || {}; curPhotos = d.photos || [];
+    document.getElementById('stuName').textContent = d.student.name;
+    document.getElementById('stuClass').textContent = `ม.${d.student.class_level}/${d.student.room}  เลขที่ ${d.student.number??'-'}`;
+    document.getElementById('visitDate').value = todayISO();
+    if (d.confirmed) {
+      // ครูยืนยันแล้ว — แสดงอ่านอย่างเดียว
+      buildForm(true);
+      document.getElementById('saveBar').innerHTML = '<div class="container text-center text-success fw-600 py-2"><i class="bi bi-lock-fill"></i> ครูยืนยันข้อมูลแล้ว แก้ไขไม่ได้</div>';
+    } else {
+      buildForm(false);
+      document.getElementById('saveBar').style.display = '';
+    }
+    document.getElementById('loadingMsg').style.display='none';
+    document.getElementById('formWrap').style.display='';
+  } catch(e){ showErr('เกิดข้อผิดพลาด: '+e.message); }
+}
+
+function showErr(msg) {
+  document.getElementById('loadingMsg').style.display='none';
+  document.getElementById('errMsg').textContent = msg;
+  document.getElementById('errScreen').style.display='';
+}
+
+function buildForm(readonly) {
+  const box = document.getElementById('formFields');
+  const dis = readonly ? 'disabled' : '';
+  let html = '';
+  SCHEMA.forEach(item => {
+    if (item.section) { html += `<div class="hv-section-title">${item.section}</div>`; return; }
+    if (item.q) { html += `<div class="hv-q">${item.q}</div>`; return; }
+    const v = curData[item.key];
+    if (item.type==='text') {
+      html += `<div class="mb-2"><label class="form-label small fw-600 mb-1">${item.label}</label>
+        <input id="f_${item.key}" class="form-control" value="${esc(v||'')}" ${dis}></div>`;
+    } else if (item.type==='textarea') {
+      html += `<div class="mb-2"><label class="form-label small fw-600 mb-1">${item.label}</label>
+        <textarea id="f_${item.key}" class="form-control" rows="${item.rows||2}" ${dis}>${esc(v||'')}</textarea></div>`;
+    } else if (item.type==='radio') {
+      html += `<div class="hv-q">${item.label}</div>`;
+      item.opts.forEach((op,j)=>{
+        const ck = v===op?'checked':'';
+        html += `<div class="form-check"><input class="form-check-input" type="radio" name="f_${item.key}" id="f_${item.key}_${j}" value="${esc(op)}" ${ck} ${dis}>
+          <label class="form-check-label" for="f_${item.key}_${j}">${op}</label></div>`;
+      });
+    } else if (item.type==='checkbox') {
+      const arr = Array.isArray(v)?v:[];
+      html += `<div class="hv-q">${item.label}</div>`;
+      item.opts.forEach((op,j)=>{
+        const ck = arr.includes(op)?'checked':'';
+        html += `<div class="form-check"><input class="form-check-input" type="checkbox" name="f_${item.key}" id="f_${item.key}_${j}" value="${esc(op)}" ${ck} ${dis}>
+          <label class="form-check-label" for="f_${item.key}_${j}">${op}</label></div>`;
+      });
+    }
+  });
+  box.innerHTML = html;
+  renderPhotos(readonly);
+}
+
+function esc(s){ return String(s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function todayISO(){ return new Date().toISOString().split('T')[0]; }
+
+function collectData() {
+  const d = {};
+  SCHEMA.forEach(item => {
+    if (!item.key) return;
+    if (item.type==='text'||item.type==='textarea') {
+      d[item.key] = (document.getElementById('f_'+item.key)?.value||'').trim();
+    } else if (item.type==='radio') {
+      const c = document.querySelector(`input[name="f_${item.key}"]:checked`);
+      d[item.key] = c ? c.value : '';
+    } else if (item.type==='checkbox') {
+      d[item.key] = [...document.querySelectorAll(`input[name="f_${item.key}"]:checked`)].map(c=>c.value);
+    }
+  });
+  return d;
+}
+
+function renderPhotos(readonly) {
+  const grid = document.getElementById('photoGrid');
+  grid.innerHTML = curPhotos.length ? curPhotos.map(p=>`<img class="hv-thumb" src="/photos/${p}">`).join('')
+    : '<span class="text-muted small">ยังไม่มีรูป</span>';
+  if (readonly) document.getElementById('photoInput').previousElementSibling;
+}
+
+async function uploadPhoto(file) {
+  if (!file) return;
+  const fd = new FormData(); fd.append('file', file);
+  const grid = document.getElementById('photoGrid');
+  grid.insertAdjacentHTML('beforeend','<div class="spinner-border spinner-border-sm" id="sp"></div>');
+  try {
+    const r = await fetch('/api/hv-fill/'+encodeURIComponent(code)+'/photo', {method:'POST',body:fd});
+    const d = await r.json();
+    if (d.success){ curPhotos.push(d.photo); renderPhotos(false); } else alert(d.message);
+  } catch(e){ alert('อัพโหลดไม่สำเร็จ'); }
+  document.getElementById('photoInput').value='';
+  document.getElementById('sp')?.remove();
+}
+
+async function submitForm() {
+  const btn = event.target.closest('button');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังส่ง...';
+  try {
+    const r = await fetch('/api/hv-fill/'+encodeURIComponent(code), {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ data: collectData(), visit_date: document.getElementById('visitDate').value })
+    });
+    const d = await r.json();
+    if (d.success) {
+      document.getElementById('formWrap').style.display='none';
+      document.getElementById('saveBar').style.display='none';
+      document.getElementById('doneScreen').style.display='';
+      window.scrollTo(0,0);
+    } else { alert(d.message); btn.disabled=false; btn.innerHTML='<i class="bi bi-send me-1"></i>ส่งข้อมูล'; }
+  } catch(e){ alert('ส่งไม่สำเร็จ'); btn.disabled=false; btn.innerHTML='<i class="bi bi-send me-1"></i>ส่งข้อมูล'; }
+}
+</script>
+</body>
+</html>
