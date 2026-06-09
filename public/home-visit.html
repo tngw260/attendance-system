@@ -34,27 +34,42 @@
       padding:14mm 16mm; box-sizing:border-box; box-shadow:0 2px 14px rgba(0,0,0,.15);
       font-family:'TH Sarabun PSK','Sarabun',sans-serif; font-size:14pt; line-height:1.5; }
     .doc-page + .doc-page { page-break-before: always; }
-    .doc-head { text-align:center; margin-bottom:4mm; }
+    /* หัวเอกสาร */
+    .doc-head { text-align:center; margin-bottom:5mm; padding-bottom:3mm; border-bottom:0.5mm solid var(--primary,#0d3b8e); }
     .doc-head .logo { width:18mm; height:18mm; object-fit:contain; }
-    .doc-head h2 { font-size:16pt; font-weight:700; margin:1.5mm 0 0; }
-    .doc-head .sub { font-size:13pt; }
-    .doc-sec { font-weight:700; font-size:14pt; margin:4mm 0 1mm; border-bottom:0.3mm solid #000; padding-bottom:1mm; }
-    .doc-line { margin:1mm 0; }
+    .doc-head h2 { font-size:17pt; font-weight:700; margin:2mm 0 0; line-height:1.2; }
+    .doc-head .sub { font-size:13pt; color:#333; margin-top:0.5mm; }
+    /* แถบหัวข้อตอน — สวย ไม่ตกหน้า */
+    .doc-sec {
+      font-weight:700; font-size:14pt; margin:5mm 0 2mm; padding:1.5mm 3mm;
+      background:#e8eef7; border-left:1mm solid var(--primary,#0d3b8e); border-radius:1mm;
+      break-inside:avoid; break-after:avoid; page-break-inside:avoid; page-break-after:avoid;
+    }
+    .doc-line { margin:1.5mm 0; break-inside:avoid; page-break-inside:avoid; }
     .doc-line .lb { font-weight:600; }
     .dot { border-bottom:1px dotted #555; padding:0 3px; }
-    .doc-opts { margin:1mm 0; }
-    .doc-opts .opt { display:inline-block; margin-right:8mm; white-space:nowrap; }
-    .doc-box { border:1px solid #999; border-radius:2mm; min-height:14mm; padding:2mm 3mm; margin:1mm 0 2mm; }
-    .doc-photos { display:grid; grid-template-columns:repeat(2,1fr); gap:4mm; margin-top:3mm; }
-    .doc-photos figure { margin:0; text-align:center; }
-    .doc-photos img { width:100%; height:60mm; object-fit:cover; border:1px solid #999; border-radius:2mm; }
+    /* คำถาม + ตัวเลือก = อยู่ด้วยกัน ไม่แตกหน้า */
+    .doc-qblock { break-inside:avoid; page-break-inside:avoid; margin:2mm 0; }
+    .doc-qlabel { font-weight:600; margin-bottom:0.5mm; }
+    .doc-opts { margin:0.5mm 0; }
+    .doc-opts .opt { display:inline-block; margin:0 6mm 1mm 0; white-space:nowrap; }
+    .doc-box { border:1px solid #999; border-radius:2mm; min-height:13mm; padding:2mm 3mm; margin:1mm 0 2mm; break-inside:avoid; }
+    /* ภาพถ่าย = ขึ้นหน้าใหม่ ไม่แทรกกลาง */
+    .doc-photos-wrap { break-before:page; page-break-before:always; }
+    .doc-photos { display:grid; grid-template-columns:repeat(2,1fr); gap:5mm; margin-top:2mm; }
+    .doc-photos figure { margin:0; text-align:center; break-inside:avoid; page-break-inside:avoid; }
+    .doc-photos img { width:100%; height:62mm; object-fit:cover; border:1px solid #999; border-radius:2mm; }
     .doc-photos figcaption { font-size:11pt; margin-top:1mm; }
-    .doc-sign { display:flex; justify-content:space-around; margin-top:12mm; text-align:center; font-size:13pt; }
+    /* ลายเซ็น = ไม่ตกหน้า */
+    .doc-sign { display:flex; justify-content:space-around; margin-top:14mm; text-align:center;
+      font-size:13pt; break-inside:avoid; page-break-inside:avoid; }
+    .doc-sign > div { line-height:1.9; }
 
     @media print {
       .no-print, nav { display:none !important; }
-      .doc-page { box-shadow:none; margin:0; }
+      .doc-page { box-shadow:none; margin:0; padding:14mm 16mm; }
       @page { size:A4; margin:0; }
+      * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
     }
     [data-theme="dark"] .doc-page { color:#000; background:#fff; }
   </style>
@@ -492,19 +507,21 @@ function printOne() {
     if (item.type==='text') {
       body += `<div class="doc-line"><span class="lb">${item.label}</span> ${dot(val)}</div>`;
     } else if (item.type==='textarea') {
-      body += `<div class="doc-line"><span class="lb">${item.label}</span></div><div class="doc-box">${(val||'').replace(/\n/g,'<br>')}</div>`;
+      body += `<div class="doc-qblock"><div class="doc-qlabel">${item.label}</div><div class="doc-box">${(val||'').replace(/\n/g,'<br>')}</div></div>`;
     } else if (item.type==='radio') {
-      body += `<div class="doc-line"><span class="lb">${item.label}</span></div><div class="doc-opts">`
-            + item.opts.map(op => `<span class="opt">${val===op?'☑':'☐'} ${op}</span>`).join('') + `</div>`;
+      body += `<div class="doc-qblock"><div class="doc-qlabel">${item.label}</div><div class="doc-opts">`
+            + item.opts.map(op => `<span class="opt">${val===op?'☑':'☐'} ${op}</span>`).join('') + `</div></div>`;
     } else if (item.type==='checkbox') {
       const arr = Array.isArray(val)?val:[];
-      body += `<div class="doc-line"><span class="lb">${item.label}</span></div><div class="doc-opts">`
-            + item.opts.map(op => `<span class="opt">${arr.includes(op)?'☑':'☐'} ${op}</span>`).join('') + `</div>`;
+      body += `<div class="doc-qblock"><div class="doc-qlabel">${item.label}</div><div class="doc-opts">`
+            + item.opts.map(op => `<span class="opt">${arr.includes(op)?'☑':'☐'} ${op}</span>`).join('') + `</div></div>`;
     }
   });
   const photoHtml = photos.length ? `
-    <div class="doc-sec">ภาพถ่ายประกอบการเยี่ยมบ้าน</div>
-    <div class="doc-photos">${photos.map((p,i)=>`<figure><img src="/photos/${p}"><figcaption>ภาพที่ ${i+1}</figcaption></figure>`).join('')}</div>` : '';
+    <div class="doc-photos-wrap">
+      <div class="doc-sec">ภาพถ่ายประกอบการเยี่ยมบ้าน</div>
+      <div class="doc-photos">${photos.map((p,i)=>`<figure><img src="/photos/${p}"><figcaption>ภาพที่ ${i+1}</figcaption></figure>`).join('')}</div>
+    </div>` : '';
 
   document.getElementById('printArea').innerHTML = `
     <div class="doc-page">
