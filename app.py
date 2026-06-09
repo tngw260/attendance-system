@@ -3086,6 +3086,76 @@ def api_home_visits_list():
         result.append(d)
     return jsonify(result)
 
+@app.get('/api/home-visits/export')
+@login_required
+def api_home_visits_export():
+    """Export ข้อมูลเยี่ยมบ้านทั้งห้องเป็น Excel — Query: ?level=1&room=1"""
+    u = current_user()
+    level = request.args.get('level')
+    room = request.args.get('room')
+    where, params, _, _ = user_class_filter(u, {'level': level, 'room': room})
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT s.number, s.student_code, s.name, s.class_level, s.room,
+                   s.birthdate, s.national_id,
+                   hv.visited, hv.visit_date, hv.data
+            FROM students s
+            LEFT JOIN home_visits hv ON hv.student_id = s.id
+            WHERE 1=1 {where}
+            ORDER BY s.class_level, s.room, s.number, s.name
+        """, params).fetchall()
+
+    # คอลัมน์ตาม schema (key, หัวตาราง)
+    fields = [
+        ('nickname','ชื่อเล่น'), ('nationality','สัญชาติ'), ('ethnicity','เชื้อชาติ'),
+        ('religion','ศาสนา'), ('age','อายุ'),
+        ('prev_school','โรงเรียนเดิม'), ('prev_gpa','เกรดเฉลี่ย'),
+        ('weight','น้ำหนัก'), ('height','ส่วนสูง'), ('blood','หมู่เลือด'), ('disease','โรคประจำตัว'),
+        ('address','ที่อยู่'),
+        ('q13_house','สถานะที่อยู่อาศัย'), ('q14_house_type','ลักษณะบ้าน'),
+        ('q15_burden','ภาระพึ่งพิง'), ('q16_safety','ความปลอดภัยบ้าน'),
+        ('q17_living_with','พักอาศัยอยู่กับ'), ('q18_travel','การเดินทาง'),
+        ('q18_cost','ค่าเดินทาง/เดือน'), ('q19_distance','ระยะทาง'), ('q20_time','เวลาเดินทาง'),
+        ('q21_route_safety','ความปลอดภัยระหว่างทาง'), ('q22_electric','แหล่งไฟฟ้า'),
+        ('q23_water','แหล่งน้ำดื่ม'), ('q24_disaster','ความเสี่ยงภัยพิบัติ'),
+        ('q25_friend','เพื่อนสนิท'),
+        ('q27_need','สภาพที่น่าเป็นห่วง'), ('q27_summary','ข้อสรุปเยี่ยมบ้าน'),
+    ]
+
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = 'ข้อมูลเยี่ยมบ้าน'
+    headers = ['เลขที่','รหัสนักเรียน','ชื่อ-สกุล','ชั้น','ห้อง','วันเกิด','เลขบัตรประชาชน',
+               'เยี่ยมแล้ว','วันที่เยี่ยม'] + [h for _, h in fields]
+    hfill = PatternFill(fill_type='solid', fgColor='1A5276')
+    hfont = Font(bold=True, color='FFFFFF')
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.fill = hfill; c.font = hfont; c.alignment = Alignment(horizontal='center', wrap_text=True)
+
+    for r in rows:
+        try: data = json.loads(r['data'] or '{}')
+        except Exception: data = {}
+        line = [
+            r['number'], r['student_code'], r['name'], r['class_level'], r['room'],
+            r['birthdate'], r['national_id'],
+            'เยี่ยมแล้ว' if r['visited'] else 'ยังไม่เยี่ยม', r['visit_date'],
+        ]
+        for key, _ in fields:
+            v = data.get(key, '')
+            if isinstance(v, list): v = ', '.join(v)
+            line.append(v)
+        ws.append(line)
+
+    widths = [7, 14, 26, 6, 6, 14, 18, 12, 14] + [18]*len(fields)
+    for col, w in zip(ws.columns, widths):
+        ws.column_dimensions[col[0].column_letter].width = w
+    ws.freeze_panes = 'A2'
+
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    lv = level or 'all'; rm = room or 'all'
+    return send_file(buf, as_attachment=True,
+                     download_name=f'home_visit_m{lv}_{rm}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
 @app.get('/api/home-visits/<int:sid>')
 @login_required
 def api_home_visit_get(sid):

@@ -95,7 +95,7 @@
             <option value="">-- เลือกห้อง --</option>
           </select>
         </div>
-        <div class="col-md-7">
+        <div class="col-md-4">
           <div id="progressBar" style="display:none;">
             <label class="form-label small fw-600 mb-1">ความคืบหน้า</label>
             <div class="progress" style="height:24px;">
@@ -103,6 +103,11 @@
             </div>
             <small class="text-muted" id="progText"></small>
           </div>
+        </div>
+        <div class="col-md-3">
+          <button class="btn btn-outline-success w-100" onclick="exportExcel()" id="exportBtn" disabled>
+            <i class="bi bi-file-earmark-excel me-1"></i>Export Excel ทั้งห้อง
+          </button>
         </div>
       </div>
     </div>
@@ -141,10 +146,33 @@
           <i class="bi bi-camera me-1"></i>เพิ่มรูป
         </button>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer flex-wrap">
+        <button class="btn btn-outline-info" onclick="openCopyHelper()" title="คัดลอกทีละช่อง ไปกรอก Hero Obec Care">
+          <i class="bi bi-clipboard-check me-1"></i>คัดลอกสำหรับ Hero
+        </button>
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
         <button class="btn btn-success" onclick="printOne()"><i class="bi bi-printer me-1"></i>พิมพ์ฟอร์ม</button>
         <button class="btn btn-primary" onclick="saveVisit()"><i class="bi bi-save me-1"></i>บันทึก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Copy Helper สำหรับ Hero Obec Care -->
+<div class="modal fade no-print" id="copyModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title"><i class="bi bi-clipboard-check me-2"></i>คัดลอกไปกรอก Hero Obec Care</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info small mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          เปิด <a href="https://heroobeccare.obec.go.th/" target="_blank" rel="noopener">Hero Obec Care</a> ในอีกแท็บ →
+          กรอกช่องไหน กดปุ่ม <b>คัดลอก</b> ช่องนั้น → ไปวาง (Ctrl+V / Cmd+V) ในเว็บ Hero
+        </div>
+        <div id="copyList"></div>
       </div>
     </div>
   </div>
@@ -284,7 +312,15 @@ async function loadList() {
   } catch(e){ box.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
 }
 
+function exportExcel() {
+  const v = document.getElementById('selClass').value;
+  if (!v) { alert('เลือกห้องก่อน'); return; }
+  const [level, room] = v.split('_');
+  window.location = `/api/home-visits/export?level=${level}&room=${room}`;
+}
+
 function renderList() {
+  document.getElementById('exportBtn').disabled = false;
   const done = curStudents.filter(s=>s.visited).length, total = curStudents.length;
   const pct = total ? Math.round(done/total*100) : 0;
   document.getElementById('progressBar').style.display='';
@@ -364,6 +400,46 @@ async function saveVisit() {
       })});
     visitModal.hide(); loadList();
   } catch(e){ alert('บันทึกไม่สำเร็จ: '+e.message); }
+}
+
+let copyModal = null;
+function openCopyHelper() {
+  if (!copyModal) copyModal = new bootstrap.Modal('#copyModal');
+  const s = curVisit.student, d = collectData();
+  // สร้างรายการช่อง พร้อมปุ่ม copy — รวมข้อมูลนักเรียนพื้นฐานด้วย
+  const items = [
+    ['ชื่อ-นามสกุล', s.name],
+    ['ชั้น', `ม.${s.class_level}/${s.room}`],
+    ['เลขที่', s.number ?? ''],
+    ['เลขประจำตัวนักเรียน', s.student_code ?? ''],
+    ['เลขบัตรประชาชน', s.national_id ?? ''],
+    ['วันเกิด', s.birthdate ? pcDate(s.birthdate) : ''],
+  ];
+  SCHEMA.forEach(item => {
+    if (!item.key) return;
+    let v = d[item.key];
+    if (Array.isArray(v)) v = v.join(', ');
+    if (v) items.push([item.label.replace(/^\d+\.\s*/,''), v]);
+  });
+  document.getElementById('copyList').innerHTML = items.map(([lb, val], i) => `
+    <div class="d-flex align-items-center gap-2 p-2 border-bottom">
+      <div class="flex-grow-1">
+        <div class="small text-muted">${lb}</div>
+        <div class="fw-600" id="cpv_${i}">${val || '<span class="text-muted">— ว่าง —</span>'}</div>
+      </div>
+      ${val ? `<button class="btn btn-sm btn-outline-info" onclick="copyField(${i}, this)"><i class="bi bi-clipboard"></i> คัดลอก</button>` : ''}
+    </div>`).join('');
+  copyModal.show();
+}
+
+function copyField(i, btn) {
+  const txt = document.getElementById('cpv_'+i).textContent;
+  navigator.clipboard.writeText(txt).then(() => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check2"></i> คัดลอกแล้ว';
+    btn.classList.replace('btn-outline-info','btn-success');
+    setTimeout(() => { btn.innerHTML = orig; btn.classList.replace('btn-success','btn-outline-info'); }, 1500);
+  }).catch(()=>alert('คัดลอกไม่สำเร็จ'));
 }
 
 function setVal(id,v){ const el=document.getElementById(id); if(el) el.value=v||''; }
