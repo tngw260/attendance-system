@@ -78,13 +78,6 @@
     }
     #confirmBanner .cb-cancel { background: #dc3545; color: white; }
     #confirmBanner .cb-ok { background: #198754; color: white; }
-    #confirmBanner .cb-countdown {
-      position: absolute;
-      bottom: 0; left: 0; height: 4px;
-      background: #ffc107;
-      width: 100%;
-      transform-origin: left;
-    }
     @media (max-width: 575px) {
       #confirmBanner { flex-wrap: wrap; }
       #confirmBanner .cb-actions { width: 100%; justify-content: stretch; }
@@ -185,14 +178,10 @@
           <label class="btn btn-outline-light" for="boxLg">ใหญ่ (เร็ว)</label>
         </div>
       </div>
-      <div class="col-12 col-md-6">
-        <label class="small fw-600 d-block mb-1">🛡️ ยืนยันก่อนบันทึก</label>
-        <div class="form-check form-switch ms-2">
-          <input class="form-check-input" type="checkbox" id="confirmMode" style="transform:scale(1.4); cursor:pointer;">
-          <label class="form-check-label small" for="confirmMode">
-            แสดงยืนยันทุกครั้ง (กันสแกนผิด)
-          </label>
-        </div>
+      <div class="col-12 col-md-6 small" style="color:#8fd19e;">
+        <i class="bi bi-shield-check me-1"></i>
+        สแกนแล้วจะแสดง <b>ชื่อ + รูป</b> ให้ตรวจก่อน<br>
+        บันทึกเมื่อกดปุ่ม <b>"บันทึก"</b> เท่านั้น
       </div>
     </div>
   </div>
@@ -216,7 +205,6 @@
       <button class="cb-cancel" onclick="cancelConfirm()">❌ ยกเลิก</button>
       <button class="cb-ok" onclick="okConfirm()">✅ บันทึก</button>
     </div>
-    <div class="cb-countdown" id="cbCountdown"></div>
   </div>
 
   <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
@@ -254,10 +242,9 @@ let lastScannedId = null;
 let lastScannedTime = 0;
 let soundOn = true;
 let scanPaused = false;          // pause หลังสแกนแต่ละครั้ง
-let pendingConfirm = null;       // {sid, status, timer, interval}
+let pendingConfirm = null;       // {sid, status}
 const SCAN_DEDUP_MS = 3000;
 const PAUSE_AFTER_SCAN_MS = 1500;
-const CONFIRM_COUNTDOWN_MS = 3500;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
@@ -266,8 +253,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const savedBoxSize = localStorage.getItem('scanBoxSize') || '0.55';
   const r = document.querySelector(`input[name="boxSize"][value="${savedBoxSize}"]`);
   if (r) r.checked = true;
-  // ยืนยันก่อนบันทึก = เปิดเป็นค่าเริ่มต้น (UI ปลอดภัย) ยกเว้นผู้ใช้เคยปิดเอง
-  document.getElementById('confirmMode').checked = (localStorage.getItem('scanConfirm') !== '0');
 
   // Save preferences เมื่อเปลี่ยน
   document.querySelectorAll('input[name="boxSize"]').forEach(el => {
@@ -275,9 +260,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       localStorage.setItem('scanBoxSize', el.value);
       restartScanner();
     });
-  });
-  document.getElementById('confirmMode').addEventListener('change', e => {
-    localStorage.setItem('scanConfirm', e.target.checked ? '1' : '0');
   });
 
   // แสดง/ซ่อน hint "ครูเวรสแกนได้ทุกห้อง" ตามสถานะ
@@ -364,21 +346,14 @@ async function onScanSuccess(decodedText) {
   }
 
   const status = document.querySelector('input[name="scanStatus"]:checked').value;
-  const confirmMode = document.getElementById('confirmMode').checked;
 
-  if (confirmMode) {
-    // ไม่ส่งทันที — ดึงข้อมูลนักเรียนก่อนเพื่อแสดงใน banner
-    try {
-      const stu = await apiFetch(`/api/students/${sid}/basic`);
-      showConfirmBanner(stu, status);
-    } catch (e) {
-      addRecent({ name: e.message, detail: 'sid: ' + sid }, 'error');
-      playSound('err');
-    }
-  } else {
-    // Auto mode — บันทึกทันที
-    await commitScan(+sid, status);
-    pauseCamera(PAUSE_AFTER_SCAN_MS);
+  // แสดงชื่อ+รูปให้ครูดูก่อนเสมอ — บันทึกเมื่อกด "บันทึก" เท่านั้น
+  try {
+    const stu = await apiFetch(`/api/students/${sid}/basic`);
+    showConfirmBanner(stu, status);
+  } catch (e) {
+    addRecent({ name: e.message, detail: 'sid: ' + sid }, 'error');
+    playSound('err');
   }
 }
 
@@ -433,22 +408,12 @@ function showConfirmBanner(stu, status) {
   banner.classList.add('show');
   playSound('ok');
 
-  // Countdown progress bar
-  const countdown = document.getElementById('cbCountdown');
-  countdown.style.transition = 'none';
-  countdown.style.transform = 'scaleX(1)';
-  void countdown.offsetWidth; // reflow
-  countdown.style.transition = `transform ${CONFIRM_COUNTDOWN_MS}ms linear`;
-  countdown.style.transform = 'scaleX(0)';
-
-  const autoConfirm = setTimeout(() => okConfirm(), CONFIRM_COUNTDOWN_MS);
-
-  pendingConfirm = { sid: stu.id, status, timer: autoConfirm };
+  // รอครูกด "บันทึก" เท่านั้น — ไม่บันทึกอัตโนมัติ
+  pendingConfirm = { sid: stu.id, status };
 }
 
 async function okConfirm() {
   if (!pendingConfirm) return;
-  clearTimeout(pendingConfirm.timer);
   const { sid, status } = pendingConfirm;
   pendingConfirm = null;
   hideConfirmBanner();
@@ -458,7 +423,6 @@ async function okConfirm() {
 
 function cancelConfirm() {
   if (!pendingConfirm) return;
-  clearTimeout(pendingConfirm.timer);
   pendingConfirm = null;
   hideConfirmBanner();
   // เคลียร์ dedup เพื่อให้สแกนคนเดียวกันซ้ำได้ทันที (กรณีต้องสแกนใหม่)

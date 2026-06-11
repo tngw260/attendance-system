@@ -175,12 +175,15 @@
     }
     .sc-qr img, .sc-qr canvas, .sc-qr div { width: 100% !important; height: 100% !important; display: block; }
     .sc-qr-label {
-      font-size: 5pt;
-      color: rgba(0,0,0,.55);
+      font-size: 5.5pt;
+      color: rgba(0,0,0,.7);
       margin-top: 0.6mm;
-      letter-spacing: 0.5pt;
-      text-transform: uppercase;
       font-weight: 600;
+      max-width: 22mm;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     /* FOOTER — ลายเซ็น ผอ. */
@@ -541,7 +544,7 @@ function renderFront(s, theme) {
     </div>
     <div class="sc-qr-wrap">
       <div class="sc-qr"><div data-qr="${s.id}" data-qr-size="160" style="width:100%;height:100%;"></div></div>
-      <div class="sc-qr-label">SCAN</div>
+      <div class="sc-qr-label">${studentFullName(s)}</div>
     </div>
     <div class="sc-sign">
       <div class="left-note">บัตรนี้เป็นกรรมสิทธิ์ของโรงเรียน</div>
@@ -588,6 +591,11 @@ function renderBack(s, theme) {
       <br>* ผู้ปกครองสแกน QR เพื่อดูข้อมูลบุตรหลานได้ตลอด 24 ชม.
     </div>
   </div>`;
+}
+
+// ชื่อ-สกุลแบบสั้น (ตัดคำนำหน้า) สำหรับแสดงใต้ QR
+function studentFullName(s) {
+  return (s.name || '').replace(/^(เด็กชาย|เด็กหญิง|นางสาว|นาย|ด\.ช\.|ด\.ญ\.)\s*/, '').trim();
 }
 
 function academicYearBE() {

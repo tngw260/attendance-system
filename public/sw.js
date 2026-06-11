@@ -9,9 +9,10 @@ const STATIC_CACHE = `school-static-${VERSION}`;
 const NET_TIMEOUT_MS = 2500;
 
 // network-first แข่งกับ timeout: server เร็ว = ได้ของใหม่, server ช้า = ใช้ cache ไม่ต้องรอ
+// cache:'no-cache' = ข้าม HTTP disk cache ไปถาม server เสมอ (ETag → 304 ถ้าไม่เปลี่ยน = ยังเร็ว)
 function networkFirstWithTimeout(request) {
   return caches.match(request).then(cached => {
-    const network = fetch(request).then(res => {
+    const network = fetch(request, { cache: 'no-cache' }).then(res => {
       if (res.ok) {
         const clone = res.clone();
         caches.open(STATIC_CACHE).then(c => c.put(request, clone));
