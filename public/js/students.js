@@ -212,14 +212,18 @@ async function genParentCode(sid) {
 
 async function showParentCode(sid) {
   try {
-    const students = await apiFetch('/api/students');
-    const s = students.find(x => x.id === sid);
+    // ใช้ข้อมูลที่โหลดไว้แล้วก่อน (เร็ว) — fallback ไป API ถ้าไม่เจอ
+    let s = allStudents.find(x => x.id === sid);
+    if (!s) {
+      const students = await apiFetch('/api/students');
+      s = students.find(x => x.id === sid);
+    }
     if (!s || !s.parent_code) {
       showToast('ยังไม่มีรหัสผู้ปกครอง', 'warning');
       return;
     }
     const url = `${location.origin}/parent.html?code=${s.parent_code}`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(url)}`;
+    const qrUrl = makeQRDataURL(url, 240);  // QR สร้างในเครื่อง
 
     const modal = document.getElementById('parentCodeModal') || (() => {
       const div = document.createElement('div');

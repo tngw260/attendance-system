@@ -173,7 +173,7 @@
       border-radius: 1mm;
       border: 0.2mm solid rgba(0,0,0,.15);
     }
-    .sc-qr img { width: 100%; height: 100%; display: block; }
+    .sc-qr img, .sc-qr canvas, .sc-qr div { width: 100% !important; height: 100% !important; display: block; }
     .sc-qr-label {
       font-size: 5pt;
       color: rgba(0,0,0,.55);
@@ -247,7 +247,9 @@
       width: 18mm; height: 18mm; background: white;
       padding: 0.5mm; border-radius: 1mm; margin: 0 auto;
     }
-    .student-card.back .pcode-block .pcode-qr img { width: 100%; height: 100%; display: block; }
+    .student-card.back .pcode-block .pcode-qr img,
+    .student-card.back .pcode-block .pcode-qr canvas,
+    .student-card.back .pcode-block .pcode-qr div { width: 100% !important; height: 100% !important; display: block; }
     .student-card.back .pcode-block .pcode-text {
       font-family: 'Courier New', monospace;
       font-weight: 700; letter-spacing: 0.5pt;
@@ -383,6 +385,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/qrcode.min.js"></script>
 <script src="/js/common.js"></script>
 <script>
 let allClasses = [];
@@ -477,6 +480,7 @@ function renderCards(students, level, room) {
     }
   });
   document.getElementById('content').innerHTML = html;
+  renderLocalQRs();  // สร้าง QR ในเครื่อง (ไม่พึ่งเน็ตนอก)
 
   // Auto-shrink ชื่อนักเรียนทุกใบให้พอดี (รัน 2 รอบ — กัน font ยังไม่โหลด)
   requestAnimationFrame(() => {
@@ -509,7 +513,6 @@ function renderPage(students, theme, side) {
 }
 
 function renderFront(s, theme) {
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data=${s.id}`;
   const photoHtml = s.photo
     ? `<img class="sc-photo" src="/photos/${s.photo}" alt="">`
     : `<div class="sc-photo-placeholder"><i class="bi bi-person"></i></div>`;
@@ -537,7 +540,7 @@ function renderFront(s, theme) {
       </div>
     </div>
     <div class="sc-qr-wrap">
-      <div class="sc-qr"><img src="${qrUrl}" alt="QR"></div>
+      <div class="sc-qr"><div data-qr="${s.id}" data-qr-size="160" style="width:100%;height:100%;"></div></div>
       <div class="sc-qr-label">SCAN</div>
     </div>
     <div class="sc-sign">
@@ -554,13 +557,10 @@ function renderBack(s, theme) {
   const year = academicYearBE();
   const pcode = s.parent_code || '------';
   const parentUrl = `${location.origin}/parent.html?code=${s.parent_code || ''}`;
-  const pqrUrl = s.parent_code
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=0&data=${encodeURIComponent(parentUrl)}`
-    : '';
 
   const pcodeBlock = s.parent_code
     ? `<div class="pcode-block">
-         <div class="pcode-qr"><img src="${pqrUrl}" alt="QR"></div>
+         <div class="pcode-qr"><div data-qr="${parentUrl.replace(/"/g,'&quot;')}" data-qr-size="140" style="width:100%;height:100%;"></div></div>
          <div class="pcode-text">${pcode}</div>
          <div style="font-size:5.5pt;opacity:.75;">รหัสผู้ปกครอง</div>
        </div>`

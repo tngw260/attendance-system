@@ -58,9 +58,13 @@
     }
     .qr-card .qrimg {
       display: block;
-      object-fit: contain;
       flex-shrink: 0;
-      /* QR ขอจาก server โดยมี margin=4 อยู่แล้ว = quiet zone เพียงพอ */
+    }
+    /* qrcodejs สร้าง <img>/<canvas> ข้างใน — บังคับให้เต็มกรอบ */
+    .qr-card .qrimg img, .qr-card .qrimg canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
     }
     .qr-card .num { font-weight: bold; font-size: 9pt; margin-top: 0.8mm; line-height: 1; }
     .qr-card .name {
@@ -130,6 +134,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/qrcode.min.js"></script>
 <script src="/js/common.js"></script>
 <script>
 let allClasses = [];
@@ -218,9 +223,10 @@ function renderBook(students, level, room, sizeMm, cols, perPage, rowMm) {
       </div>
       <div class="qr-grid" style="grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, ${rowMm}mm);">`;
     page.forEach(s => {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx}x${qrPx}&margin=4&data=${s.id}`;
+      // QR สร้างในเครื่อง — เร็ว + พิมพ์ได้แม้เน็ตช้า (padding ขาว = quiet zone)
       html += `<div class="qr-card">
-        <img class="qrimg" src="${qrUrl}" alt="QR ${s.id}" style="width:${sizeMm}mm;height:${sizeMm}mm;">
+        <div class="qrimg" data-qr="${s.id}" data-qr-size="${qrPx}"
+          style="width:${sizeMm}mm;height:${sizeMm}mm;padding:1mm;background:#fff;box-sizing:border-box;"></div>
         <div class="num">${s.number ?? '-'}</div>
         <div class="name">${s.name}</div>
         <div class="code">${s.student_code || ''}</div>
@@ -229,6 +235,7 @@ function renderBook(students, level, room, sizeMm, cols, perPage, rowMm) {
     html += `</div></div>`;
   });
   document.getElementById('content').innerHTML = html;
+  renderLocalQRs();
 }
 </script>
 </body>

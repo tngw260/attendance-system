@@ -1,11 +1,30 @@
-// Service worker v2 — strategy ที่ deploy CSS/JS ได้ทันที
+// Service worker v3 — strategy ที่ deploy CSS/JS ได้ทันที + ไม่ค้างตอน server ช้า
 // - HTML/API → network-first
-// - CSS/JS → network-first + cache fallback (ให้ update ทันที)
+// - CSS/JS → network-first แต่ถ้าช้าเกิน 2.5s และมี cache → ใช้ cache ทันที
 // - Images/fonts → cache-first (เปลี่ยนน้อย, ประหยัด data)
 
-const VERSION = 'v2-2026';
+const VERSION = 'v3-2026';
 const CACHE_NAME = `school-${VERSION}`;
 const STATIC_CACHE = `school-static-${VERSION}`;
+const NET_TIMEOUT_MS = 2500;
+
+// network-first แข่งกับ timeout: server เร็ว = ได้ของใหม่, server ช้า = ใช้ cache ไม่ต้องรอ
+function networkFirstWithTimeout(request) {
+  return caches.match(request).then(cached => {
+    const network = fetch(request).then(res => {
+      if (res.ok) {
+        const clone = res.clone();
+        caches.open(STATIC_CACHE).then(c => c.put(request, clone));
+      }
+      return res;
+    });
+    if (!cached) return network;  // ไม่มี cache → รอ network อย่างเดียว
+    const timer = new Promise(resolve =>
+      setTimeout(() => resolve(cached), NET_TIMEOUT_MS));
+    // ตัวไหนมาก่อนใช้ตัวนั้น — network ยัง update cache เบื้องหลังเสมอ
+    return Promise.race([network.catch(() => cached), timer]);
+  });
+}
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
@@ -25,20 +44,10 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (event.request.method !== 'GET') return;
 
-  // CSS/JS — network-first (อัพเดททันทีเมื่อ deploy)
+  // CSS/JS — network-first + timeout fallback (อัพเดททันทีเมื่อ deploy แต่ไม่ค้างตอน server ช้า)
   if (url.pathname.startsWith('/css/') || url.pathname.startsWith('/js/') ||
       url.pathname.endsWith('.css') || url.pathname.endsWith('.js')) {
-    event.respondWith(
-      fetch(event.request)
-        .then(res => {
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(STATIC_CACHE).then(c => c.put(event.request, clone));
-          }
-          return res;
-        })
-        .catch(() => caches.match(event.request))
-    );
+    event.respondWith(networkFirstWithTimeout(event.request));
     return;
   }
 

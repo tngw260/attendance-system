@@ -232,7 +232,11 @@ function renderPhotos(readonly) {
   const grid = document.getElementById('photoGrid');
   grid.innerHTML = curPhotos.length ? curPhotos.map(p=>`<img class="hv-thumb" src="/photos/${p}">`).join('')
     : '<span class="text-muted small">ยังไม่มีรูป</span>';
-  if (readonly) document.getElementById('photoInput').previousElementSibling;
+  // โหมดยืนยันแล้ว → ซ่อนปุ่มเพิ่มรูป
+  if (readonly) {
+    const btn = document.getElementById('photoInput')?.nextElementSibling;
+    if (btn) btn.style.display = 'none';
+  }
 }
 
 async function uploadPhoto(file) {

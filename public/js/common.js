@@ -149,6 +149,7 @@ async function apiFetch(url, options = {}) {
     headers: { ...defaults.headers, ...(options.headers || {}) }
   });
   if (res.status === 401) {
+    try { sessionStorage.removeItem('authMe.v1'); } catch {}
     if (!location.pathname.endsWith('login.html')) location.href = '/login.html';
     throw new Error('unauthorized');
   }
@@ -244,10 +245,46 @@ function injectGlobalSearch() {
   input.addEventListener('focus', () => { if (input.value.trim()) box.style.display = ''; });
 }
 
+// cache ข้อมูลผู้ใช้ใน sessionStorage — หน้าโหลดทันทีไม่ต้องรอ network (revalidate เบื้องหลัง)
+const USER_CACHE_KEY = 'authMe.v1';
+const USER_CACHE_TTL = 10 * 60 * 1000; // 10 นาที
+
+function readUserCache() {
+  try {
+    const raw = sessionStorage.getItem(USER_CACHE_KEY);
+    if (!raw) return null;
+    const { user, ts } = JSON.parse(raw);
+    if (!user || Date.now() - ts > USER_CACHE_TTL) return null;
+    return user;
+  } catch { return null; }
+}
+function writeUserCache(user) {
+  try { sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify({ user, ts: Date.now() })); } catch {}
+}
+function clearUserCache() {
+  try { sessionStorage.removeItem(USER_CACHE_KEY); } catch {}
+}
+
 async function loadCurrentUser() {
+  // 1) มี cache → ใช้ทันที (เร็ว) แล้วตรวจสอบกับ server เบื้องหลัง
+  const cached = readUserCache();
+  if (cached) {
+    currentUser = cached;
+    setupUserUI();
+    // revalidate เบื้องหลัง — ถ้า session หมด/ข้อมูลเปลี่ยน ค่อยจัดการ
+    apiFetch('/api/auth/me').then(data => {
+      writeUserCache(data.user);
+      if (data.user?.must_change_pw && !location.pathname.endsWith('change-password.html')) {
+        location.href = '/change-password.html';
+      }
+    }).catch(() => {});  // 401 → apiFetch redirect ไป login เอง
+    return currentUser;
+  }
+  // 2) ไม่มี cache → โหลดปกติ
   try {
     const data = await apiFetch('/api/auth/me');
     currentUser = data.user;
+    writeUserCache(currentUser);
 
     // Force change password if flagged
     if (currentUser?.must_change_pw &&
@@ -256,6 +293,16 @@ async function loadCurrentUser() {
       return null;
     }
 
+    setupUserUI();
+    return currentUser;
+  } catch (e) {
+    if (e.message !== 'unauthorized') console.error(e);
+    return null;
+  }
+}
+
+function setupUserUI() {
+  try {
     // Upgrade "คะแนน" link → "คะแนนความประพฤติ" dropdown
     upgradeBehaviorMenu();
     // Add Heatmap link (after รายงาน) if not present
@@ -295,9 +342,8 @@ async function loadCurrentUser() {
     if (currentUser?.role !== 'admin') {
       document.querySelectorAll('.admin-only').forEach(e => e.style.display = 'none');
     }
-    return currentUser;
   } catch (e) {
-    return null;
+    console.error(e);
   }
 }
 
@@ -545,6 +591,7 @@ function goBack() {
 
 async function logout() {
   if (!confirm('ออกจากระบบ?')) return;
+  clearUserCache();
   try {
     await apiFetch('/api/auth/logout', { method: 'POST' });
   } catch {}
@@ -552,6 +599,38 @@ async function logout() {
 }
 
 function classLabel(level, room) { return `ม.${level}/${room}`; }
+
+// สร้าง QR เป็น data URL (สำหรับใช้ใน <img> หรือหน้าต่างพิมพ์)
+function makeQRDataURL(text, size = 200) {
+  if (typeof QRCode === 'undefined') return '';
+  const tmp = document.createElement('div');
+  tmp.style.cssText = 'position:absolute;left:-9999px;';
+  document.body.appendChild(tmp);
+  try {
+    new QRCode(tmp, { text: String(text), width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
+    const canvas = tmp.querySelector('canvas');
+    return canvas ? canvas.toDataURL('image/png') : (tmp.querySelector('img')?.src || '');
+  } finally {
+    tmp.remove();
+  }
+}
+
+// สร้าง QR ในเครื่อง (ใช้ /js/qrcode.min.js) แทนการเรียก api.qrserver.com
+// ใช้: ใส่ <div data-qr="ข้อความ" data-qr-size="160"></div> แล้วเรียก renderLocalQRs()
+function renderLocalQRs(root) {
+  if (typeof QRCode === 'undefined') return;  // หน้านี้ไม่ได้โหลด qrcode.min.js
+  (root || document).querySelectorAll('[data-qr]').forEach(el => {
+    if (el.dataset.qrDone) return;
+    const size = parseInt(el.dataset.qrSize || '160', 10);
+    el.innerHTML = '';
+    new QRCode(el, {
+      text: String(el.dataset.qr),
+      width: size, height: size,
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+    el.dataset.qrDone = '1';
+  });
+}
 
 function thaiYear() {
   const m = new Date().getMonth() + 1;
