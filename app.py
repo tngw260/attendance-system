@@ -3071,6 +3071,23 @@ def api_students_search():
         rows = con.execute(sql, [pattern, pattern, pattern] + params).fetchall()
     return jsonify(rows_to_list(rows))
 
+@app.get('/api/students/search-all')
+@login_required
+def api_students_search_all():
+    """ค้นหานักเรียนทุกห้อง (ข้อมูลพื้นฐาน) — สำหรับครูเวรเช็คมาสายเด็กที่ไม่มีบัตร"""
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        return jsonify([])
+    pattern = f'%{q}%'
+    with get_db() as con:
+        rows = con.execute("""
+            SELECT id, number, student_code, name, class_level, room, photo
+            FROM students
+            WHERE (name LIKE ? OR student_code LIKE ? OR CAST(number AS TEXT) LIKE ?)
+            ORDER BY class_level, room, number, name LIMIT 20
+        """, (pattern, pattern, pattern)).fetchall()
+    return jsonify(rows_to_list(rows))
+
 # ── HOME VISITS (เยี่ยมบ้าน) ───────────────────────────────
 
 @app.get('/api/home-visits')
