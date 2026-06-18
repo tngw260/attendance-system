@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ใบรหัสผู้ปกครอง</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    .controls { background:#f0f4fb; padding:12px; border-bottom:2px solid var(--primary); }
+    /* A4 — ใบแจก 2 คอลัมน์ × 5 แถว = 10 ใบ/หน้า */
+    .pc-page {
+      width:210mm; min-height:297mm; margin:10mm auto; background:#fff; color:#000;
+      padding:10mm; box-sizing:border-box; box-shadow:0 2px 14px rgba(0,0,0,.15);
+      font-family:'TH Sarabun PSK','Sarabun',sans-serif;
+      display:grid; grid-template-columns:repeat(2,1fr); grid-auto-rows:50mm; gap:4mm;
+      page-break-after:always;
+    }
+    .pc-page:last-child { page-break-after:auto; }
+    .pc-slip {
+      border:1px dashed #888; border-radius:2mm; padding:3mm 4mm;
+      display:flex; align-items:center; gap:3mm; box-sizing:border-box; overflow:hidden;
+    }
+    .pc-slip .qr { width:30mm; height:30mm; flex-shrink:0; background:#fff; }
+    .pc-slip .qr canvas, .pc-slip .qr img { width:100% !important; height:100% !important; }
+    .pc-slip .info { flex:1; min-width:0; font-size:11pt; line-height:1.35; }
+    .pc-slip .school { font-size:9pt; color:#555; }
+    .pc-slip .sname { font-weight:700; font-size:12pt; }
+    .pc-slip .scls { font-size:10pt; color:#444; }
+    .pc-slip .code { font-family:'Courier New',monospace; font-weight:700; font-size:15pt;
+      letter-spacing:2px; color:#0d3b8e; margin:1mm 0; }
+    .pc-slip .hint { font-size:8.5pt; color:#666; }
+    .pc-slip .nocode { color:#c00; font-size:10pt; }
+
+    @media print {
+      .no-print, nav { display:none !important; }
+      .pc-page { box-shadow:none; margin:0; }
+      @page { size:A4; margin:0; }
+    }
+    [data-theme="dark"] .pc-page { color:#000; background:#fff; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <div id="userBadge" class="d-flex align-items-center"></div>
+  </div>
+</nav>
+
+<div class="controls no-print">
+  <div class="container">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small fw-600 mb-1">เลือกห้อง</label>
+        <select id="selClass" class="form-select form-select-sm">
+          <option value="">-- เลือกห้อง --</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button class="btn btn-primary btn-sm w-100" onclick="loadSlips()">
+          <i class="bi bi-arrow-clockwise me-1"></i>โหลด
+        </button>
+      </div>
+      <div class="col-md-3">
+        <button class="btn btn-success btn-sm w-100" onclick="genMissing()" id="genBtn" disabled>
+          <i class="bi bi-plus-circle me-1"></i>สร้างรหัสที่ยังไม่มี
+        </button>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-dark btn-sm w-100" onclick="window.print()" id="printBtn" disabled>
+          <i class="bi bi-printer-fill me-1"></i>พิมพ์
+        </button>
+      </div>
+    </div>
+    <div class="small text-muted mt-2">
+      <i class="bi bi-info-circle me-1"></i>
+      ใบแจกผู้ปกครอง — สแกน QR หรือกรอกรหัสเข้าดูประวัติมาเรียน + คะแนนความประพฤติของบุตรหลาน • ตัดตามเส้นปะแจกรายคน
+    </div>
+  </div>
+</div>
+
+<div id="content">
+  <div class="pc-page" style="grid-template-columns:1fr; min-height:auto;">
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-people fs-1 d-block mb-2"></i>เลือกห้องแล้วกด "โหลด"
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/qrcode.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let allClasses = [], schoolName = 'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  try {
+    const t = await (await fetch('/api/public/theme')).json();
+    if (t.school_name) schoolName = t.school_name;
+    allClasses = await apiFetch('/api/classes');
+    const sel = document.getElementById('selClass');
+    const grouped = {};
+    allClasses.forEach(c => { (grouped[c.class_level] = grouped[c.class_level]||[]).push(c); });
+    Object.keys(grouped).sort((a,b)=>+a-+b).forEach(lv => {
+      const og = document.createElement('optgroup'); og.label = `มัธยมศึกษาปีที่ ${lv}`;
+      grouped[lv].forEach(c => {
+        const o = document.createElement('option');
+        o.value = `${c.class_level}_${c.room}`;
+        o.textContent = `ม.${c.class_level}/${c.room} (${c.count} คน)`;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+    if (currentUser?.role==='teacher' && currentUser?.assigned_level) {
+      sel.value = `${currentUser.assigned_level}_${currentUser.assigned_room||''}`;
+      if (sel.value && sel.value!=='_') loadSlips();
+    }
+  } catch(e){ alert(e.message); }
+});
+
+let curList = [];
+async function loadSlips() {
+  const v = document.getElementById('selClass').value;
+  if (!v) { alert('เลือกห้องก่อน'); return; }
+  const [level, room] = v.split('_');
+  document.getElementById('content').innerHTML =
+    '<div class="pc-page" style="grid-template-columns:1fr;min-height:auto;"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>';
+  try {
+    curList = await apiFetch(`/api/students/parent-codes?level=${level}&room=${room}`);
+    renderSlips();
+    document.getElementById('genBtn').disabled = false;
+    document.getElementById('printBtn').disabled = false;
+  } catch(e){
+    document.getElementById('content').innerHTML = `<div class="pc-page"><div class="alert alert-danger">${e.message}</div></div>`;
+  }
+}
+
+function renderSlips() {
+  if (!curList.length) {
+    document.getElementById('content').innerHTML = '<div class="pc-page"><div class="alert alert-warning">ห้องนี้ไม่มีนักเรียน</div></div>';
+    return;
+  }
+  const noCode = curList.filter(s => !s.parent_code).length;
+  const perPage = 10;
+  let html = '';
+  for (let i = 0; i < curList.length; i += perPage) {
+    html += '<div class="pc-page">';
+    curList.slice(i, i+perPage).forEach(s => {
+      const url = `${location.origin}/parent.html?code=${s.parent_code || ''}`;
+      html += `<div class="pc-slip">
+        <div class="qr">${s.parent_code ? `<div data-qr="${url}" data-qr-size="120"></div>` : ''}</div>
+        <div class="info">
+          <div class="school">${schoolName}</div>
+          <div class="sname">${s.name}</div>
+          <div class="scls">ม.${s.class_level}/${s.room}${s.number ? ' เลขที่ '+s.number : ''}</div>
+          ${s.parent_code
+            ? `<div class="code">${s.parent_code}</div>
+               <div class="hint">สแกน QR หรือเข้า ${location.host}/parent.html<br>กรอกรหัสด้านบน — ดูประวัติมาเรียน + คะแนน</div>`
+            : `<div class="nocode">⚠ ยังไม่มีรหัส (กดปุ่ม "สร้างรหัสที่ยังไม่มี")</div>`}
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  document.getElementById('content').innerHTML = html;
+  renderLocalQRs();
+  if (noCode > 0) {
+    showToast(`มี ${noCode} คนยังไม่มีรหัส — กด "สร้างรหัสที่ยังไม่มี"`, 'warning');
+  }
+}
+
+async function genMissing() {
+  const v = document.getElementById('selClass').value;
+  if (!v) return;
+  const [level, room] = v.split('_');
+  if (!confirm('สร้างรหัสผู้ปกครองให้นักเรียนที่ยังไม่มีในห้องนี้?')) return;
+  try {
+    const res = await apiFetch('/api/students/parent-codes/bulk', {
+      method:'POST', body: JSON.stringify({ level:+level, room:+room })
+    });
+    showToast(res.message, 'success');
+    loadSlips();
+  } catch(e){ alert(e.message); }
+}
+</script>
+</body>
+</html>

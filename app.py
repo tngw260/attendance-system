@@ -3074,14 +3074,15 @@ def api_students_search():
 @app.get('/api/students/search-all')
 @login_required
 def api_students_search_all():
-    """ค้นหานักเรียนทุกห้อง (ข้อมูลพื้นฐาน) — สำหรับครูเวรเช็คมาสายเด็กที่ไม่มีบัตร"""
+    """ค้นหานักเรียนทุกห้อง (สำหรับครูเวรเช็คมาสายเด็กที่ไม่มีบัตร)
+    ส่งเฉพาะข้อมูลที่จำเป็นต่อการยืนยันตัวตน — ไม่ส่ง student_code/parent_code/เลขบัตร"""
     q = (request.args.get('q') or '').strip()
     if not q:
         return jsonify([])
     pattern = f'%{q}%'
     with get_db() as con:
         rows = con.execute("""
-            SELECT id, number, student_code, name, class_level, room, photo
+            SELECT id, number, name, class_level, room, photo
             FROM students
             WHERE (name LIKE ? OR student_code LIKE ? OR CAST(number AS TEXT) LIKE ?)
             ORDER BY class_level, room, number, name LIMIT 20
@@ -3522,6 +3523,23 @@ def api_gen_parent_codes_bulk():
                 except sqlite3.IntegrityError: continue
         audit_log(con, 'bulk_gen_parent_codes', 'student', None, {'count': count})
     return jsonify(success=True, count=count, message=f'สร้างรหัสผู้ปกครองให้ {count} คน')
+
+@app.get('/api/students/parent-codes')
+@login_required
+def api_parent_codes_list():
+    """รายชื่อ + รหัสผู้ปกครองทั้งห้อง สำหรับพิมพ์ใบแจก — Query: ?level=1&room=1"""
+    u = current_user()
+    level = request.args.get('level')
+    room = request.args.get('room')
+    where, params, _, _ = user_class_filter(u, {'level': level, 'room': room})
+    with get_db() as con:
+        rows = con.execute(
+            f"""SELECT id, number, student_code, name, class_level, room, parent_code
+                FROM students s WHERE 1=1 {where}
+                ORDER BY class_level, room, number, name""",
+            params
+        ).fetchall()
+    return jsonify(rows_to_list(rows))
 
 @app.get('/api/parent/<code>')
 def api_parent_view(code):
