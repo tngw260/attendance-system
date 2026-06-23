@@ -1610,13 +1610,12 @@ def api_attendance_scan_undo():
 @app.get('/api/late')
 @login_required
 def api_late_list():
-    """รายชื่อนักเรียนที่มาสายในวันที่ระบุ + สถานะการบำเพ็ญประโยชน์"""
-    u = current_user()
+    """รายชื่อนักเรียนที่มาสายในวันที่ระบุ + สถานะการบำเพ็ญประโยชน์
+    งานมาสาย/บำเพ็ญฯ เป็นงานครูเวร — ครูทุกคนเห็นทั้งโรงเรียน (ไม่จำกัดห้อง)"""
     date = request.args.get('date', today_iso())
-    where, params, _, _ = user_class_filter(u)
 
     with get_db() as con:
-        rows = con.execute(f"""
+        rows = con.execute("""
             SELECT a.id AS attendance_id, a.date, a.note,
                    s.id, s.number, s.student_code, s.name, s.class_level, s.room,
                    mk.id AS makeup_id, mk.points AS makeup_points, mk.created_at AS makeup_at,
@@ -1625,9 +1624,9 @@ def api_late_list():
             JOIN students s ON s.id = a.student_id
             LEFT JOIN behavior_logs mk ON mk.source='makeup' AND mk.source_id=a.id
             LEFT JOIN users u ON u.id = mk.recorded_by
-            WHERE a.status='late' AND a.date=? {where}
+            WHERE a.status='late' AND a.date=?
             ORDER BY s.class_level, s.room, s.number, s.name
-        """, [date] + params).fetchall()
+        """, (date,)).fetchall()
     return jsonify(rows=rows_to_list(rows), date=date)
 
 @app.post('/api/late/<int:attendance_id>/makeup')
@@ -1647,8 +1646,7 @@ def api_late_makeup(attendance_id):
         """, (attendance_id,)).fetchone()
         if not att:
             return jsonify(success=False, message='ไม่พบรายการมาสาย'), 404
-        if not can_access_student(u, att):
-            return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+        # งานบำเพ็ญฯ เป็นงานครูเวร — ครูทุกคนกดได้ทุกห้อง
 
         # ตรวจสอบว่ายังไม่ได้แก้
         existing = con.execute(
@@ -1680,8 +1678,9 @@ def api_late_undo_makeup(attendance_id):
             FROM attendance a JOIN students s ON s.id=a.student_id
             WHERE a.id=?
         """, (attendance_id,)).fetchone()
-        if not att or not can_access_student(u, att):
-            return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+        if not att:
+            return jsonify(success=False, message='ไม่พบรายการ'), 404
+        # งานบำเพ็ญฯ เป็นงานครูเวร — ครูทุกคนยกเลิกได้
         con.execute("DELETE FROM behavior_logs WHERE source='makeup' AND source_id=?", (attendance_id,))
         audit_log(con, 'late_undo_makeup', 'attendance', attendance_id, None)
     return jsonify(success=True, message='ยกเลิกการบำเพ็ญแล้ว')
@@ -1776,15 +1775,14 @@ def api_line_summary():
 @app.get('/api/late/pending')
 @login_required
 def api_late_pending():
-    """รายชื่อนักเรียนที่ค้างบำเพ็ญประโยชน์ (มาสายแต่ยังไม่ได้บำเพ็ญ) — ทุกวัน รวมวันนี้"""
-    u = current_user()
-    where, params, _, _ = user_class_filter(u)
+    """รายชื่อนักเรียนที่ค้างบำเพ็ญประโยชน์ (มาสายแต่ยังไม่ได้บำเพ็ญ) — ทุกวัน รวมวันนี้
+    งานครูเวร — ครูทุกคนเห็นทั้งโรงเรียน"""
     from_date = request.args.get('from')
     if not from_date:
         from_date = (datetime.date.today() - datetime.timedelta(days=60)).isoformat()
 
     with get_db() as con:
-        rows = con.execute(f"""
+        rows = con.execute("""
             SELECT a.id AS attendance_id, a.date, a.note,
                    s.id, s.number, s.student_code, s.name, s.class_level, s.room
             FROM attendance a
@@ -1792,20 +1790,17 @@ def api_late_pending():
             LEFT JOIN behavior_logs mk ON mk.source='makeup' AND mk.source_id=a.id
             WHERE a.status='late' AND mk.id IS NULL
               AND a.date >= ? AND a.date <= ?
-              {where}
             ORDER BY a.date ASC, s.class_level, s.room, s.number, s.name
-        """, [from_date, today_iso()] + params).fetchall()
+        """, (from_date, today_iso())).fetchall()
     return jsonify(rows=rows_to_list(rows), from_date=from_date, until=today_iso())
 
 @app.get('/api/late/summary')
 @login_required
 def api_late_summary():
-    """สรุปจำนวนนักเรียนมาสาย + บำเพ็ญแล้ว/ยัง — สำหรับ dashboard"""
-    u = current_user()
+    """สรุปจำนวนนักเรียนมาสาย + บำเพ็ญแล้ว/ยัง — สำหรับ dashboard (ทั้งโรงเรียน)"""
     date = request.args.get('date', today_iso())
-    where, params, _, _ = user_class_filter(u)
     with get_db() as con:
-        row = con.execute(f"""
+        row = con.execute("""
             SELECT
               COUNT(*) AS total_late,
               SUM(CASE WHEN mk.id IS NOT NULL THEN 1 ELSE 0 END) AS made_up,
@@ -1813,8 +1808,8 @@ def api_late_summary():
             FROM attendance a
             JOIN students s ON s.id=a.student_id
             LEFT JOIN behavior_logs mk ON mk.source='makeup' AND mk.source_id=a.id
-            WHERE a.status='late' AND a.date=? {where}
-        """, [date] + params).fetchone()
+            WHERE a.status='late' AND a.date=?
+        """, (date,)).fetchone()
     result = dict(row)
     result['date'] = date
     return jsonify(result)
