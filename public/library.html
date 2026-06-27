@@ -77,10 +77,26 @@
   <div id="tab-borrow" class="lib-tab" style="display:none;">
     <div class="card"><div class="card-body">
       <h5 class="mb-3"><i class="bi bi-box-arrow-right me-2"></i>ยืมหนังสือ</h5>
-      <div class="mb-3 position-relative">
+      <div class="mb-3">
         <label class="form-label fw-600">1. เลือกนักเรียน</label>
-        <input id="stuPick" class="form-control" placeholder="พิมพ์ชื่อ / เลขที่ นักเรียน" autocomplete="off">
-        <div id="stuResults" class="picker-results"></div>
+        <!-- วิธี A: เลือกจากห้อง → รายชื่อขึ้นอัตโนมัติ -->
+        <div class="row g-2 mb-2">
+          <div class="col-5">
+            <select id="stuClass" class="form-select" onchange="loadClassStudents()">
+              <option value="">-- เลือกห้อง --</option>
+            </select>
+          </div>
+          <div class="col-7">
+            <select id="stuFromClass" class="form-select" onchange="pickFromClass()" disabled>
+              <option value="">-- เลือกนักเรียน --</option>
+            </select>
+          </div>
+        </div>
+        <!-- วิธี B: พิมพ์ค้นหา -->
+        <div class="position-relative">
+          <input id="stuPick" class="form-control" placeholder="หรือพิมพ์ชื่อ / เลขที่ ค้นหา" autocomplete="off">
+          <div id="stuResults" class="picker-results"></div>
+        </div>
         <div id="stuChosen" class="mt-2"></div>
       </div>
       <div class="mb-3 position-relative">
@@ -212,10 +228,60 @@ document.addEventListener('DOMContentLoaded', async () => {
     a.addEventListener('click', e => { e.preventDefault(); switchTab(a.dataset.tab); });
   });
   setupPickers();
+  loadClassDropdown();
   document.getElementById('loanDays').addEventListener('input', updateDuePreview);
   updateDuePreview();
   loadStats(); loadBooks();
 });
+
+// โหลดรายชื่อห้องลง dropdown แรก
+async function loadClassDropdown() {
+  try {
+    const classes = await apiFetch('/api/classes');
+    const sel = document.getElementById('stuClass');
+    const grouped = {};
+    classes.forEach(c => { (grouped[c.class_level]=grouped[c.class_level]||[]).push(c); });
+    Object.keys(grouped).sort((a,b)=>+a-+b).forEach(lv => {
+      const og = document.createElement('optgroup'); og.label = `มัธยมศึกษาปีที่ ${lv}`;
+      grouped[lv].forEach(c => {
+        const o = document.createElement('option');
+        o.value = `${c.class_level}_${c.room}`;
+        o.textContent = `ม.${c.class_level}/${c.room} (${c.count} คน)`;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+  } catch(e){}
+}
+
+let classStudents = [];
+// เลือกห้อง → โหลดรายชื่อทั้งห้องลง dropdown ที่สอง
+async function loadClassStudents() {
+  const v = document.getElementById('stuClass').value;
+  const sel2 = document.getElementById('stuFromClass');
+  if (!v) { sel2.innerHTML='<option value="">-- เลือกนักเรียน --</option>'; sel2.disabled=true; return; }
+  const [level, room] = v.split('_');
+  sel2.disabled = true;
+  sel2.innerHTML = '<option>กำลังโหลด...</option>';
+  try {
+    classStudents = await apiFetch(`/api/students?level=${level}&room=${room}`);
+    sel2.innerHTML = '<option value="">-- เลือกนักเรียน --</option>' +
+      classStudents.map(s => `<option value="${s.id}">${s.number?s.number+'. ':''}${s.name}</option>`).join('');
+    sel2.disabled = false;
+  } catch(e){ sel2.innerHTML='<option value="">โหลดไม่สำเร็จ</option>'; }
+}
+
+// เลือกนักเรียนจาก dropdown ห้อง
+function pickFromClass() {
+  const id = +document.getElementById('stuFromClass').value;
+  if (!id) return;
+  const s = classStudents.find(x => x.id === id);
+  if (!s) return;
+  chosenStu = s;
+  document.getElementById('stuChosen').innerHTML = `<span class="badge bg-primary fs-6">${s.name} (ม.${s.class_level}/${s.room})</span>`;
+  document.getElementById('stuPick').value = '';  // เคลียร์ช่องพิมพ์
+  checkBorrowReady();
+}
 
 function switchTab(tab) {
   document.querySelectorAll('#libTabs .nav-link').forEach(a => a.classList.toggle('active', a.dataset.tab===tab));
