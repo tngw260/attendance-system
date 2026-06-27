@@ -308,6 +308,7 @@ function setupUserUI() {
     // Add Heatmap link (after รายงาน) if not present
     injectHeatmapLink();
     injectHomeVisitLink();
+    injectLibraryLink();
     // Add global student search
     injectGlobalSearch();
     // Apply theme color and logo from settings
@@ -371,6 +372,21 @@ function injectHomeVisitLink() {
   li.className = 'nav-item';
   const isActive = location.pathname === '/home-visit.html';
   li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/home-visit.html"><i class="bi bi-house-heart me-1"></i>เยี่ยมบ้าน</a>`;
+  anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
+}
+
+function injectLibraryLink() {
+  if (currentUser?.role !== 'admin') return;  // เฉพาะแอดมิน
+  if (document.querySelector('a.nav-link[href="/library.html"]')) return;
+  const anchor = document.querySelector('a.nav-link[href="/home-visit.html"]')
+              || document.querySelector('a.nav-link[href="/students.html"]');
+  if (!anchor) return;
+  const anchorLi = anchor.closest('li.nav-item');
+  if (!anchorLi) return;
+  const li = document.createElement('li');
+  li.className = 'nav-item';
+  const isActive = location.pathname === '/library.html';
+  li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/library.html"><i class="bi bi-book-half me-1"></i>ห้องสมุด</a>`;
   anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
 }
 

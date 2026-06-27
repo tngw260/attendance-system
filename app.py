@@ -136,6 +136,7 @@ DEFAULT_SETTINGS = {
     'deduct_leave':      '0',
     'makeup_late_points':'1',
     'alert_threshold':   '5',
+    'loan_days':         '7',   # จำนวนวันยืมหนังสือเริ่มต้น
     'sem1_start':        '05-16',
     'sem1_end':          '10-15',
     'sem2_start':        '11-01',
@@ -253,6 +254,36 @@ def init_db():
                 updated_at    TEXT DEFAULT (datetime('now','localtime'))
             );
             CREATE INDEX IF NOT EXISTS idx_hv_student ON home_visits(student_id);
+
+            CREATE TABLE IF NOT EXISTS books (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_code   TEXT UNIQUE,             -- รหัส/บาร์โค้ดหนังสือ
+                title       TEXT NOT NULL,
+                author      TEXT,
+                category    TEXT,
+                status      TEXT NOT NULL DEFAULT 'available'
+                                CHECK (status IN ('available','borrowed','damaged','lost')),
+                note        TEXT,
+                created_at  TEXT DEFAULT (datetime('now','localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_book_status ON books(status);
+            CREATE INDEX IF NOT EXISTS idx_book_title  ON books(title);
+
+            CREATE TABLE IF NOT EXISTS book_loans (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id      INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+                student_id   INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+                borrow_date  TEXT NOT NULL,
+                due_date     TEXT NOT NULL,
+                return_date  TEXT,                   -- NULL = ยังไม่คืน
+                return_cond  TEXT,                   -- normal/damaged/lost ตอนคืน
+                borrowed_by  INTEGER REFERENCES users(id),
+                returned_by  INTEGER REFERENCES users(id),
+                created_at   TEXT DEFAULT (datetime('now','localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_loan_active  ON book_loans(return_date);
+            CREATE INDEX IF NOT EXISTS idx_loan_book    ON book_loans(book_id);
+            CREATE INDEX IF NOT EXISTS idx_loan_student ON book_loans(student_id);
 
             CREATE TABLE IF NOT EXISTS holidays (
                 date       TEXT PRIMARY KEY,
@@ -1685,6 +1716,35 @@ def api_late_undo_makeup(attendance_id):
         audit_log(con, 'late_undo_makeup', 'attendance', attendance_id, None)
     return jsonify(success=True, message='ยกเลิกการบำเพ็ญแล้ว')
 
+@app.get('/api/duty-summary')
+@login_required
+def api_duty_summary():
+    """สรุปสำหรับครูเวร (ทั้งโรงเรียน) — เช้า: ใครมาสาย / เย็น: ใครบำเพ็ญแล้ว-ค้าง"""
+    date = request.args.get('date', today_iso())
+    with get_db() as con:
+        rows = con.execute("""
+            SELECT s.number, s.name, s.class_level, s.room,
+                   mk.id AS makeup_id
+            FROM attendance a
+            JOIN students s ON s.id=a.student_id
+            LEFT JOIN behavior_logs mk ON mk.source='makeup' AND mk.source_id=a.id
+            WHERE a.status='late' AND a.date=?
+            ORDER BY s.class_level, s.room, s.number, s.name
+        """, (date,)).fetchall()
+    late = []
+    for r in rows:
+        d = dict(r)
+        d['cls'] = f"ม.{d['class_level']}/{d['room']}"
+        d['made_up'] = d['makeup_id'] is not None
+        late.append(d)
+    return jsonify(
+        date=date,
+        late=late,
+        total=len(late),
+        made_up=sum(1 for x in late if x['made_up']),
+        pending=sum(1 for x in late if not x['made_up']),
+    )
+
 @app.get('/api/line-summary')
 @login_required
 def api_line_summary():
@@ -3082,6 +3142,203 @@ def api_students_search_all():
             WHERE (name LIKE ? OR student_code LIKE ? OR CAST(number AS TEXT) LIKE ?)
             ORDER BY class_level, room, number, name LIMIT 20
         """, (pattern, pattern, pattern)).fetchall()
+    return jsonify(rows_to_list(rows))
+
+# ── LIBRARY: ยืม-คืนหนังสือ (admin only) ──────────────────
+
+@app.get('/api/books')
+@login_required
+def api_books_list():
+    """รายการหนังสือ — ?q=ค้นหา &status=available/borrowed/damaged/lost"""
+    q = (request.args.get('q') or '').strip()
+    status = request.args.get('status')
+    where, params = '', []
+    if q:
+        where += ' AND (b.title LIKE ? OR b.author LIKE ? OR b.book_code LIKE ? OR b.category LIKE ?)'
+        p = f'%{q}%'; params += [p, p, p, p]
+    if status in ('available','borrowed','damaged','lost'):
+        where += ' AND b.status=?'; params.append(status)
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT b.*,
+                   ln.student_id AS cur_student_id, s.name AS cur_student_name,
+                   s.class_level AS cur_level, s.room AS cur_room,
+                   ln.due_date AS cur_due
+            FROM books b
+            LEFT JOIN book_loans ln ON ln.book_id=b.id AND ln.return_date IS NULL
+            LEFT JOIN students s ON s.id=ln.student_id
+            WHERE 1=1 {where}
+            ORDER BY b.title
+        """, params).fetchall()
+    return jsonify(rows_to_list(rows))
+
+@app.get('/api/books/stats')
+@login_required
+def api_books_stats():
+    """นับจำนวนหนังสือตามสถานะ + ค้างคืน"""
+    with get_db() as con:
+        st = con.execute("""
+            SELECT COUNT(*) AS total,
+              SUM(status='available') AS available,
+              SUM(status='borrowed')  AS borrowed,
+              SUM(status='damaged')   AS damaged,
+              SUM(status='lost')      AS lost
+            FROM books
+        """).fetchone()
+        overdue = con.execute(
+            "SELECT COUNT(*) AS n FROM book_loans WHERE return_date IS NULL AND due_date < ?",
+            (today_iso(),)).fetchone()['n']
+    d = dict(st); d['overdue'] = overdue
+    return jsonify(d)
+
+@app.post('/api/books')
+@admin_required
+def api_book_add():
+    b = request.get_json() or {}
+    title = (b.get('title') or '').strip()
+    if not title:
+        return jsonify(success=False, message='กรอกชื่อหนังสือ'), 400
+    code = (b.get('book_code') or '').strip() or None
+    status = b.get('status', 'available')
+    if status not in ('available','borrowed','damaged','lost'): status = 'available'
+    with get_db() as con:
+        if code and con.execute('SELECT 1 FROM books WHERE book_code=?', (code,)).fetchone():
+            return jsonify(success=False, message='รหัสหนังสือนี้มีอยู่แล้ว'), 400
+        cur = con.execute("""INSERT INTO books (book_code,title,author,category,status,note)
+            VALUES (?,?,?,?,?,?)""",
+            (code, title, (b.get('author') or '').strip() or None,
+             (b.get('category') or '').strip() or None, status,
+             (b.get('note') or '').strip() or None))
+        audit_log(con, 'add_book', 'book', cur.lastrowid, {'title': title})
+    return jsonify(success=True, id=cur.lastrowid, message='เพิ่มหนังสือสำเร็จ')
+
+@app.put('/api/books/<int:bid>')
+@admin_required
+def api_book_update(bid):
+    b = request.get_json() or {}
+    with get_db() as con:
+        bk = con.execute('SELECT * FROM books WHERE id=?', (bid,)).fetchone()
+        if not bk: return jsonify(success=False, message='ไม่พบหนังสือ'), 404
+        updates = {}
+        for f in ('title','author','category','note','book_code'):
+            if f in b: updates[f] = (b.get(f) or '').strip() or None
+        if 'status' in b and b['status'] in ('available','borrowed','damaged','lost'):
+            # ห้ามตั้ง available/borrowed มือถ้ากำลังถูกยืมอยู่ (ให้ใช้ระบบคืน)
+            active = con.execute('SELECT 1 FROM book_loans WHERE book_id=? AND return_date IS NULL', (bid,)).fetchone()
+            if active and b['status'] in ('available',):
+                return jsonify(success=False, message='หนังสือกำลังถูกยืม — ใช้เมนูคืนหนังสือ'), 400
+            updates['status'] = b['status']
+        if not updates: return jsonify(success=False, message='ไม่มีข้อมูลให้แก้'), 400
+        if 'book_code' in updates and updates['book_code']:
+            dup = con.execute('SELECT 1 FROM books WHERE book_code=? AND id<>?', (updates['book_code'], bid)).fetchone()
+            if dup: return jsonify(success=False, message='รหัสหนังสือซ้ำ'), 400
+        cols = ', '.join(f'{k}=?' for k in updates)
+        con.execute(f'UPDATE books SET {cols} WHERE id=?', list(updates.values()) + [bid])
+        audit_log(con, 'update_book', 'book', bid, {'fields': list(updates.keys())})
+    return jsonify(success=True, message='บันทึกการแก้ไขแล้ว')
+
+@app.delete('/api/books/<int:bid>')
+@admin_required
+def api_book_delete(bid):
+    with get_db() as con:
+        active = con.execute('SELECT 1 FROM book_loans WHERE book_id=? AND return_date IS NULL', (bid,)).fetchone()
+        if active: return jsonify(success=False, message='หนังสือกำลังถูกยืม ลบไม่ได้'), 400
+        con.execute('DELETE FROM books WHERE id=?', (bid,))
+        audit_log(con, 'delete_book', 'book', bid, None)
+    return jsonify(success=True, message='ลบหนังสือแล้ว')
+
+@app.post('/api/loans')
+@admin_required
+def api_loan_borrow():
+    """ยืมหนังสือ — Body: {book_id, student_id, days?}"""
+    u = current_user()
+    b = request.get_json() or {}
+    book_id = b.get('book_id'); student_id = b.get('student_id')
+    if not book_id or not student_id:
+        return jsonify(success=False, message='เลือกหนังสือและนักเรียน'), 400
+    settings = get_settings()
+    try: days = int(b.get('days') or settings.get('loan_days', '7'))
+    except (TypeError, ValueError): days = 7
+    today = datetime.date.today()
+    due = (today + datetime.timedelta(days=days)).isoformat()
+    with get_db() as con:
+        bk = con.execute('SELECT * FROM books WHERE id=?', (book_id,)).fetchone()
+        if not bk: return jsonify(success=False, message='ไม่พบหนังสือ'), 404
+        if bk['status'] != 'available':
+            return jsonify(success=False, message=f'หนังสือไม่พร้อมยืม (สถานะ: {bk["status"]})'), 400
+        st = con.execute('SELECT name FROM students WHERE id=?', (student_id,)).fetchone()
+        if not st: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        con.execute("""INSERT INTO book_loans (book_id,student_id,borrow_date,due_date,borrowed_by)
+            VALUES (?,?,?,?,?)""", (book_id, student_id, today.isoformat(), due, u['id']))
+        con.execute("UPDATE books SET status='borrowed' WHERE id=?", (book_id,))
+        audit_log(con, 'borrow_book', 'book', book_id, {'student_id': student_id, 'due': due})
+    return jsonify(success=True, due_date=due, message=f'ยืมสำเร็จ — กำหนดคืน {due}')
+
+@app.get('/api/loans')
+@login_required
+def api_loans_active():
+    """รายการที่ยังไม่คืน — ?q=ค้นชื่อนักเรียน/หนังสือ &overdue=1"""
+    q = (request.args.get('q') or '').strip()
+    overdue_only = request.args.get('overdue') == '1'
+    where, params = '', []
+    if q:
+        where += ' AND (s.name LIKE ? OR b.title LIKE ? OR b.book_code LIKE ?)'
+        p = f'%{q}%'; params += [p, p, p]
+    if overdue_only:
+        where += ' AND ln.due_date < ?'; params.append(today_iso())
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT ln.id AS loan_id, ln.borrow_date, ln.due_date,
+                   b.id AS book_id, b.title, b.book_code,
+                   s.id AS student_id, s.name AS student_name, s.class_level, s.room, s.number
+            FROM book_loans ln
+            JOIN books b ON b.id=ln.book_id
+            JOIN students s ON s.id=ln.student_id
+            WHERE ln.return_date IS NULL {where}
+            ORDER BY ln.due_date ASC
+        """, params).fetchall()
+    today = datetime.date.today()
+    result = []
+    for r in rows:
+        d = dict(r)
+        try:
+            due = datetime.date.fromisoformat(d['due_date'])
+            d['overdue_days'] = max(0, (today - due).days)
+        except Exception:
+            d['overdue_days'] = 0
+        result.append(d)
+    return jsonify(result)
+
+@app.post('/api/loans/<int:loan_id>/return')
+@admin_required
+def api_loan_return(loan_id):
+    """คืนหนังสือ — Body: {condition: normal/damaged/lost}"""
+    u = current_user()
+    b = request.get_json() or {}
+    cond = b.get('condition', 'normal')
+    if cond not in ('normal','damaged','lost'): cond = 'normal'
+    with get_db() as con:
+        ln = con.execute('SELECT * FROM book_loans WHERE id=? AND return_date IS NULL', (loan_id,)).fetchone()
+        if not ln: return jsonify(success=False, message='ไม่พบรายการยืม (หรือคืนแล้ว)'), 404
+        con.execute("""UPDATE book_loans SET return_date=?, return_cond=?, returned_by=? WHERE id=?""",
+            (today_iso(), cond, u['id'], loan_id))
+        # สถานะหนังสือตามสภาพที่คืน
+        new_status = {'normal':'available','damaged':'damaged','lost':'lost'}[cond]
+        con.execute('UPDATE books SET status=? WHERE id=?', (new_status, ln['book_id']))
+        audit_log(con, 'return_book', 'book', ln['book_id'], {'condition': cond})
+    msg = {'normal':'คืนเรียบร้อย','damaged':'คืน (ชำรุด)','lost':'บันทึกสูญหาย'}[cond]
+    return jsonify(success=True, message=msg)
+
+@app.get('/api/loans/history/<int:student_id>')
+@login_required
+def api_loan_history(student_id):
+    """ประวัติการยืมของนักเรียน 1 คน"""
+    with get_db() as con:
+        rows = con.execute("""
+            SELECT ln.*, b.title, b.book_code
+            FROM book_loans ln JOIN books b ON b.id=ln.book_id
+            WHERE ln.student_id=? ORDER BY ln.borrow_date DESC
+        """, (student_id,)).fetchall()
     return jsonify(rows_to_list(rows))
 
 # ── HOME VISITS (เยี่ยมบ้าน) ───────────────────────────────

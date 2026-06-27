@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>แจ้งไลน์ครูเวร</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    .msg-box { white-space:pre-wrap; font-family:'Sarabun',sans-serif; font-size:1rem;
+      background:var(--surface,#fff); border:1px solid var(--border,#dee2e6); border-radius:10px;
+      padding:16px; min-height:200px; line-height:1.6; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <div id="userBadge" class="d-flex align-items-center"></div>
+  </div>
+</nav>
+
+<div class="page-header">
+  <div class="container">
+    <h1><i class="bi bi-chat-quote-fill me-2"></i>แจ้งไลน์ครูเวร</h1>
+    <div class="subtitle">สรุปนักเรียนมาสายทั้งโรงเรียน — ก๊อปไปแจ้งกลุ่มไลน์ครูเวร</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label small fw-600 mb-1">วันที่</label>
+          <input type="date" id="selDate" class="form-control">
+        </div>
+        <div class="col-md-5">
+          <label class="form-label small fw-600 mb-1">รูปแบบข้อความ</label>
+          <div class="btn-group w-100" role="group">
+            <input type="radio" class="btn-check" name="mode" id="mMorning" value="morning" checked>
+            <label class="btn btn-outline-warning" for="mMorning"><i class="bi bi-sunrise me-1"></i>เช้า (มาสาย)</label>
+            <input type="radio" class="btn-check" name="mode" id="mEvening" value="evening">
+            <label class="btn btn-outline-info" for="mEvening"><i class="bi bi-sunset me-1"></i>เย็น (บำเพ็ญ)</label>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <button class="btn btn-primary w-100" onclick="build()">
+            <i class="bi bi-arrow-clockwise me-1"></i>สร้างข้อความ
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="summaryBar" class="mb-2"></div>
+  <div id="msgBox" class="msg-box text-muted">กด"สร้างข้อความ" เพื่อสรุปนักเรียนมาสาย</div>
+
+  <div class="d-grid gap-2 d-md-flex mt-3">
+    <button class="btn btn-success btn-lg flex-grow-1" onclick="copyMsg()" id="copyBtn" disabled>
+      <i class="bi bi-clipboard-check me-1"></i>ก๊อปข้อความ
+    </button>
+    <a class="btn btn-outline-success btn-lg" id="lineBtn" href="#" target="_blank" style="display:none;">
+      <i class="bi bi-line me-1"></i>เปิดไลน์
+    </a>
+  </div>
+  <div class="small text-muted mt-2">
+    <i class="bi bi-info-circle me-1"></i>กด "ก๊อปข้อความ" แล้ววางในกลุ่มไลน์ครูเวรได้เลย
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let curMsg = '';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  document.getElementById('selDate').value = todayISO();
+  // เช้า/เย็น auto ตามเวลา
+  if (new Date().getHours() >= 13) document.getElementById('mEvening').checked = true;
+  build();
+});
+
+async function build() {
+  const date = document.getElementById('selDate').value;
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const box = document.getElementById('msgBox');
+  box.className = 'msg-box text-muted';
+  box.textContent = 'กำลังโหลด...';
+  try {
+    const d = await apiFetch(`/api/duty-summary?date=${date}`);
+    curMsg = (mode === 'morning') ? buildMorning(d) : buildEvening(d);
+    box.className = 'msg-box';
+    box.textContent = curMsg;
+    document.getElementById('copyBtn').disabled = false;
+    renderSummary(d);
+  } catch(e) {
+    box.className = 'msg-box text-danger';
+    box.textContent = 'ผิดพลาด: ' + e.message;
+  }
+}
+
+function thDate(iso) {
+  const m = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const dt = new Date(iso+'T00:00:00');
+  const days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  return `วัน${days[dt.getDay()]}ที่ ${dt.getDate()} ${m[dt.getMonth()]} ${dt.getFullYear()+543}`;
+}
+
+function buildMorning(d) {
+  let t = `🌅 สรุปนักเรียนมาสาย\n${thDate(d.date)}\n`;
+  t += `โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม\n`;
+  t += `━━━━━━━━━━━━━\n`;
+  if (!d.late.length) { t += `✅ วันนี้ไม่มีนักเรียนมาสาย`; return t; }
+  t += `มาสายทั้งหมด ${d.total} คน\n\n`;
+  let lastCls = '';
+  d.late.forEach((s, i) => {
+    if (s.cls !== lastCls) { t += `\n📌 ${s.cls}\n`; lastCls = s.cls; }
+    t += `   ${s.name}\n`;
+  });
+  t += `\n━━━━━━━━━━━━━\n`;
+  t += `🙏 ขอให้ครูที่ปรึกษากำกับนักเรียนให้มาบำเพ็ญประโยชน์ตอนเย็นด้วยครับ/ค่ะ`;
+  return t;
+}
+
+function buildEvening(d) {
+  let t = `🌇 สรุปการบำเพ็ญประโยชน์ (แก้มาสาย)\n${thDate(d.date)}\n`;
+  t += `โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม\n`;
+  t += `━━━━━━━━━━━━━\n`;
+  if (!d.late.length) { t += `✅ วันนี้ไม่มีนักเรียนมาสาย`; return t; }
+  t += `มาสาย ${d.total} คน • บำเพ็ญแล้ว ${d.made_up} • ค้าง ${d.pending}\n`;
+  const pending = d.late.filter(s => !s.made_up);
+  if (pending.length) {
+    t += `\n⚠️ ยังค้างบำเพ็ญ ${pending.length} คน:\n`;
+    let lastCls = '';
+    pending.forEach(s => {
+      if (s.cls !== lastCls) { t += `\n📌 ${s.cls}\n`; lastCls = s.cls; }
+      t += `   ${s.name}\n`;
+    });
+    t += `\n🙏 ฝากครูที่ปรึกษาติดตามนักเรียนที่ยังค้างด้วยครับ/ค่ะ`;
+  } else {
+    t += `\n✅ นักเรียนบำเพ็ญประโยชน์ครบทุกคนแล้ว ขอบคุณครับ/ค่ะ`;
+  }
+  return t;
+}
+
+function renderSummary(d) {
+  document.getElementById('summaryBar').innerHTML = `
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge bg-warning text-dark fs-6">มาสาย ${d.total}</span>
+      <span class="badge bg-success fs-6">บำเพ็ญแล้ว ${d.made_up}</span>
+      <span class="badge bg-danger fs-6">ค้าง ${d.pending}</span>
+    </div>`;
+}
+
+function copyMsg() {
+  navigator.clipboard.writeText(curMsg).then(() => {
+    showToast('ก๊อปแล้ว — วางในกลุ่มไลน์ได้เลย', 'success');
+    const lb = document.getElementById('lineBtn');
+    lb.href = 'https://line.me/R/'; lb.style.display = '';
+  }).catch(() => {
+    // fallback: select text
+    const r = document.createRange(); r.selectNodeContents(document.getElementById('msgBox'));
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    showToast('เลือกข้อความแล้ว กด Ctrl+C / Cmd+C', 'warning');
+  });
+}
+</script>
+</body>
+</html>

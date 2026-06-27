@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ยืม-คืนหนังสือ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    .stat-pill { border-radius:10px; padding:12px; text-align:center; color:#fff; }
+    .stat-pill .n { font-size:1.6rem; font-weight:800; line-height:1; }
+    .stat-pill .l { font-size:.82rem; opacity:.9; margin-top:2px; }
+    .picker-results { position:absolute; z-index:1000; width:100%; max-height:260px; overflow-y:auto;
+      background:var(--surface,#fff); border:1px solid var(--border,#dee2e6); border-radius:8px;
+      box-shadow:0 4px 16px rgba(0,0,0,.15); display:none; }
+    .picker-results .hit { padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border,#eee); }
+    .picker-results .hit:hover { background:var(--surface-2,#f0f4ff); }
+    .badge-st-available { background:#198754; }
+    .badge-st-borrowed { background:#fd7e14; }
+    .badge-st-damaged  { background:#6c757d; }
+    .badge-st-lost     { background:#dc3545; }
+    .overdue-row { background:rgba(220,53,69,.08); }
+    @media print { .no-print,nav { display:none !important; } }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <div id="userBadge" class="d-flex align-items-center"></div>
+  </div>
+</nav>
+
+<div class="page-header no-print">
+  <div class="container">
+    <h1><i class="bi bi-book-half me-2"></i>ระบบยืม-คืนหนังสือ</h1>
+    <div class="subtitle">ห้องสมุดโรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+  <!-- สถิติ -->
+  <div class="row g-2 mb-3" id="statBar"></div>
+
+  <ul class="nav nav-tabs mb-3 no-print" id="libTabs">
+    <li class="nav-item"><a class="nav-link active" href="#" data-tab="books"><i class="bi bi-list-ul me-1"></i>รายการหนังสือ</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" data-tab="borrow"><i class="bi bi-box-arrow-right me-1"></i>ยืมหนังสือ</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" data-tab="return"><i class="bi bi-box-arrow-in-left me-1"></i>คืนหนังสือ</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" data-tab="overdue"><i class="bi bi-exclamation-triangle me-1"></i>ค้างคืน</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" data-tab="report"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
+  </ul>
+
+  <!-- ===== แท็บ: รายการหนังสือ ===== -->
+  <div id="tab-books" class="lib-tab">
+    <div class="d-flex gap-2 mb-3 flex-wrap no-print">
+      <input id="bookSearch" class="form-control" style="max-width:300px;" placeholder="🔍 ค้นชื่อ/ผู้แต่ง/รหัส" oninput="loadBooks()">
+      <select id="bookFilter" class="form-select" style="max-width:170px;" onchange="loadBooks()">
+        <option value="">-- ทุกสถานะ --</option>
+        <option value="available">พร้อมยืม</option>
+        <option value="borrowed">ถูกยืม</option>
+        <option value="damaged">ชำรุด</option>
+        <option value="lost">สูญหาย</option>
+      </select>
+      <button class="btn btn-success" onclick="openBookForm()"><i class="bi bi-plus-circle me-1"></i>เพิ่มหนังสือ</button>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead><tr><th>รหัส</th><th>ชื่อหนังสือ</th><th>ผู้แต่ง</th><th>หมวด</th><th>สถานะ</th><th class="no-print text-end">จัดการ</th></tr></thead>
+        <tbody id="booksBody"><tr><td colspan="6" class="text-center text-muted py-4">กำลังโหลด...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== แท็บ: ยืม ===== -->
+  <div id="tab-borrow" class="lib-tab" style="display:none;">
+    <div class="card"><div class="card-body">
+      <h5 class="mb-3"><i class="bi bi-box-arrow-right me-2"></i>ยืมหนังสือ</h5>
+      <div class="mb-3 position-relative">
+        <label class="form-label fw-600">1. เลือกนักเรียน</label>
+        <input id="stuPick" class="form-control" placeholder="พิมพ์ชื่อ / เลขที่ นักเรียน" autocomplete="off">
+        <div id="stuResults" class="picker-results"></div>
+        <div id="stuChosen" class="mt-2"></div>
+      </div>
+      <div class="mb-3 position-relative">
+        <label class="form-label fw-600">2. เลือกหนังสือ (เฉพาะที่พร้อมยืม)</label>
+        <input id="bookPick" class="form-control" placeholder="พิมพ์ชื่อ / รหัส หนังสือ" autocomplete="off">
+        <div id="bookResults" class="picker-results"></div>
+        <div id="bookChosen" class="mt-2"></div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-600">3. จำนวนวันยืม</label>
+        <input id="loanDays" type="number" class="form-control" style="max-width:140px;" value="7" min="1" max="60">
+        <small class="text-muted">กำหนดคืน: <span id="duePreview">-</span></small>
+      </div>
+      <button class="btn btn-primary btn-lg" onclick="doBorrow()" id="borrowBtn" disabled>
+        <i class="bi bi-check-circle me-1"></i>ยืนยันการยืม
+      </button>
+    </div></div>
+  </div>
+
+  <!-- ===== แท็บ: คืน ===== -->
+  <div id="tab-return" class="lib-tab" style="display:none;">
+    <input id="returnSearch" class="form-control mb-3" style="max-width:340px;" placeholder="🔍 ค้นชื่อนักเรียน / ชื่อหนังสือ" oninput="loadReturn()">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead><tr><th>นักเรียน</th><th>หนังสือ</th><th>กำหนดคืน</th><th class="text-end">คืน</th></tr></thead>
+        <tbody id="returnBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== แท็บ: ค้างคืน ===== -->
+  <div id="tab-overdue" class="lib-tab" style="display:none;">
+    <div class="d-flex justify-content-between mb-2 no-print">
+      <h5 class="mb-0"><i class="bi bi-exclamation-triangle text-danger me-2"></i>หนังสือค้างคืน (เกินกำหนด)</h5>
+      <button class="btn btn-outline-primary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>พิมพ์</button>
+    </div>
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr><th>นักเรียน</th><th>ชั้น</th><th>หนังสือ</th><th>กำหนดคืน</th><th>เกิน (วัน)</th></tr></thead>
+        <tbody id="overdueBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== แท็บ: รายงาน ===== -->
+  <div id="tab-report" class="lib-tab" style="display:none;">
+    <div class="card mb-3"><div class="card-body">
+      <h6 class="fw-600"><i class="bi bi-clock-history me-2"></i>ประวัติการยืมของนักเรียน</h6>
+      <div class="position-relative" style="max-width:340px;">
+        <input id="histPick" class="form-control" placeholder="พิมพ์ชื่อนักเรียน" autocomplete="off">
+        <div id="histResults" class="picker-results"></div>
+      </div>
+      <div id="histBody" class="mt-3"></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- Modal: เพิ่ม/แก้หนังสือ -->
+<div class="modal fade" id="bookModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header bg-success text-white">
+    <h5 class="modal-title"><i class="bi bi-book me-2"></i><span id="bmTitle">เพิ่มหนังสือ</span></h5>
+    <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+  </div>
+  <div class="modal-body">
+    <input type="hidden" id="bm_id">
+    <div class="mb-2"><label class="form-label small fw-600">ชื่อหนังสือ *</label><input id="bm_title" class="form-control"></div>
+    <div class="row g-2">
+      <div class="col-6 mb-2"><label class="form-label small fw-600">รหัส/บาร์โค้ด</label><input id="bm_code" class="form-control"></div>
+      <div class="col-6 mb-2"><label class="form-label small fw-600">หมวดหมู่</label><input id="bm_category" class="form-control"></div>
+    </div>
+    <div class="mb-2"><label class="form-label small fw-600">ผู้แต่ง</label><input id="bm_author" class="form-control"></div>
+    <div class="mb-2" id="bm_statusWrap"><label class="form-label small fw-600">สถานะ</label>
+      <select id="bm_status" class="form-select">
+        <option value="available">พร้อมยืม</option>
+        <option value="damaged">ชำรุด</option>
+        <option value="lost">สูญหาย</option>
+      </select></div>
+    <div class="mb-0"><label class="form-label small fw-600">หมายเหตุ</label><input id="bm_note" class="form-control"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
+    <button class="btn btn-success" onclick="saveBook()"><i class="bi bi-save me-1"></i>บันทึก</button>
+  </div>
+</div></div></div>
+
+<!-- Modal: คืน -->
+<div class="modal fade" id="returnModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header bg-primary text-white">
+    <h5 class="modal-title"><i class="bi bi-box-arrow-in-left me-2"></i>คืนหนังสือ</h5>
+    <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+  </div>
+  <div class="modal-body">
+    <input type="hidden" id="rt_loanId">
+    <div id="rt_info" class="mb-3"></div>
+    <label class="form-label fw-600">สภาพหนังสือ</label>
+    <div class="d-grid gap-2">
+      <button class="btn btn-outline-success" onclick="doReturn('normal')"><i class="bi bi-check-circle me-1"></i>ปกติ — คืนเข้าชั้น</button>
+      <button class="btn btn-outline-secondary" onclick="doReturn('damaged')"><i class="bi bi-bandaid me-1"></i>ชำรุด</button>
+      <button class="btn btn-outline-danger" onclick="doReturn('lost')"><i class="bi bi-x-octagon me-1"></i>สูญหาย</button>
+    </div>
+  </div>
+</div></div></div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="mainToast" class="toast align-items-center border-0" role="alert"><div class="d-flex">
+    <div class="toast-body fw-500"></div>
+    <button class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+  </div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const ST = { available:{l:'พร้อมยืม',c:'available'}, borrowed:{l:'ถูกยืม',c:'borrowed'},
+  damaged:{l:'ชำรุด',c:'damaged'}, lost:{l:'สูญหาย',c:'lost'} };
+let bookModal, returnModal, chosenStu=null, chosenBook=null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  if (currentUser?.role !== 'admin') {
+    document.querySelector('.container.pb-5').innerHTML =
+      '<div class="alert alert-warning mt-4"><i class="bi bi-lock me-2"></i>ระบบยืม-คืนหนังสือ สำหรับผู้ดูแลระบบเท่านั้น</div>';
+    return;
+  }
+  bookModal = new bootstrap.Modal('#bookModal');
+  returnModal = new bootstrap.Modal('#returnModal');
+  // tabs
+  document.querySelectorAll('#libTabs .nav-link').forEach(a => {
+    a.addEventListener('click', e => { e.preventDefault(); switchTab(a.dataset.tab); });
+  });
+  setupPickers();
+  document.getElementById('loanDays').addEventListener('input', updateDuePreview);
+  updateDuePreview();
+  loadStats(); loadBooks();
+});
+
+function switchTab(tab) {
+  document.querySelectorAll('#libTabs .nav-link').forEach(a => a.classList.toggle('active', a.dataset.tab===tab));
+  document.querySelectorAll('.lib-tab').forEach(d => d.style.display='none');
+  document.getElementById('tab-'+tab).style.display='';
+  if (tab==='return') loadReturn();
+  if (tab==='overdue') loadOverdue();
+}
+
+async function loadStats() {
+  try {
+    const s = await apiFetch('/api/books/stats');
+    document.getElementById('statBar').innerHTML = `
+      <div class="col"><div class="stat-pill" style="background:#0d3b8e;"><div class="n">${s.total||0}</div><div class="l">หนังสือทั้งหมด</div></div></div>
+      <div class="col"><div class="stat-pill badge-st-available"><div class="n">${s.available||0}</div><div class="l">พร้อมยืม</div></div></div>
+      <div class="col"><div class="stat-pill badge-st-borrowed"><div class="n">${s.borrowed||0}</div><div class="l">ถูกยืม</div></div></div>
+      <div class="col"><div class="stat-pill badge-st-damaged"><div class="n">${s.damaged||0}</div><div class="l">ชำรุด</div></div></div>
+      <div class="col"><div class="stat-pill badge-st-lost"><div class="n">${s.lost||0}</div><div class="l">สูญหาย</div></div></div>
+      <div class="col"><div class="stat-pill" style="background:#c0392b;"><div class="n">${s.overdue||0}</div><div class="l">ค้างคืน</div></div></div>`;
+  } catch(e){}
+}
+
+async function loadBooks() {
+  const q = document.getElementById('bookSearch').value.trim();
+  const st = document.getElementById('bookFilter').value;
+  try {
+    const list = await apiFetch(`/api/books?q=${encodeURIComponent(q)}&status=${st}`);
+    document.getElementById('booksBody').innerHTML = list.length ? list.map(b => `
+      <tr>
+        <td><code>${b.book_code||'-'}</code></td>
+        <td class="fw-600">${b.title}${b.cur_student_name ? `<br><small class="text-warning">📕 ${b.cur_student_name} (ม.${b.cur_level}/${b.cur_room}) ครบ ${pcDate(b.cur_due)}</small>`:''}</td>
+        <td>${b.author||'-'}</td><td>${b.category||'-'}</td>
+        <td><span class="badge badge-st-${b.status}">${ST[b.status].l}</span></td>
+        <td class="no-print text-end">
+          <button class="btn btn-sm btn-link p-0 me-2" onclick='openBookForm(${JSON.stringify(b)})' title="แก้ไข"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-link text-danger p-0" onclick="delBook(${b.id})" title="ลบ"><i class="bi bi-trash"></i></button>
+        </td>
+      </tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted py-4">— ไม่พบหนังสือ —</td></tr>';
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+function openBookForm(b) {
+  document.getElementById('bm_id').value = b?.id || '';
+  document.getElementById('bmTitle').textContent = b ? 'แก้ไขหนังสือ' : 'เพิ่มหนังสือ';
+  document.getElementById('bm_title').value = b?.title || '';
+  document.getElementById('bm_code').value = b?.book_code || '';
+  document.getElementById('bm_category').value = b?.category || '';
+  document.getElementById('bm_author').value = b?.author || '';
+  document.getElementById('bm_note').value = b?.note || '';
+  // ตอนแก้ไข ถ้าถูกยืมอยู่ ซ่อน select สถานะ (จัดการผ่านระบบคืน)
+  const isBorrowed = b?.status === 'borrowed';
+  document.getElementById('bm_statusWrap').style.display = isBorrowed ? 'none' : '';
+  if (b && !isBorrowed) document.getElementById('bm_status').value = b.status;
+  else document.getElementById('bm_status').value = 'available';
+  bookModal.show();
+}
+
+async function saveBook() {
+  const id = document.getElementById('bm_id').value;
+  const body = {
+    title: document.getElementById('bm_title').value.trim(),
+    book_code: document.getElementById('bm_code').value.trim(),
+    category: document.getElementById('bm_category').value.trim(),
+    author: document.getElementById('bm_author').value.trim(),
+    note: document.getElementById('bm_note').value.trim(),
+  };
+  if (document.getElementById('bm_statusWrap').style.display !== 'none')
+    body.status = document.getElementById('bm_status').value;
+  if (!body.title) { showToast('กรอกชื่อหนังสือ','warning'); return; }
+  try {
+    const res = id ? await apiFetch(`/api/books/${id}`, {method:'PUT', body:JSON.stringify(body)})
+                   : await apiFetch('/api/books', {method:'POST', body:JSON.stringify(body)});
+    showToast(res.message); bookModal.hide(); loadBooks(); loadStats();
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+async function delBook(id) {
+  if (!confirm('ลบหนังสือเล่มนี้?')) return;
+  try { const r=await apiFetch(`/api/books/${id}`, {method:'DELETE'}); showToast(r.message); loadBooks(); loadStats(); }
+  catch(e){ showToast(e.message,'danger'); }
+}
+
+/* ===== Pickers (นักเรียน / หนังสือ / ประวัติ) ===== */
+function setupPickers() {
+  bindPicker('stuPick','stuResults', '/api/students/search-all', (s)=>{
+    chosenStu=s;
+    document.getElementById('stuChosen').innerHTML = `<span class="badge bg-primary fs-6">${s.name} (ม.${s.class_level}/${s.room})</span>`;
+    checkBorrowReady();
+  }, (s)=>`${s.name} <small class="text-muted">ม.${s.class_level}/${s.room}${s.number?' เลขที่ '+s.number:''}</small>`);
+
+  bindPicker('bookPick','bookResults', '/api/books?status=available', (b)=>{
+    chosenBook=b;
+    document.getElementById('bookChosen').innerHTML = `<span class="badge bg-success fs-6">📘 ${b.title}${b.book_code?' ('+b.book_code+')':''}</span>`;
+    checkBorrowReady();
+  }, (b)=>`${b.title} <small class="text-muted">${b.author||''} ${b.book_code||''}</small>`, 'q');
+
+  bindPicker('histPick','histResults', '/api/students/search-all', (s)=>{
+    document.getElementById('histPick').value = s.name;
+    loadHistory(s.id);
+  }, (s)=>`${s.name} <small class="text-muted">ม.${s.class_level}/${s.room}</small>`);
+}
+
+function bindPicker(inputId, boxId, url, onPick, render, qparam='q') {
+  const input = document.getElementById(inputId), box = document.getElementById(boxId);
+  let timer;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 1) { box.style.display='none'; return; }
+    timer = setTimeout(async () => {
+      try {
+        const sep = url.includes('?') ? '&' : '?';
+        const list = await apiFetch(`${url}${sep}${qparam}=${encodeURIComponent(q)}`);
+        if (!list.length) { box.innerHTML='<div class="hit text-muted">— ไม่พบ —</div>'; box.style.display=''; return; }
+        box.innerHTML = list.slice(0,15).map((x,i)=>`<div class="hit" data-i="${i}">${render(x)}</div>`).join('');
+        box.style.display='';
+        box.querySelectorAll('.hit').forEach((el)=>{
+          if (el.dataset.i===undefined) return;
+          el.addEventListener('click', ()=>{ onPick(list[+el.dataset.i]); box.style.display='none'; });
+        });
+      } catch(e){}
+    }, 250);
+  });
+  document.addEventListener('click', e => { if (!input.contains(e.target) && !box.contains(e.target)) box.style.display='none'; });
+}
+
+function checkBorrowReady() {
+  document.getElementById('borrowBtn').disabled = !(chosenStu && chosenBook);
+}
+function updateDuePreview() {
+  const days = parseInt(document.getElementById('loanDays').value)||7;
+  const d = new Date(); d.setDate(d.getDate()+days);
+  document.getElementById('duePreview').textContent = pcDate(d.toISOString().split('T')[0]);
+}
+
+async function doBorrow() {
+  if (!chosenStu || !chosenBook) return;
+  const days = parseInt(document.getElementById('loanDays').value)||7;
+  try {
+    const r = await apiFetch('/api/loans', {method:'POST', body:JSON.stringify({book_id:chosenBook.id, student_id:chosenStu.id, days})});
+    showToast(r.message);
+    // reset
+    chosenStu=chosenBook=null;
+    document.getElementById('stuPick').value=''; document.getElementById('bookPick').value='';
+    document.getElementById('stuChosen').innerHTML=''; document.getElementById('bookChosen').innerHTML='';
+    checkBorrowReady(); loadStats();
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+async function loadReturn() {
+  const q = document.getElementById('returnSearch').value.trim();
+  try {
+    const list = await apiFetch(`/api/loans?q=${encodeURIComponent(q)}`);
+    document.getElementById('returnBody').innerHTML = list.length ? list.map(l => `
+      <tr class="${l.overdue_days>0?'overdue-row':''}">
+        <td class="fw-600">${l.student_name}<br><small class="text-muted">ม.${l.class_level}/${l.room}</small></td>
+        <td>${l.title}${l.overdue_days>0?`<br><small class="text-danger">เกิน ${l.overdue_days} วัน</small>`:''}</td>
+        <td>${pcDate(l.due_date)}</td>
+        <td class="text-end"><button class="btn btn-sm btn-primary" onclick='openReturn(${JSON.stringify(l)})'>คืน</button></td>
+      </tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted py-4">— ไม่มีรายการค้างคืน —</td></tr>';
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+function openReturn(l) {
+  document.getElementById('rt_loanId').value = l.loan_id;
+  document.getElementById('rt_info').innerHTML =
+    `<div class="fw-600">${l.student_name} <small class="text-muted">ม.${l.class_level}/${l.room}</small></div>
+     <div>📘 ${l.title}</div><div class="small text-muted">กำหนดคืน ${pcDate(l.due_date)}${l.overdue_days>0?` • เกิน ${l.overdue_days} วัน`:''}</div>`;
+  returnModal.show();
+}
+
+async function doReturn(cond) {
+  const id = document.getElementById('rt_loanId').value;
+  try {
+    const r = await apiFetch(`/api/loans/${id}/return`, {method:'POST', body:JSON.stringify({condition:cond})});
+    showToast(r.message); returnModal.hide(); loadReturn(); loadStats();
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+async function loadOverdue() {
+  try {
+    const list = await apiFetch('/api/loans?overdue=1');
+    document.getElementById('overdueBody').innerHTML = list.length ? list.map(l => `
+      <tr class="overdue-row">
+        <td class="fw-600">${l.student_name}</td>
+        <td>ม.${l.class_level}/${l.room}</td>
+        <td>${l.title}</td>
+        <td>${pcDate(l.due_date)}</td>
+        <td><span class="badge bg-danger">${l.overdue_days} วัน</span></td>
+      </tr>`).join('') : '<tr><td colspan="5" class="text-center text-success py-4">✅ ไม่มีหนังสือค้างคืน</td></tr>';
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+async function loadHistory(sid) {
+  try {
+    const list = await apiFetch(`/api/loans/history/${sid}`);
+    document.getElementById('histBody').innerHTML = list.length ? `
+      <table class="table table-sm"><thead><tr><th>หนังสือ</th><th>ยืม</th><th>กำหนดคืน</th><th>คืนแล้ว</th><th>สภาพ</th></tr></thead><tbody>
+      ${list.map(l=>`<tr><td>${l.title}</td><td>${pcDate(l.borrow_date)}</td><td>${pcDate(l.due_date)}</td>
+        <td>${l.return_date?pcDate(l.return_date):'<span class="badge bg-warning text-dark">ยังไม่คืน</span>'}</td>
+        <td>${l.return_cond?({normal:'ปกติ',damaged:'ชำรุด',lost:'สูญหาย'}[l.return_cond]):'-'}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="text-muted">— ไม่มีประวัติการยืม —</div>';
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+function pcDate(iso){ if(!iso)return'-'; const m=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const d=new Date(iso+'T00:00:00'); if(isNaN(d))return iso; return `${d.getDate()} ${m[d.getMonth()]} ${d.getFullYear()+543}`; }
+</script>
+</body>
+</html>
