@@ -63,7 +63,9 @@
         <option value="damaged">ชำรุด</option>
         <option value="lost">สูญหาย</option>
       </select>
-      <button class="btn btn-success" onclick="openBookForm()"><i class="bi bi-plus-circle me-1"></i>เพิ่มหนังสือ</button>
+      <button class="btn btn-success" onclick="openBookForm()"><i class="bi bi-plus-circle me-1"></i>เพิ่ม 1 เล่ม</button>
+      <button class="btn btn-primary" onclick="openBulkForm()"><i class="bi bi-stack me-1"></i>เพิ่มหลายเล่ม</button>
+      <button class="btn btn-outline-success" onclick="openImportForm()"><i class="bi bi-file-earmark-excel me-1"></i>นำเข้า Excel</button>
     </div>
     <div class="table-responsive">
       <table class="table table-hover align-middle">
@@ -182,6 +184,51 @@
   </div>
 </div></div></div>
 
+<!-- Modal: เพิ่มหลายเล่ม -->
+<div class="modal fade" id="bulkModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header bg-primary text-white">
+    <h5 class="modal-title"><i class="bi bi-stack me-2"></i>เพิ่มหนังสือหลายเล่ม</h5>
+    <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+  </div>
+  <div class="modal-body">
+    <p class="small text-muted">กรอกทีละแถว — กด Enter ที่ช่อง "ชื่อหนังสือ" เพื่อเพิ่มแถวใหม่ • เว้นว่างได้เฉพาะที่ไม่ใช่ชื่อ</p>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead><tr><th style="width:38%">ชื่อหนังสือ *</th><th>ผู้แต่ง</th><th>หมวด</th><th>รหัส</th><th></th></tr></thead>
+        <tbody id="bulkRows"></tbody>
+      </table>
+    </div>
+    <button class="btn btn-sm btn-outline-primary" onclick="addBulkRow()"><i class="bi bi-plus me-1"></i>เพิ่มแถว</button>
+  </div>
+  <div class="modal-footer">
+    <span class="text-muted small me-auto" id="bulkCount">0 เล่ม</span>
+    <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
+    <button class="btn btn-primary" onclick="saveBulk()"><i class="bi bi-save me-1"></i>บันทึกทั้งหมด</button>
+  </div>
+</div></div></div>
+
+<!-- Modal: นำเข้า Excel -->
+<div class="modal fade" id="importModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header bg-success text-white">
+    <h5 class="modal-title"><i class="bi bi-file-earmark-excel me-2"></i>นำเข้าหนังสือจาก Excel</h5>
+    <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+  </div>
+  <div class="modal-body">
+    <ol class="small">
+      <li>ดาวน์โหลดไฟล์ตัวอย่าง → กรอกข้อมูล</li>
+      <li>คอลัมน์: ชื่อหนังสือ* / ผู้แต่ง / หมวดหมู่ / รหัส</li>
+      <li>อัพโหลดไฟล์กลับ</li>
+    </ol>
+    <a class="btn btn-outline-success btn-sm mb-3" href="/api/books/template"><i class="bi bi-download me-1"></i>ดาวน์โหลดไฟล์ตัวอย่าง</a>
+    <input type="file" id="importFile" class="form-control" accept=".xlsx,.xls">
+    <div id="importResult" class="mt-3"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
+    <button class="btn btn-success" onclick="doImport()"><i class="bi bi-upload me-1"></i>นำเข้า</button>
+  </div>
+</div></div></div>
+
 <!-- Modal: คืน -->
 <div class="modal fade" id="returnModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
   <div class="modal-header bg-primary text-white">
@@ -212,7 +259,7 @@
 <script>
 const ST = { available:{l:'พร้อมยืม',c:'available'}, borrowed:{l:'ถูกยืม',c:'borrowed'},
   damaged:{l:'ชำรุด',c:'damaged'}, lost:{l:'สูญหาย',c:'lost'} };
-let bookModal, returnModal, chosenStu=null, chosenBook=null;
+let bookModal, returnModal, bulkModal, importModal, chosenStu=null, chosenBook=null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
@@ -223,6 +270,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   bookModal = new bootstrap.Modal('#bookModal');
   returnModal = new bootstrap.Modal('#returnModal');
+  bulkModal = new bootstrap.Modal('#bulkModal');
+  importModal = new bootstrap.Modal('#importModal');
   // tabs
   document.querySelectorAll('#libTabs .nav-link').forEach(a => {
     a.addEventListener('click', e => { e.preventDefault(); switchTab(a.dataset.tab); });
@@ -362,6 +411,76 @@ async function delBook(id) {
   if (!confirm('ลบหนังสือเล่มนี้?')) return;
   try { const r=await apiFetch(`/api/books/${id}`, {method:'DELETE'}); showToast(r.message); loadBooks(); loadStats(); }
   catch(e){ showToast(e.message,'danger'); }
+}
+
+/* ===== เพิ่มหลายเล่ม ===== */
+function openBulkForm() {
+  document.getElementById('bulkRows').innerHTML = '';
+  for (let i=0;i<5;i++) addBulkRow();
+  updateBulkCount();
+  bulkModal.show();
+}
+function addBulkRow() {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="form-control form-control-sm bk-title" placeholder="ชื่อหนังสือ"></td>
+    <td><input class="form-control form-control-sm bk-author"></td>
+    <td><input class="form-control form-control-sm bk-cat"></td>
+    <td><input class="form-control form-control-sm bk-code"></td>
+    <td><button class="btn btn-sm btn-link text-danger p-0" onclick="this.closest('tr').remove();updateBulkCount();"><i class="bi bi-x-lg"></i></button></td>`;
+  document.getElementById('bulkRows').appendChild(tr);
+  // Enter ที่ช่องชื่อ = เพิ่มแถวใหม่ + โฟกัส
+  tr.querySelector('.bk-title').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const rows = [...document.querySelectorAll('#bulkRows tr')];
+      if (tr === rows[rows.length-1]) addBulkRow();
+      const next = tr.nextElementSibling;
+      next?.querySelector('.bk-title')?.focus();
+    }
+  });
+  tr.querySelectorAll('input').forEach(i => i.addEventListener('input', updateBulkCount));
+}
+function updateBulkCount() {
+  const n = [...document.querySelectorAll('#bulkRows .bk-title')].filter(i => i.value.trim()).length;
+  document.getElementById('bulkCount').textContent = `${n} เล่ม`;
+}
+async function saveBulk() {
+  const books = [...document.querySelectorAll('#bulkRows tr')].map(tr => ({
+    title: tr.querySelector('.bk-title').value.trim(),
+    author: tr.querySelector('.bk-author').value.trim(),
+    category: tr.querySelector('.bk-cat').value.trim(),
+    book_code: tr.querySelector('.bk-code').value.trim(),
+  })).filter(b => b.title);
+  if (!books.length) { showToast('กรอกชื่อหนังสืออย่างน้อย 1 เล่ม','warning'); return; }
+  try {
+    const r = await apiFetch('/api/books/bulk', {method:'POST', body:JSON.stringify({books})});
+    showToast(r.message); bulkModal.hide(); loadBooks(); loadStats();
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+/* ===== นำเข้า Excel ===== */
+function openImportForm() {
+  document.getElementById('importFile').value='';
+  document.getElementById('importResult').innerHTML='';
+  importModal.show();
+}
+async function doImport() {
+  const f = document.getElementById('importFile').files[0];
+  if (!f) { showToast('เลือกไฟล์ก่อน','warning'); return; }
+  const fd = new FormData(); fd.append('file', f);
+  const box = document.getElementById('importResult');
+  box.innerHTML = '<div class="spinner-border spinner-border-sm"></div> กำลังนำเข้า...';
+  try {
+    const r = await fetch('/api/books/import', {method:'POST', body:fd, credentials:'same-origin'});
+    const d = await r.json();
+    if (d.success) {
+      box.innerHTML = `<div class="alert alert-success mb-0"><i class="bi bi-check-circle me-1"></i>${d.message}</div>`;
+      loadBooks(); loadStats();
+    } else {
+      box.innerHTML = `<div class="alert alert-danger mb-0">${d.message}</div>`;
+    }
+  } catch(e){ box.innerHTML = `<div class="alert alert-danger mb-0">ผิดพลาด: ${e.message}</div>`; }
 }
 
 /* ===== Pickers (นักเรียน / หนังสือ / ประวัติ) ===== */

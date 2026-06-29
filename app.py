@@ -3247,6 +3247,87 @@ def api_book_delete(bid):
         audit_log(con, 'delete_book', 'book', bid, None)
     return jsonify(success=True, message='ลบหนังสือแล้ว')
 
+@app.post('/api/books/bulk')
+@admin_required
+def api_books_bulk():
+    """เพิ่มหนังสือหลายเล่มพร้อมกัน — Body: {books:[{title,author,category,book_code}, ...]}"""
+    b = request.get_json() or {}
+    items = b.get('books') or []
+    if not items:
+        return jsonify(success=False, message='ไม่มีรายการหนังสือ'), 400
+    count, skipped = 0, 0
+    with get_db() as con:
+        for it in items:
+            title = (it.get('title') or '').strip()
+            if not title:
+                skipped += 1; continue
+            code = (it.get('book_code') or '').strip() or None
+            if code and con.execute('SELECT 1 FROM books WHERE book_code=?', (code,)).fetchone():
+                skipped += 1; continue
+            con.execute("""INSERT INTO books (book_code,title,author,category,status)
+                VALUES (?,?,?,?,'available')""",
+                (code, title, (it.get('author') or '').strip() or None,
+                 (it.get('category') or '').strip() or None))
+            count += 1
+        audit_log(con, 'bulk_add_books', 'book', None, {'count': count, 'skipped': skipped})
+    msg = f'เพิ่มหนังสือ {count} เล่ม'
+    if skipped: msg += f' (ข้าม {skipped} — ชื่อว่าง/รหัสซ้ำ)'
+    return jsonify(success=True, count=count, skipped=skipped, message=msg)
+
+@app.get('/api/books/template')
+@admin_required
+def api_books_template():
+    """ดาวน์โหลด Excel template สำหรับนำเข้าหนังสือ"""
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = 'หนังสือ'
+    headers = ['ชื่อหนังสือ *', 'ผู้แต่ง', 'หมวดหมู่', 'รหัส/บาร์โค้ด']
+    hfill = PatternFill(fill_type='solid', fgColor='198754')
+    hfont = Font(bold=True, color='FFFFFF')
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.fill = hfill; c.font = hfont; c.alignment = Alignment(horizontal='center')
+    ws.append(['แฮร์รี่ พอตเตอร์ เล่ม 1', 'J.K. Rowling', 'นิยาย', 'B001'])
+    ws.append(['คณิตศาสตร์ ม.1', 'สสวท.', 'เรียน', 'B002'])
+    for col, w in zip(ws.columns, [34, 22, 16, 16]):
+        ws.column_dimensions[col[0].column_letter].width = w
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name='books_template.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@app.post('/api/books/import')
+@admin_required
+def api_books_import():
+    """นำเข้าหนังสือจากไฟล์ Excel"""
+    if 'file' not in request.files:
+        return jsonify(success=False, message='ไม่พบไฟล์'), 400
+    f = request.files['file']
+    if not f.filename.lower().endswith(('.xlsx', '.xls')):
+        return jsonify(success=False, message='ต้องเป็นไฟล์ Excel'), 400
+    try:
+        wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        wb.close()
+    except Exception as e:
+        return jsonify(success=False, message=f'เปิดไฟล์ไม่ได้: {e}'), 400
+    count, skipped = 0, 0
+    with get_db() as con:
+        for row in rows:
+            if not row or not row[0]: continue
+            title = str(row[0]).strip()
+            if not title: skipped += 1; continue
+            author = str(row[1]).strip() if len(row) > 1 and row[1] else None
+            category = str(row[2]).strip() if len(row) > 2 and row[2] else None
+            code = str(row[3]).strip() if len(row) > 3 and row[3] else None
+            if code and con.execute('SELECT 1 FROM books WHERE book_code=?', (code,)).fetchone():
+                skipped += 1; continue
+            con.execute("""INSERT INTO books (book_code,title,author,category,status)
+                VALUES (?,?,?,?,'available')""", (code, title, author, category))
+            count += 1
+        audit_log(con, 'import_books', 'book', None, {'count': count, 'skipped': skipped})
+    msg = f'นำเข้าหนังสือ {count} เล่ม'
+    if skipped: msg += f' (ข้าม {skipped} — ชื่อว่าง/รหัสซ้ำ)'
+    return jsonify(success=True, count=count, skipped=skipped, message=msg)
+
 @app.post('/api/loans')
 @admin_required
 def api_loan_borrow():
