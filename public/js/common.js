@@ -309,6 +309,7 @@ function setupUserUI() {
     injectHeatmapLink();
     injectHomeVisitLink();
     injectLibraryLink();
+    injectBankLink();
     // Add global student search
     injectGlobalSearch();
     // Apply theme color and logo from settings
@@ -387,6 +388,23 @@ function injectLibraryLink() {
   li.className = 'nav-item';
   const isActive = location.pathname === '/library.html';
   li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/library.html"><i class="bi bi-book-half me-1"></i>ห้องสมุด</a>`;
+  anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
+}
+
+function injectBankLink() {
+  // ครูที่ปรึกษา + แอดมิน เห็นได้
+  if (!(currentUser?.role === 'admin' || currentUser?.role === 'teacher')) return;
+  if (document.querySelector('a.nav-link[href="/bank.html"]')) return;
+  const anchor = document.querySelector('a.nav-link[href="/library.html"]')
+              || document.querySelector('a.nav-link[href="/home-visit.html"]')
+              || document.querySelector('a.nav-link[href="/students.html"]');
+  if (!anchor) return;
+  const anchorLi = anchor.closest('li.nav-item');
+  if (!anchorLi) return;
+  const li = document.createElement('li');
+  li.className = 'nav-item';
+  const isActive = location.pathname === '/bank.html';
+  li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/bank.html"><i class="bi bi-bank2 me-1"></i>ธนาคาร</a>`;
   anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
 }
 

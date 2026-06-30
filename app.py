@@ -305,6 +305,31 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_member_student ON members(student_id);
 
+            CREATE TABLE IF NOT EXISTS bank_accounts (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_no  TEXT UNIQUE,            -- เลขบัญชี (ออกอัตโนมัติ)
+                student_id  INTEGER NOT NULL UNIQUE REFERENCES students(id) ON DELETE CASCADE,
+                opened_date TEXT NOT NULL,          -- วันเปิดบัญชี
+                status      TEXT DEFAULT 'active'    -- active/closed
+                              CHECK (status IN ('active','closed')),
+                note        TEXT,
+                created_at  TEXT DEFAULT (datetime('now','localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_bank_acc_student ON bank_accounts(student_id);
+
+            CREATE TABLE IF NOT EXISTS bank_transactions (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id  INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+                txn_type    TEXT NOT NULL CHECK (txn_type IN ('deposit','withdraw')),
+                amount      REAL NOT NULL,          -- จำนวนเงิน (บาท)
+                txn_date    TEXT NOT NULL,          -- วันที่ทำรายการ (ย้อนหลังได้)
+                note        TEXT,
+                created_by  INTEGER REFERENCES users(id),
+                created_at  TEXT DEFAULT (datetime('now','localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_bank_txn_student ON bank_transactions(student_id);
+            CREATE INDEX IF NOT EXISTS idx_bank_txn_date    ON bank_transactions(txn_date);
+
             CREATE TABLE IF NOT EXISTS holidays (
                 date       TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
@@ -3867,6 +3892,226 @@ def api_members_cards():
             ORDER BY s.class_level, s.room, s.number, s.name
         """, params).fetchall()
     return jsonify(rows_to_list(rows))
+
+
+# ── SCHOOL BANK (ธนาคารโรงเรียน) ───────────────────────────
+
+def _bank_balance(con, student_id):
+    """ยอดคงเหลือของนักเรียน = ฝากรวม - ถอนรวม"""
+    row = con.execute("""
+        SELECT COALESCE(SUM(CASE WHEN txn_type='deposit' THEN amount ELSE -amount END),0) AS bal
+        FROM bank_transactions WHERE student_id=?""", (student_id,)).fetchone()
+    return round(row['bal'] or 0, 2)
+
+
+def _next_account_no(con):
+    """ออกเลขบัญชีถัดไป — ปีพ.ศ. 2 หลัก + running 4 หลัก เช่น 69-0001"""
+    yy = (datetime.date.today().year + 543) % 100
+    prefix = f'{yy:02d}-'
+    row = con.execute(
+        "SELECT account_no FROM bank_accounts WHERE account_no LIKE ? ORDER BY account_no DESC LIMIT 1",
+        (prefix + '%',)).fetchone()
+    n = 1
+    if row and row['account_no']:
+        try: n = int(row['account_no'].split('-')[-1]) + 1
+        except (ValueError, IndexError): n = 1
+    return f'{prefix}{n:04d}'
+
+
+def _ensure_account(con, student_id):
+    """เปิดบัญชีอัตโนมัติถ้ายังไม่มี → คืน account row"""
+    acc = con.execute('SELECT * FROM bank_accounts WHERE student_id=?', (student_id,)).fetchone()
+    if acc: return acc
+    no = _next_account_no(con)
+    con.execute("INSERT INTO bank_accounts (account_no,student_id,opened_date) VALUES (?,?,?)",
+                (no, student_id, datetime.date.today().isoformat()))
+    return con.execute('SELECT * FROM bank_accounts WHERE student_id=?', (student_id,)).fetchone()
+
+
+@app.get('/api/bank/accounts')
+@login_required
+def api_bank_accounts():
+    """รายชื่อนักเรียน + ยอดคงเหลือ (รายห้อง) — ?level &room &q"""
+    u = current_user()
+    q = (request.args.get('q') or '').strip()
+    where, params, _, _ = user_class_filter(u, {'level': request.args.get('level'), 'room': request.args.get('room')})
+    if q:
+        where += ' AND (s.name LIKE ? OR a.account_no LIKE ?)'
+        p = f'%{q}%'; params += [p, p]
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT s.id AS student_id, s.number, s.name, s.class_level, s.room, s.photo,
+                   a.account_no, a.opened_date, a.status,
+                   COALESCE((SELECT SUM(CASE WHEN t.txn_type='deposit' THEN t.amount ELSE -t.amount END)
+                             FROM bank_transactions t WHERE t.student_id=s.id),0) AS balance,
+                   (SELECT MAX(t.txn_date) FROM bank_transactions t WHERE t.student_id=s.id) AS last_txn
+            FROM students s
+            LEFT JOIN bank_accounts a ON a.student_id=s.id
+            WHERE 1=1 {where}
+            ORDER BY s.class_level, s.room, s.number, s.name
+        """, params).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r); d['balance'] = round(d['balance'] or 0, 2); result.append(d)
+    return jsonify(result)
+
+
+@app.get('/api/bank/account/<int:student_id>')
+@login_required
+def api_bank_account_detail(student_id):
+    """รายละเอียดบัญชี + สมุดบัญชี (ธุรกรรมทั้งหมด เรียงเก่า→ใหม่ พร้อมยอดคงเหลือสะสม)"""
+    u = current_user()
+    with get_db() as con:
+        s = con.execute('SELECT * FROM students WHERE id=?', (student_id,)).fetchone()
+        if not s: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if not can_access_student(u, s):
+            return jsonify(success=False, message='ไม่มีสิทธิ์เข้าถึงนักเรียนคนนี้'), 403
+        acc = con.execute('SELECT * FROM bank_accounts WHERE student_id=?', (student_id,)).fetchone()
+        txns = con.execute("""
+            SELECT t.*, us.full_name AS by_name
+            FROM bank_transactions t LEFT JOIN users us ON us.id=t.created_by
+            WHERE t.student_id=? ORDER BY t.txn_date ASC, t.id ASC
+        """, (student_id,)).fetchall()
+    running = 0; tlist = []
+    for t in txns:
+        d = dict(t)
+        running += d['amount'] if d['txn_type'] == 'deposit' else -d['amount']
+        d['balance_after'] = round(running, 2)
+        tlist.append(d)
+    tlist.reverse()  # ใหม่→เก่า สำหรับแสดงผล
+    return jsonify(
+        student={'id': s['id'], 'number': s['number'], 'name': s['name'],
+                 'class_level': s['class_level'], 'room': s['room'], 'photo': s['photo']},
+        account=(dict(acc) if acc else None),
+        balance=round(running, 2),
+        transactions=tlist)
+
+
+@app.post('/api/bank/txn')
+@login_required
+def api_bank_txn():
+    """ฝาก/ถอน — Body: {student_id, type:'deposit'|'withdraw', amount, txn_date?, note?}"""
+    u = current_user()
+    b = request.get_json() or {}
+    student_id = b.get('student_id')
+    txn_type = b.get('type')
+    if txn_type not in ('deposit', 'withdraw'):
+        return jsonify(success=False, message='ประเภทรายการไม่ถูกต้อง'), 400
+    try:
+        amount = round(float(b.get('amount')), 2)
+    except (TypeError, ValueError):
+        return jsonify(success=False, message='จำนวนเงินไม่ถูกต้อง'), 400
+    if amount <= 0:
+        return jsonify(success=False, message='จำนวนเงินต้องมากกว่า 0'), 400
+    txn_date = (b.get('txn_date') or '').strip()
+    try:
+        d = datetime.date.fromisoformat(txn_date) if txn_date else datetime.date.today()
+    except ValueError:
+        d = datetime.date.today()
+    if d > datetime.date.today():
+        return jsonify(success=False, message='เลือกวันที่ในอนาคตไม่ได้'), 400
+    note = (b.get('note') or '').strip()
+    with get_db() as con:
+        s = con.execute('SELECT * FROM students WHERE id=?', (student_id,)).fetchone()
+        if not s: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if not can_access_student(u, s):
+            return jsonify(success=False, message='ไม่มีสิทธิ์ทำรายการของนักเรียนคนนี้'), 403
+        _ensure_account(con, student_id)
+        bal = _bank_balance(con, student_id)
+        if txn_type == 'withdraw' and amount > bal + 1e-9:
+            return jsonify(success=False, message=f'ยอดเงินไม่พอ — คงเหลือ {bal:,.2f} บาท'), 400
+        con.execute("""INSERT INTO bank_transactions (student_id,txn_type,amount,txn_date,note,created_by)
+            VALUES (?,?,?,?,?,?)""", (student_id, txn_type, amount, d.isoformat(), note, u['id']))
+        new_bal = round(bal + (amount if txn_type == 'deposit' else -amount), 2)
+        audit_log(con, 'bank_'+txn_type, 'student', student_id, {'amount': amount, 'date': d.isoformat(), 'balance': new_bal})
+    word = 'ฝาก' if txn_type == 'deposit' else 'ถอน'
+    return jsonify(success=True, balance=new_bal, message=f'{word} {amount:,.2f} บาท สำเร็จ — คงเหลือ {new_bal:,.2f} บาท')
+
+
+@app.delete('/api/bank/txn/<int:txn_id>')
+@login_required
+def api_bank_txn_delete(txn_id):
+    """ลบรายการ (แก้ที่บันทึกผิด) — ห้ามลบถ้าทำให้ยอดติดลบ"""
+    u = current_user()
+    with get_db() as con:
+        t = con.execute('SELECT * FROM bank_transactions WHERE id=?', (txn_id,)).fetchone()
+        if not t: return jsonify(success=False, message='ไม่พบรายการ'), 404
+        s = con.execute('SELECT * FROM students WHERE id=?', (t['student_id'],)).fetchone()
+        if not can_access_student(u, s):
+            return jsonify(success=False, message='ไม่มีสิทธิ์ลบรายการนี้'), 403
+        # ถ้าลบรายการฝาก แล้วทำให้ยอดติดลบ → ห้าม
+        if t['txn_type'] == 'deposit':
+            bal = _bank_balance(con, t['student_id'])
+            if bal - t['amount'] < -1e-9:
+                return jsonify(success=False, message='ลบไม่ได้ — จะทำให้ยอดเงินติดลบ (มีการถอนหลังจากนี้แล้ว)'), 400
+        con.execute('DELETE FROM bank_transactions WHERE id=?', (txn_id,))
+        audit_log(con, 'bank_delete_txn', 'student', t['student_id'], {'txn_id': txn_id, 'type': t['txn_type'], 'amount': t['amount']})
+    return jsonify(success=True, message='ลบรายการแล้ว')
+
+
+@app.get('/api/bank/summary')
+@login_required
+def api_bank_summary():
+    """สรุปยอด รายวัน/สัปดาห์/เดือน — ?period=day|week|month &date=YYYY-MM-DD &level &room"""
+    u = current_user()
+    period = request.args.get('period') or 'day'
+    try:
+        ref = datetime.date.fromisoformat(request.args.get('date') or today_iso())
+    except ValueError:
+        ref = datetime.date.today()
+    if period == 'week':
+        start = ref - datetime.timedelta(days=ref.weekday()); end = start + datetime.timedelta(days=6)
+    elif period == 'month':
+        start = ref.replace(day=1)
+        nxt = (start + datetime.timedelta(days=32)).replace(day=1)
+        end = nxt - datetime.timedelta(days=1)
+    else:
+        start = end = ref
+    where, params, _, _ = user_class_filter(u, {'level': request.args.get('level'), 'room': request.args.get('room')})
+    base = f"""FROM bank_transactions t JOIN students s ON s.id=t.student_id
+               WHERE t.txn_date BETWEEN ? AND ? {where}"""
+    p = [start.isoformat(), end.isoformat()] + params
+    with get_db() as con:
+        tot = con.execute(f"""SELECT
+            COALESCE(SUM(CASE WHEN t.txn_type='deposit' THEN t.amount ELSE 0 END),0) AS deposit,
+            COALESCE(SUM(CASE WHEN t.txn_type='withdraw' THEN t.amount ELSE 0 END),0) AS withdraw,
+            COUNT(*) AS cnt {base}""", p).fetchone()
+        daily = con.execute(f"""SELECT t.txn_date AS d,
+            COALESCE(SUM(CASE WHEN t.txn_type='deposit' THEN t.amount ELSE 0 END),0) AS deposit,
+            COALESCE(SUM(CASE WHEN t.txn_type='withdraw' THEN t.amount ELSE 0 END),0) AS withdraw,
+            COUNT(*) AS cnt {base} GROUP BY t.txn_date ORDER BY t.txn_date""", p).fetchall()
+        # ยอดคงเหลือรวมทั้งขอบเขต (ทุกช่วงเวลา ไม่จำกัดวันที่)
+        wtot, ptot = user_class_filter(u, {'level': request.args.get('level'), 'room': request.args.get('room')})[:2]
+        total_bal = con.execute(f"""SELECT COALESCE(SUM(CASE WHEN t.txn_type='deposit' THEN t.amount ELSE -t.amount END),0) AS bal
+            FROM bank_transactions t JOIN students s ON s.id=t.student_id WHERE 1=1 {wtot}""", ptot).fetchone()['bal']
+    dep = round(tot['deposit'], 2); wd = round(tot['withdraw'], 2)
+    return jsonify(
+        period=period, start=start.isoformat(), end=end.isoformat(),
+        deposit=dep, withdraw=wd, net=round(dep - wd, 2), count=tot['cnt'],
+        total_balance=round(total_bal or 0, 2),
+        daily=[{'date': r['d'], 'deposit': round(r['deposit'], 2),
+                'withdraw': round(r['withdraw'], 2), 'count': r['cnt']} for r in daily])
+
+
+@app.get('/api/bank/stats')
+@login_required
+def api_bank_stats():
+    """สถิติรวมในขอบเขตสิทธิ์ — บัญชี, ยอดรวม, ฝาก/ถอนวันนี้"""
+    u = current_user()
+    where, params, _, _ = user_class_filter(u, {'level': request.args.get('level'), 'room': request.args.get('room')})
+    today = today_iso()
+    with get_db() as con:
+        accounts = con.execute(f"""SELECT COUNT(*) c FROM bank_accounts a
+            JOIN students s ON s.id=a.student_id WHERE 1=1 {where}""", params).fetchone()['c']
+        total_bal = con.execute(f"""SELECT COALESCE(SUM(CASE WHEN t.txn_type='deposit' THEN t.amount ELSE -t.amount END),0) bal
+            FROM bank_transactions t JOIN students s ON s.id=t.student_id WHERE 1=1 {where}""", params).fetchone()['bal']
+        td = con.execute(f"""SELECT
+            COALESCE(SUM(CASE WHEN t.txn_type='deposit' THEN t.amount ELSE 0 END),0) dep,
+            COALESCE(SUM(CASE WHEN t.txn_type='withdraw' THEN t.amount ELSE 0 END),0) wd
+            FROM bank_transactions t JOIN students s ON s.id=t.student_id
+            WHERE t.txn_date=? {where}""", [today]+params).fetchone()
+    return jsonify(accounts=accounts, total_balance=round(total_bal or 0, 2),
+                   today_deposit=round(td['dep'], 2), today_withdraw=round(td['wd'], 2))
 
 
 # ── HOME VISITS (เยี่ยมบ้าน) ───────────────────────────────
