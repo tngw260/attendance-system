@@ -49,6 +49,7 @@
     <li class="nav-item"><a class="nav-link" href="#" data-tab="borrow"><i class="bi bi-box-arrow-right me-1"></i>ยืมหนังสือ</a></li>
     <li class="nav-item"><a class="nav-link" href="#" data-tab="return"><i class="bi bi-box-arrow-in-left me-1"></i>คืนหนังสือ</a></li>
     <li class="nav-item"><a class="nav-link" href="#" data-tab="overdue"><i class="bi bi-exclamation-triangle me-1"></i>ค้างคืน</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" data-tab="members"><i class="bi bi-person-badge me-1"></i>สมาชิก</a></li>
     <li class="nav-item"><a class="nav-link" href="#" data-tab="report"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
   </ul>
 
@@ -154,6 +155,28 @@
       <table class="table align-middle">
         <thead><tr><th>นักเรียน</th><th>ชั้น</th><th>หนังสือ</th><th>กำหนดคืน</th><th>เกิน (วัน)</th></tr></thead>
         <tbody id="overdueBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== แท็บ: สมาชิก ===== -->
+  <div id="tab-members" class="lib-tab" style="display:none;">
+    <div class="row g-2 mb-3" id="memStatBar"></div>
+    <div class="d-flex gap-2 mb-3 flex-wrap no-print">
+      <input id="memSearch" class="form-control" style="max-width:260px;" placeholder="🔍 ค้นชื่อ/เลขสมาชิก" oninput="loadMembers()">
+      <select id="memFilter" class="form-select" style="max-width:150px;" onchange="loadMembers()">
+        <option value="">-- ทุกสถานะ --</option>
+        <option value="active">ใช้งาน</option>
+        <option value="suspended">ระงับ</option>
+      </select>
+      <button class="btn btn-success" onclick="openMemberForm()"><i class="bi bi-person-plus me-1"></i>สมัครสมาชิก</button>
+      <button class="btn btn-primary" onclick="openMemberBulk()"><i class="bi bi-people me-1"></i>สมัครทั้งห้อง</button>
+      <a class="btn btn-outline-dark" href="/member-cards.html" target="_blank"><i class="bi bi-credit-card-2-front me-1"></i>พิมพ์บัตรสมาชิก</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead><tr><th>เลขสมาชิก</th><th>ชื่อ</th><th>ชั้น</th><th>วันสมัคร</th><th>จำกัด</th><th>กำลังยืม</th><th>สถานะ</th><th class="no-print text-end">จัดการ</th></tr></thead>
+        <tbody id="membersBody"><tr><td colspan="8" class="text-center text-muted py-4">กำลังโหลด...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -292,6 +315,57 @@
   </div>
 </div></div></div>
 
+<!-- Modal: สมัครสมาชิก (เดี่ยว) -->
+<div class="modal fade" id="memberModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header bg-success text-white">
+    <h5 class="modal-title" id="memTitle"><i class="bi bi-person-plus me-2"></i>สมัครสมาชิก</h5>
+    <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+  </div>
+  <div class="modal-body">
+    <input type="hidden" id="mem_id">
+    <div id="mem_studentWrap" class="mb-2 position-relative">
+      <label class="form-label small fw-600">เลือกนักเรียน *</label>
+      <input id="memStuPick" class="form-control" placeholder="🔍 พิมพ์ชื่อนักเรียน" autocomplete="off">
+      <div id="memStuResults" class="picker-results" style="display:none;"></div>
+      <div id="memStuChosen" class="mt-2"></div>
+    </div>
+    <div id="mem_nameShow" class="mb-2 fw-600" style="display:none;"></div>
+    <div class="row g-2">
+      <div class="col-6 mb-2"><label class="form-label small fw-600">วันสมัคร</label><input type="date" id="mem_since" class="form-control"></div>
+      <div class="col-6 mb-2"><label class="form-label small fw-600">จำกัดยืม (เล่ม)</label><input type="number" id="mem_limit" class="form-control" value="3" min="0" max="20"></div>
+    </div>
+    <div id="mem_statusWrap" class="mb-2" style="display:none;"><label class="form-label small fw-600">สถานะ</label>
+      <select id="mem_status" class="form-select"><option value="active">ใช้งาน</option><option value="suspended">ระงับการยืม</option></select></div>
+    <div class="mb-0"><label class="form-label small fw-600">หมายเหตุ</label><input id="mem_note" class="form-control"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+    <button class="btn btn-success" onclick="saveMember()"><i class="bi bi-check-lg me-1"></i>บันทึก</button>
+  </div>
+</div></div></div>
+
+<!-- Modal: สมัครทั้งห้อง -->
+<div class="modal fade" id="memberBulkModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content">
+  <div class="modal-header bg-primary text-white">
+    <h5 class="modal-title"><i class="bi bi-people me-2"></i>สมัครสมาชิกทั้งห้อง</h5>
+    <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+  </div>
+  <div class="modal-body">
+    <div class="row g-2 mb-2 align-items-end">
+      <div class="col"><label class="form-label small fw-600">เลือกห้อง</label>
+        <select id="mbClass" class="form-select" onchange="loadBulkMemberStudents()"><option value="">-- เลือกห้อง --</option></select></div>
+      <div class="col-auto"><label class="form-label small fw-600">จำกัดยืม</label>
+        <input type="number" id="mbLimit" class="form-control" value="3" min="0" max="20" style="width:90px;"></div>
+    </div>
+    <div class="form-check small mb-2"><input class="form-check-input" type="checkbox" id="mbAll" onchange="toggleAllBulk(this)"><label class="form-check-label" for="mbAll">เลือกทั้งหมด (เฉพาะที่ยังไม่เป็นสมาชิก)</label></div>
+    <div id="mbList" class="border rounded p-2" style="max-height:340px; overflow:auto;"><div class="text-muted small">เลือกห้องก่อน</div></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+    <button class="btn btn-primary" onclick="saveMemberBulk()"><i class="bi bi-check-lg me-1"></i>สมัครที่เลือก</button>
+  </div>
+</div></div></div>
+
 <div class="toast-container position-fixed bottom-0 end-0 p-3">
   <div id="mainToast" class="toast align-items-center border-0" role="alert"><div class="d-flex">
     <div class="toast-body fw-500"></div>
@@ -304,7 +378,7 @@
 <script>
 const ST = { available:{l:'พร้อมยืม',c:'available'}, borrowed:{l:'ถูกยืม',c:'borrowed'},
   damaged:{l:'ชำรุด',c:'damaged'}, lost:{l:'สูญหาย',c:'lost'} };
-let bookModal, returnModal, bulkModal, importModal, loanImportModal, chosenStu=null, chosenBook=null;
+let bookModal, returnModal, bulkModal, importModal, loanImportModal, memberModal, memberBulkModal, chosenStu=null, chosenBook=null, memChosenStu=null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
@@ -318,6 +392,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   bulkModal = new bootstrap.Modal('#bulkModal');
   importModal = new bootstrap.Modal('#importModal');
   loanImportModal = new bootstrap.Modal('#loanImportModal');
+  memberModal = new bootstrap.Modal('#memberModal');
+  memberBulkModal = new bootstrap.Modal('#memberBulkModal');
   // tabs
   document.querySelectorAll('#libTabs .nav-link').forEach(a => {
     a.addEventListener('click', e => { e.preventDefault(); switchTab(a.dataset.tab); });
@@ -385,6 +461,7 @@ function switchTab(tab) {
   document.getElementById('tab-'+tab).style.display='';
   if (tab==='return') loadReturn();
   if (tab==='overdue') loadOverdue();
+  if (tab==='members') { loadMemberStats(); loadMembers(); }
 }
 
 async function loadStats() {
@@ -398,6 +475,158 @@ async function loadStats() {
       <div class="col"><div class="stat-pill badge-st-lost"><div class="n">${s.lost||0}</div><div class="l">สูญหาย</div></div></div>
       <div class="col"><div class="stat-pill" style="background:#c0392b;"><div class="n">${s.overdue||0}</div><div class="l">ค้างคืน</div></div></div>`;
   } catch(e){}
+}
+
+/* ===== สมาชิกห้องสมุด ===== */
+async function loadMemberStats() {
+  try {
+    const s = await apiFetch('/api/members/stats');
+    document.getElementById('memStatBar').innerHTML = `
+      <div class="col"><div class="stat-pill" style="background:#0d3b8e;"><div class="n">${s.total||0}</div><div class="l">สมาชิกทั้งหมด</div></div></div>
+      <div class="col"><div class="stat-pill badge-st-available"><div class="n">${s.active||0}</div><div class="l">ใช้งาน</div></div></div>
+      <div class="col"><div class="stat-pill" style="background:#c0392b;"><div class="n">${s.suspended||0}</div><div class="l">ระงับ</div></div></div>
+      <div class="col"><div class="stat-pill badge-st-damaged"><div class="n">${s.non_members||0}</div><div class="l">ยังไม่สมัคร</div></div></div>`;
+  } catch(e){}
+}
+
+async function loadMembers() {
+  const q = document.getElementById('memSearch').value.trim();
+  const st = document.getElementById('memFilter').value;
+  try {
+    const list = await apiFetch(`/api/members?q=${encodeURIComponent(q)}&status=${st}`);
+    document.getElementById('membersBody').innerHTML = list.length ? list.map(m => `
+      <tr class="${m.overdue_loans>0?'overdue-row':''}">
+        <td><code>${m.member_no||'-'}</code></td>
+        <td class="fw-600">${m.name}</td>
+        <td>ม.${m.class_level}/${m.room}${m.number?' เลขที่ '+m.number:''}</td>
+        <td>${pcDate(m.member_since)}</td>
+        <td class="text-center">${m.borrow_limit||0}</td>
+        <td class="text-center">${m.active_loans||0}${m.overdue_loans>0?` <span class="badge bg-danger">ค้าง ${m.overdue_loans}</span>`:''}<br><small class="text-muted">ยืมรวม ${m.total_loans||0}</small></td>
+        <td><span class="badge ${m.status==='active'?'bg-success':'bg-danger'}">${m.status==='active'?'ใช้งาน':'ระงับ'}</span></td>
+        <td class="no-print text-end">
+          <button class="btn btn-sm btn-link p-0 me-2" onclick='openMemberForm(${JSON.stringify(m)})' title="แก้ไข"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-link ${m.status==='active'?'text-warning':'text-success'} p-0 me-2" onclick="toggleSuspend(${m.id},'${m.status}')" title="${m.status==='active'?'ระงับ':'เปิดใช้'}"><i class="bi bi-${m.status==='active'?'pause-circle':'play-circle'}"></i></button>
+          <button class="btn btn-sm btn-link text-danger p-0" onclick="delMember(${m.id})" title="ยกเลิกสมาชิก"><i class="bi bi-trash"></i></button>
+        </td>
+      </tr>`).join('') : '<tr><td colspan="8" class="text-center text-muted py-4">— ยังไม่มีสมาชิก —</td></tr>';
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+function openMemberForm(m) {
+  memChosenStu = null;
+  document.getElementById('mem_id').value = m?.id || '';
+  document.getElementById('mem_since').value = m?.member_since || todayISO();
+  document.getElementById('mem_limit').value = (m && m.borrow_limit!=null) ? m.borrow_limit : 3;
+  document.getElementById('mem_note').value = m?.note || '';
+  document.getElementById('memStuPick').value = '';
+  document.getElementById('memStuChosen').innerHTML = '';
+  if (m) {
+    // แก้ไข: ซ่อนช่องเลือกนักเรียน, โชว์ชื่อ + สถานะ
+    document.getElementById('memTitle').innerHTML = '<i class="bi bi-pencil me-2"></i>แก้ไขสมาชิก';
+    document.getElementById('mem_studentWrap').style.display = 'none';
+    const ns = document.getElementById('mem_nameShow');
+    ns.style.display = ''; ns.textContent = `${m.member_no} — ${m.name} (ม.${m.class_level}/${m.room})`;
+    document.getElementById('mem_statusWrap').style.display = '';
+    document.getElementById('mem_status').value = m.status;
+  } else {
+    document.getElementById('memTitle').innerHTML = '<i class="bi bi-person-plus me-2"></i>สมัครสมาชิก';
+    document.getElementById('mem_studentWrap').style.display = '';
+    document.getElementById('mem_nameShow').style.display = 'none';
+    document.getElementById('mem_statusWrap').style.display = 'none';
+  }
+  memberModal.show();
+}
+
+async function saveMember() {
+  const id = document.getElementById('mem_id').value;
+  const limit = parseInt(document.getElementById('mem_limit').value)||0;
+  const since = document.getElementById('mem_since').value;
+  const note = document.getElementById('mem_note').value.trim();
+  try {
+    if (id) {
+      const status = document.getElementById('mem_status').value;
+      await apiFetch(`/api/members/${id}`, {method:'PUT', body:JSON.stringify({status, borrow_limit:limit, member_since:since, note})});
+      showToast('บันทึกแล้ว');
+    } else {
+      if (!memChosenStu) { showToast('เลือกนักเรียนก่อน','warning'); return; }
+      const r = await apiFetch('/api/members', {method:'POST', body:JSON.stringify({student_id:memChosenStu.id, borrow_limit:limit, member_since:since, note})});
+      showToast(r.message);
+    }
+    memberModal.hide(); loadMembers(); loadMemberStats();
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+async function toggleSuspend(id, cur) {
+  const next = cur==='active' ? 'suspended' : 'active';
+  try {
+    await apiFetch(`/api/members/${id}`, {method:'PUT', body:JSON.stringify({status:next})});
+    showToast(next==='suspended'?'ระงับการยืมแล้ว':'เปิดใช้งานแล้ว');
+    loadMembers(); loadMemberStats();
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+async function delMember(id) {
+  if (!confirm('ยกเลิกสมาชิกคนนี้? (ประวัติการยืมยังอยู่)')) return;
+  try {
+    const r = await apiFetch(`/api/members/${id}`, {method:'DELETE'});
+    showToast(r.message); loadMembers(); loadMemberStats();
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+/* ---- สมัครทั้งห้อง ---- */
+async function openMemberBulk() {
+  const sel = document.getElementById('mbClass');
+  if (sel.options.length <= 1) {
+    try {
+      const classes = await apiFetch('/api/classes');
+      classes.forEach(c => {
+        const o = document.createElement('option');
+        o.value = `${c.class_level}|${c.room}`; o.textContent = `ม.${c.class_level}/${c.room}`;
+        sel.appendChild(o);
+      });
+    } catch(e){}
+  }
+  sel.value = ''; document.getElementById('mbList').innerHTML = '<div class="text-muted small">เลือกห้องก่อน</div>';
+  document.getElementById('mbAll').checked = false;
+  memberBulkModal.show();
+}
+
+async function loadBulkMemberStudents() {
+  const v = document.getElementById('mbClass').value;
+  const box = document.getElementById('mbList');
+  document.getElementById('mbAll').checked = false;
+  if (!v) { box.innerHTML = '<div class="text-muted small">เลือกห้องก่อน</div>'; return; }
+  const [level, room] = v.split('|');
+  box.innerHTML = '<div class="spinner-border spinner-border-sm"></div> กำลังโหลด...';
+  try {
+    const [students, members] = await Promise.all([
+      apiFetch(`/api/students?level=${level}&room=${room}`),
+      apiFetch(`/api/members?level=${level}&room=${room}`)
+    ]);
+    const memberIds = new Set(members.map(m => m.student_id));
+    box.innerHTML = students.map(s => {
+      const isM = memberIds.has(s.id);
+      return `<div class="form-check">
+        <input class="form-check-input mb-stu" type="checkbox" value="${s.id}" id="mbs${s.id}" ${isM?'disabled':''}>
+        <label class="form-check-label ${isM?'text-muted':''}" for="mbs${s.id}">
+          ${s.number?s.number+'. ':''}${s.name} ${isM?'<span class="badge bg-secondary">เป็นสมาชิกแล้ว</span>':''}
+        </label></div>`;
+    }).join('') || '<div class="text-muted small">ไม่มีนักเรียนในห้องนี้</div>';
+  } catch(e){ box.innerHTML = `<div class="text-danger small">${e.message}</div>`; }
+}
+
+function toggleAllBulk(cb) {
+  document.querySelectorAll('#mbList .mb-stu:not(:disabled)').forEach(c => c.checked = cb.checked);
+}
+
+async function saveMemberBulk() {
+  const ids = [...document.querySelectorAll('#mbList .mb-stu:checked')].map(c => +c.value);
+  if (!ids.length) { showToast('เลือกนักเรียนอย่างน้อย 1 คน','warning'); return; }
+  const limit = parseInt(document.getElementById('mbLimit').value)||3;
+  try {
+    const r = await apiFetch('/api/members/bulk', {method:'POST', body:JSON.stringify({student_ids:ids, borrow_limit:limit})});
+    showToast(r.message); memberBulkModal.hide(); loadMembers(); loadMemberStats();
+  } catch(e){ showToast(e.message,'danger'); }
 }
 
 async function loadBooks() {
@@ -587,6 +816,11 @@ function setupPickers() {
     document.getElementById('histPick').value = s.name;
     loadHistory(s.id);
   }, (s)=>`${s.name} <small class="text-muted">ม.${s.class_level}/${s.room}</small>`);
+
+  bindPicker('memStuPick','memStuResults', '/api/students/search-all', (s)=>{
+    memChosenStu=s;
+    document.getElementById('memStuChosen').innerHTML = `<span class="badge bg-primary fs-6">${s.name} (ม.${s.class_level}/${s.room})</span>`;
+  }, (s)=>`${s.name} <small class="text-muted">ม.${s.class_level}/${s.room}${s.number?' เลขที่ '+s.number:''}</small>`);
 }
 
 function bindPicker(inputId, boxId, url, onPick, render, qparam='q') {

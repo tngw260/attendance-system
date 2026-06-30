@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>บัตรสมาชิกห้องสมุด</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    .controls { background:#f0f4fb; padding:12px; border-bottom:2px solid var(--primary); }
+    /* A4 — 2 คอลัมน์ × 5 แถว = 10 บัตร/หน้า */
+    .mc-page {
+      width:210mm; min-height:297mm; margin:10mm auto; background:#fff; color:#000;
+      padding:10mm; box-sizing:border-box; box-shadow:0 2px 14px rgba(0,0,0,.15);
+      font-family:'Sarabun',sans-serif;
+      display:grid; grid-template-columns:repeat(2,1fr); grid-auto-rows:50mm; gap:5mm;
+      page-break-after:always;
+    }
+    .mc-page:last-child { page-break-after:auto; }
+    .mc-card {
+      border:1.5px solid #0d3b8e; border-radius:3mm; box-sizing:border-box; overflow:hidden;
+      display:flex; flex-direction:column;
+    }
+    .mc-card .hd {
+      background:#0d3b8e; color:#fff; padding:1.5mm 3mm; font-size:9pt; font-weight:700;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .mc-card .hd .lib { font-size:8pt; font-weight:500; opacity:.9; }
+    .mc-card .bd { flex:1; display:flex; align-items:center; gap:3mm; padding:2.5mm 3mm; }
+    .mc-card .photo {
+      width:18mm; height:22mm; flex-shrink:0; border:1px solid #ccc; border-radius:1.5mm;
+      object-fit:cover; background:#eef2f8;
+    }
+    .mc-card .photo-ph { display:flex; align-items:center; justify-content:center; color:#9bb; font-size:20pt; }
+    .mc-card .info { flex:1; min-width:0; line-height:1.3; }
+    .mc-card .sname { font-weight:700; font-size:12pt; line-height:1.15;
+      display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .mc-card .scls { font-size:10pt; color:#444; }
+    .mc-card .mno { font-family:'Courier New',monospace; font-weight:700; font-size:13pt; color:#0d3b8e; margin-top:.5mm; }
+    .mc-card .since { font-size:8.5pt; color:#666; }
+    .mc-card .susp { color:#c0392b; font-weight:700; font-size:8.5pt; }
+    .mc-card .qr { width:22mm; height:22mm; flex-shrink:0; background:#fff; }
+    .mc-card .qr canvas, .mc-card .qr img { width:100% !important; height:100% !important; }
+
+    @media print {
+      .no-print, nav { display:none !important; }
+      .mc-page { box-shadow:none; margin:0; }
+      @page { size:A4; margin:0; }
+    }
+    [data-theme="dark"] .mc-page { color:#000; background:#fff; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/library.html"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <div id="userBadge" class="d-flex align-items-center"></div>
+  </div>
+</nav>
+
+<div class="controls no-print">
+  <div class="container">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small fw-600 mb-1">เลือกห้อง</label>
+        <select id="selClass" class="form-select form-select-sm">
+          <option value="">-- ทั้งโรงเรียน --</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-600 mb-1">สถานะ</label>
+        <select id="selStatus" class="form-select form-select-sm">
+          <option value="active">ใช้งาน</option>
+          <option value="suspended">ระงับ</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button class="btn btn-primary btn-sm w-100" onclick="loadCards()">
+          <i class="bi bi-arrow-clockwise me-1"></i>โหลด
+        </button>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-dark btn-sm w-100" onclick="window.print()" id="printBtn" disabled>
+          <i class="bi bi-printer-fill me-1"></i>พิมพ์
+        </button>
+      </div>
+    </div>
+    <div class="small text-muted mt-2">
+      <i class="bi bi-info-circle me-1"></i>
+      บัตรสมาชิกห้องสมุด — QR เก็บเลขสมาชิก สแกนค้นหาที่เคาน์เตอร์ได้ • 10 ใบ/หน้า A4 • ตัดตามกรอบ
+    </div>
+  </div>
+</div>
+
+<div id="content">
+  <div class="mc-page" style="grid-template-columns:1fr; min-height:auto;">
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-person-badge fs-1 d-block mb-2"></i>เลือกเงื่อนไขแล้วกด "โหลด"
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/qrcode.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let schoolName = 'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  if (currentUser?.role !== 'admin') {
+    document.getElementById('content').innerHTML =
+      '<div class="mc-page" style="grid-template-columns:1fr;min-height:auto;"><div class="alert alert-warning m-3"><i class="bi bi-lock me-2"></i>สำหรับผู้ดูแลระบบเท่านั้น</div></div>';
+    document.querySelector('.controls').style.display = 'none';
+    return;
+  }
+  try {
+    const t = await (await fetch('/api/public/theme')).json();
+    if (t.school_name) schoolName = t.school_name;
+    const classes = await apiFetch('/api/classes');
+    const sel = document.getElementById('selClass');
+    const grouped = {};
+    classes.forEach(c => { (grouped[c.class_level] = grouped[c.class_level]||[]).push(c); });
+    Object.keys(grouped).sort((a,b)=>+a-+b).forEach(lv => {
+      const og = document.createElement('optgroup'); og.label = `มัธยมศึกษาปีที่ ${lv}`;
+      grouped[lv].forEach(c => {
+        const o = document.createElement('option');
+        o.value = `${c.class_level}_${c.room}`;
+        o.textContent = `ม.${c.class_level}/${c.room}`;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+  } catch(e){ showToast(e.message,'danger'); }
+});
+
+let curList = [];
+async function loadCards() {
+  const v = document.getElementById('selClass').value;
+  const status = document.getElementById('selStatus').value;
+  let qs = `status=${status}`;
+  if (v) { const [level, room] = v.split('_'); qs += `&level=${level}&room=${room}`; }
+  document.getElementById('content').innerHTML =
+    '<div class="mc-page" style="grid-template-columns:1fr;min-height:auto;"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>';
+  try {
+    curList = await apiFetch(`/api/members/cards?${qs}`);
+    renderCards();
+    document.getElementById('printBtn').disabled = !curList.length;
+  } catch(e){
+    document.getElementById('content').innerHTML = `<div class="mc-page"><div class="alert alert-danger m-3">${e.message}</div></div>`;
+  }
+}
+
+function thDate(iso) {
+  if (!iso) return '-';
+  const m = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const d = new Date(iso+'T00:00:00');
+  if (isNaN(d)) return iso;
+  return `${d.getDate()} ${m[d.getMonth()]} ${d.getFullYear()+543}`;
+}
+
+function renderCards() {
+  if (!curList.length) {
+    document.getElementById('content').innerHTML =
+      '<div class="mc-page"><div class="alert alert-warning m-3">ไม่พบสมาชิกตามเงื่อนไข</div></div>';
+    return;
+  }
+  const perPage = 10;
+  let html = '';
+  for (let i = 0; i < curList.length; i += perPage) {
+    html += '<div class="mc-page">';
+    curList.slice(i, i+perPage).forEach(s => {
+      const photo = s.photo
+        ? `<img class="photo" src="${s.photo}" alt="">`
+        : `<div class="photo photo-ph"><i class="bi bi-person"></i></div>`;
+      html += `<div class="mc-card">
+        <div class="hd"><span>บัตรสมาชิกห้องสมุด</span><span class="lib">${schoolName}</span></div>
+        <div class="bd">
+          ${photo}
+          <div class="info">
+            <div class="sname">${s.name}</div>
+            <div class="scls">ม.${s.class_level}/${s.room}${s.number?' เลขที่ '+s.number:''}</div>
+            <div class="mno">เลขสมาชิก ${s.member_no||'-'}</div>
+            <div class="since">สมาชิกตั้งแต่ ${thDate(s.member_since)}</div>
+            ${s.status==='suspended'?'<div class="susp">⚠ ระงับการยืม</div>':''}
+          </div>
+          <div class="qr"><div data-qr="${s.member_no||''}" data-qr-size="110"></div></div>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  document.getElementById('content').innerHTML = html;
+  renderLocalQRs();
+}
+</script>
+</body>
+</html>

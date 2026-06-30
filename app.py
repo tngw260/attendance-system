@@ -137,6 +137,8 @@ DEFAULT_SETTINGS = {
     'makeup_late_points':'1',
     'alert_threshold':   '5',
     'loan_days':         '7',   # จำนวนวันยืมหนังสือเริ่มต้น
+    'member_borrow_limit':'3',   # จำนวนเล่มที่สมาชิกยืมพร้อมกันได้ (ค่าเริ่มต้น)
+    'require_membership': '1',   # 1=ต้องเป็นสมาชิกถึงยืมได้
     'sem1_start':        '05-16',
     'sem1_end':          '10-15',
     'sem2_start':        '11-01',
@@ -289,6 +291,19 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_loan_active  ON book_loans(return_date);
             CREATE INDEX IF NOT EXISTS idx_loan_book    ON book_loans(book_id);
             CREATE INDEX IF NOT EXISTS idx_loan_student ON book_loans(student_id);
+
+            CREATE TABLE IF NOT EXISTS members (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                member_no     TEXT UNIQUE,            -- เลขสมาชิก (ออกอัตโนมัติ)
+                student_id    INTEGER NOT NULL UNIQUE REFERENCES students(id) ON DELETE CASCADE,
+                member_since  TEXT NOT NULL,          -- วันสมัคร
+                status        TEXT DEFAULT 'active'   -- active/suspended
+                                CHECK (status IN ('active','suspended')),
+                borrow_limit  INTEGER DEFAULT 3,      -- จำกัดจำนวนเล่มที่ยืมพร้อมกัน
+                note          TEXT,
+                created_at    TEXT DEFAULT (datetime('now','localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_member_student ON members(student_id);
 
             CREATE TABLE IF NOT EXISTS holidays (
                 date       TEXT PRIMARY KEY,
@@ -3553,6 +3568,28 @@ def api_loans_import():
     return jsonify(success=True, count=ok, errors=errors[:50], message=msg)
 
 
+def check_member_can_borrow(con, student_id, settings):
+    """ตรวจสิทธิ์การยืมของสมาชิก → (ok:bool, message:str)
+       - require_membership=1 : ต้องเป็นสมาชิก active
+       - เช็คสถานะระงับ + จำนวนเล่มที่ยืมค้างอยู่ ไม่เกิน borrow_limit"""
+    require = settings.get('require_membership', '1') == '1'
+    m = con.execute('SELECT * FROM members WHERE student_id=?', (student_id,)).fetchone()
+    if not m:
+        if require:
+            return False, 'นักเรียนยังไม่เป็นสมาชิกห้องสมุด — สมัครสมาชิกก่อนยืม'
+        return True, ''   # ไม่บังคับสมาชิก → ยืมได้เลย
+    if m['status'] == 'suspended':
+        return False, 'สมาชิกถูกระงับการยืม'
+    limit = m['borrow_limit'] if m['borrow_limit'] is not None else 3
+    if limit and limit > 0:
+        active = con.execute(
+            'SELECT COUNT(*) c FROM book_loans WHERE student_id=? AND return_date IS NULL',
+            (student_id,)).fetchone()['c']
+        if active >= limit:
+            return False, f'ยืมครบจำนวนสูงสุดแล้ว ({active}/{limit} เล่ม) — คืนก่อนจึงยืมเพิ่มได้'
+    return True, ''
+
+
 @app.post('/api/loans')
 @admin_required
 def api_loan_borrow():
@@ -3580,6 +3617,8 @@ def api_loan_borrow():
             return jsonify(success=False, message=f'หนังสือเล่มนี้ไม่ว่าง — สถานะ: {STLABEL.get(bk["status"], bk["status"])}'), 400
         st = con.execute('SELECT name FROM students WHERE id=?', (student_id,)).fetchone()
         if not st: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        ok, msg = check_member_can_borrow(con, student_id, settings)
+        if not ok: return jsonify(success=False, message=msg), 400
         con.execute("""INSERT INTO book_loans (book_id,student_id,borrow_date,due_date,borrowed_by)
             VALUES (?,?,?,?,?)""", (book_id, student_id, bdate.isoformat(), due, u['id']))
         con.execute("UPDATE books SET status='borrowed' WHERE id=?", (book_id,))
@@ -3652,6 +3691,183 @@ def api_loan_history(student_id):
             WHERE ln.student_id=? ORDER BY ln.borrow_date DESC
         """, (student_id,)).fetchall()
     return jsonify(rows_to_list(rows))
+
+# ── LIBRARY MEMBERS (สมาชิกห้องสมุด) ───────────────────────
+
+def _next_member_no(con):
+    """ออกเลขสมาชิกถัดไป — ปีพ.ศ. 2 หลัก + running 3 หลัก เช่น 69-001"""
+    yy = (datetime.date.today().year + 543) % 100
+    prefix = f'{yy:02d}-'
+    row = con.execute(
+        "SELECT member_no FROM members WHERE member_no LIKE ? ORDER BY member_no DESC LIMIT 1",
+        (prefix + '%',)).fetchone()
+    n = 1
+    if row and row['member_no']:
+        try: n = int(row['member_no'].split('-')[-1]) + 1
+        except (ValueError, IndexError): n = 1
+    return f'{prefix}{n:03d}'
+
+
+@app.get('/api/members')
+@admin_required
+def api_members_list():
+    """รายชื่อสมาชิก — ?q=ค้นหา &status=active/suspended &level &room"""
+    q = (request.args.get('q') or '').strip()
+    status = request.args.get('status') or ''
+    level = request.args.get('level') or ''
+    room = request.args.get('room') or ''
+    where, params = '', []
+    if q:
+        where += ' AND (s.name LIKE ? OR m.member_no LIKE ? OR s.student_code LIKE ?)'
+        p = f'%{q}%'; params += [p, p, p]
+    if status in ('active', 'suspended'):
+        where += ' AND m.status=?'; params.append(status)
+    if level: where += ' AND s.class_level=?'; params.append(level)
+    if room:  where += ' AND s.room=?'; params.append(room)
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT m.id, m.member_no, m.member_since, m.status, m.borrow_limit, m.note,
+                   s.id AS student_id, s.number, s.student_code, s.name,
+                   s.class_level, s.room, s.photo,
+                   (SELECT COUNT(*) FROM book_loans ln WHERE ln.student_id=s.id) AS total_loans,
+                   (SELECT COUNT(*) FROM book_loans ln WHERE ln.student_id=s.id AND ln.return_date IS NULL) AS active_loans,
+                   (SELECT COUNT(*) FROM book_loans ln WHERE ln.student_id=s.id AND ln.return_date IS NULL AND ln.due_date < ?) AS overdue_loans
+            FROM members m JOIN students s ON s.id=m.student_id
+            WHERE 1=1 {where}
+            ORDER BY s.class_level, s.room, s.number, s.name
+        """, [today_iso()] + params).fetchall()
+    return jsonify(rows_to_list(rows))
+
+
+@app.get('/api/members/stats')
+@admin_required
+def api_members_stats():
+    with get_db() as con:
+        total = con.execute('SELECT COUNT(*) c FROM members').fetchone()['c']
+        active = con.execute("SELECT COUNT(*) c FROM members WHERE status='active'").fetchone()['c']
+        suspended = con.execute("SELECT COUNT(*) c FROM members WHERE status='suspended'").fetchone()['c']
+        non_members = con.execute(
+            'SELECT COUNT(*) c FROM students s WHERE NOT EXISTS (SELECT 1 FROM members m WHERE m.student_id=s.id)').fetchone()['c']
+    return jsonify(total=total, active=active, suspended=suspended, non_members=non_members)
+
+
+@app.post('/api/members')
+@admin_required
+def api_member_add():
+    """สมัครสมาชิก — Body: {student_id, borrow_limit?, member_since?, note?}"""
+    u = current_user()
+    b = request.get_json() or {}
+    student_id = b.get('student_id')
+    if not student_id:
+        return jsonify(success=False, message='เลือกนักเรียน'), 400
+    settings = get_settings()
+    try: limit = int(b.get('borrow_limit') or settings.get('member_borrow_limit', '3'))
+    except (TypeError, ValueError): limit = 3
+    since = (b.get('member_since') or '').strip() or datetime.date.today().isoformat()
+    with get_db() as con:
+        st = con.execute('SELECT name FROM students WHERE id=?', (student_id,)).fetchone()
+        if not st: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if con.execute('SELECT 1 FROM members WHERE student_id=?', (student_id,)).fetchone():
+            return jsonify(success=False, message='นักเรียนคนนี้เป็นสมาชิกอยู่แล้ว'), 400
+        no = _next_member_no(con)
+        cur = con.execute("""INSERT INTO members (member_no,student_id,member_since,status,borrow_limit,note)
+            VALUES (?,?,?, 'active', ?, ?)""", (no, student_id, since, limit, (b.get('note') or '').strip()))
+        audit_log(con, 'add_member', 'member', cur.lastrowid, {'student_id': student_id, 'member_no': no})
+    return jsonify(success=True, member_no=no, message=f'สมัครสมาชิกสำเร็จ — เลขสมาชิก {no}')
+
+
+@app.post('/api/members/bulk')
+@admin_required
+def api_members_bulk():
+    """สมัครสมาชิกทีละหลายคน — Body: {student_ids:[...], borrow_limit?}"""
+    b = request.get_json() or {}
+    ids = b.get('student_ids') or []
+    if not ids: return jsonify(success=False, message='ไม่มีนักเรียนที่เลือก'), 400
+    settings = get_settings()
+    try: limit = int(b.get('borrow_limit') or settings.get('member_borrow_limit', '3'))
+    except (TypeError, ValueError): limit = 3
+    since = datetime.date.today().isoformat()
+    ok, skip = 0, 0
+    with get_db() as con:
+        for sid in ids:
+            if con.execute('SELECT 1 FROM members WHERE student_id=?', (sid,)).fetchone():
+                skip += 1; continue
+            if not con.execute('SELECT 1 FROM students WHERE id=?', (sid,)).fetchone():
+                skip += 1; continue
+            no = _next_member_no(con)
+            con.execute("""INSERT INTO members (member_no,student_id,member_since,status,borrow_limit)
+                VALUES (?,?,?, 'active', ?)""", (no, sid, since, limit))
+            ok += 1
+        audit_log(con, 'add_members_bulk', 'member', None, {'count': ok, 'skip': skip})
+    msg = f'สมัครสมาชิก {ok} คน'
+    if skip: msg += f' (ข้าม {skip} — เป็นสมาชิกอยู่แล้ว)'
+    return jsonify(success=True, count=ok, skipped=skip, message=msg)
+
+
+@app.put('/api/members/<int:mid>')
+@admin_required
+def api_member_update(mid):
+    """แก้ไขสมาชิก — Body: {status?, borrow_limit?, member_since?, note?}"""
+    b = request.get_json() or {}
+    fields, params = [], []
+    if 'status' in b and b['status'] in ('active', 'suspended'):
+        fields.append('status=?'); params.append(b['status'])
+    if 'borrow_limit' in b:
+        try: params.append(int(b['borrow_limit'])); fields.append('borrow_limit=?')
+        except (TypeError, ValueError): pass
+    if 'member_since' in b and (b['member_since'] or '').strip():
+        fields.append('member_since=?'); params.append(b['member_since'].strip())
+    if 'note' in b:
+        fields.append('note=?'); params.append((b['note'] or '').strip())
+    if not fields: return jsonify(success=False, message='ไม่มีข้อมูลที่แก้ไข'), 400
+    params.append(mid)
+    with get_db() as con:
+        if not con.execute('SELECT 1 FROM members WHERE id=?', (mid,)).fetchone():
+            return jsonify(success=False, message='ไม่พบสมาชิก'), 404
+        con.execute(f'UPDATE members SET {",".join(fields)} WHERE id=?', params)
+        audit_log(con, 'update_member', 'member', mid, b)
+    return jsonify(success=True, message='บันทึกแล้ว')
+
+
+@app.delete('/api/members/<int:mid>')
+@admin_required
+def api_member_delete(mid):
+    """ยกเลิกสมาชิก (ลบ record สมาชิก ไม่กระทบประวัติการยืม)"""
+    with get_db() as con:
+        m = con.execute('SELECT * FROM members WHERE id=?', (mid,)).fetchone()
+        if not m: return jsonify(success=False, message='ไม่พบสมาชิก'), 404
+        active = con.execute(
+            'SELECT COUNT(*) c FROM book_loans WHERE student_id=? AND return_date IS NULL',
+            (m['student_id'],)).fetchone()['c']
+        if active > 0:
+            return jsonify(success=False, message=f'ยังมีหนังสือค้างคืน {active} เล่ม — คืนก่อนจึงยกเลิกสมาชิกได้'), 400
+        con.execute('DELETE FROM members WHERE id=?', (mid,))
+        audit_log(con, 'delete_member', 'member', mid, {'student_id': m['student_id']})
+    return jsonify(success=True, message='ยกเลิกสมาชิกแล้ว')
+
+
+@app.get('/api/members/cards')
+@admin_required
+def api_members_cards():
+    """ข้อมูลสำหรับพิมพ์บัตรสมาชิก — ?level &room &status"""
+    status = request.args.get('status') or 'active'
+    level = request.args.get('level') or ''
+    room = request.args.get('room') or ''
+    where, params = '', []
+    if status in ('active', 'suspended'):
+        where += ' AND m.status=?'; params.append(status)
+    if level: where += ' AND s.class_level=?'; params.append(level)
+    if room:  where += ' AND s.room=?'; params.append(room)
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT m.member_no, m.member_since, m.status,
+                   s.name, s.class_level, s.room, s.number, s.photo
+            FROM members m JOIN students s ON s.id=m.student_id
+            WHERE 1=1 {where}
+            ORDER BY s.class_level, s.room, s.number, s.name
+        """, params).fetchall()
+    return jsonify(rows_to_list(rows))
+
 
 # ── HOME VISITS (เยี่ยมบ้าน) ───────────────────────────────
 
