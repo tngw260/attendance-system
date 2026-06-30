@@ -3003,22 +3003,51 @@ def api_holidays_seed():
 @app.get('/api/backup')
 @admin_required
 def api_backup():
-    """Download zip of DB + photos."""
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        zf.write(DB_PATH, 'school.db')
-        # Photos
-        for f in os.listdir(PHOTOS_DIR):
-            zf.write(os.path.join(PHOTOS_DIR, f), f'photos/{f}')
-        # Assets (logo)
-        for f in os.listdir(ASSETS_DIR):
-            zf.write(os.path.join(ASSETS_DIR, f), f'assets/{f}')
-        manifest = {'created_at': datetime.datetime.now().isoformat(),
-                    'created_by': current_user()['full_name']}
-        zf.writestr('manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2))
-    buf.seek(0)
+    """Download zip of DB (consistent snapshot — รวมธนาคาร/WAL ล่าสุด) + photos + manifest."""
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        # snapshot แบบ consistent ผ่าน sqlite backup API (ครอบคลุมธุรกรรมที่ยังอยู่ใน WAL)
+        sconn = sqlite3.connect(DB_PATH); dconn = sqlite3.connect(tmp_path)
+        with dconn:
+            sconn.backup(dconn)
+        sconn.close(); dconn.close()
+        # นับจำนวนรายการเพื่อยืนยันว่าข้อมูลครบ (รวมธนาคาร)
+        with get_db() as con:
+            def cnt(t):
+                try: return con.execute(f'SELECT COUNT(*) AS n FROM {t}').fetchone()['n']
+                except Exception: return 0
+            bank_bal = con.execute(
+                "SELECT COALESCE(SUM(CASE WHEN txn_type='deposit' THEN amount ELSE -amount END),0) AS b "
+                "FROM bank_transactions").fetchone()['b']
+            manifest = {
+                'created_at': datetime.datetime.now().isoformat(),
+                'created_by': current_user()['full_name'],
+                'counts': {
+                    'students': cnt('students'), 'attendance': cnt('attendance'),
+                    'behavior_logs': cnt('behavior_logs'), 'home_visits': cnt('home_visits'),
+                    'books': cnt('books'), 'book_loans': cnt('book_loans'), 'members': cnt('members'),
+                    'bank_accounts': cnt('bank_accounts'), 'bank_transactions': cnt('bank_transactions'),
+                },
+                'bank_total_balance': round(bank_bal or 0, 2),
+            }
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.write(tmp_path, 'school.db')
+            for f in os.listdir(PHOTOS_DIR):
+                zf.write(os.path.join(PHOTOS_DIR, f), f'photos/{f}')
+            for f in os.listdir(ASSETS_DIR):
+                zf.write(os.path.join(ASSETS_DIR, f), f'assets/{f}')
+            zf.writestr('manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2))
+        buf.seek(0)
+    finally:
+        try: os.unlink(tmp_path)
+        except OSError: pass
     with get_db() as con:
-        audit_log(con, 'backup', 'system', None, None)
+        audit_log(con, 'backup', 'system', None,
+                  {'bank_accounts': manifest['counts']['bank_accounts'],
+                   'bank_transactions': manifest['counts']['bank_transactions']})
     return send_file(buf, as_attachment=True,
                      download_name=f'attendance_backup_{today_iso()}.zip',
                      mimetype='application/zip')
@@ -3096,13 +3125,22 @@ def api_admin_backup_info():
     try:
         size = os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0
         with get_db() as con:
+            def cnt(t):
+                try: return con.execute(f'SELECT COUNT(*) AS n FROM {t}').fetchone()['n']
+                except Exception: return 0
             counts = {
-                'students':      con.execute('SELECT COUNT(*) AS n FROM students').fetchone()['n'],
-                'attendance':    con.execute('SELECT COUNT(*) AS n FROM attendance').fetchone()['n'],
-                'behavior_logs': con.execute('SELECT COUNT(*) AS n FROM behavior_logs').fetchone()['n'],
-                'users':         con.execute('SELECT COUNT(*) AS n FROM users').fetchone()['n'],
+                'students':      cnt('students'),
+                'attendance':    cnt('attendance'),
+                'behavior_logs': cnt('behavior_logs'),
+                'users':         cnt('users'),
+                'bank_accounts':     cnt('bank_accounts'),
+                'bank_transactions': cnt('bank_transactions'),
             }
-        return jsonify(size_bytes=size, size_mb=round(size/1024/1024, 2), counts=counts)
+            bank_bal = con.execute(
+                "SELECT COALESCE(SUM(CASE WHEN txn_type='deposit' THEN amount ELSE -amount END),0) AS b "
+                "FROM bank_transactions").fetchone()['b']
+        return jsonify(size_bytes=size, size_mb=round(size/1024/1024, 2),
+                       counts=counts, bank_total_balance=round(bank_bal or 0, 2))
     except Exception as e:
         return jsonify(error=str(e)), 500
 
