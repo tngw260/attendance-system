@@ -4105,6 +4105,42 @@ def api_bank_summary():
                 'withdraw': round(r['withdraw'], 2), 'count': r['cnt']} for r in daily])
 
 
+@app.get('/api/bank/transactions')
+@login_required
+def api_bank_transactions():
+    """รายการเดินบัญชีทีละรายการ — ?period=day|week|month &date &level &room &type=deposit|withdraw"""
+    u = current_user()
+    period = request.args.get('period') or 'day'
+    try: ref = datetime.date.fromisoformat(request.args.get('date') or today_iso())
+    except ValueError: ref = datetime.date.today()
+    if period == 'week':
+        start = ref - datetime.timedelta(days=ref.weekday()); end = start + datetime.timedelta(days=6)
+    elif period == 'month':
+        start = ref.replace(day=1)
+        end = (start + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)
+    else:
+        start = end = ref
+    where, params, _, _ = user_class_filter(u, {'level': request.args.get('level'), 'room': request.args.get('room')})
+    extra, ttype = '', request.args.get('type')
+    if ttype in ('deposit', 'withdraw'):
+        extra = ' AND t.txn_type=?'; params = params + [ttype]
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT t.id, t.txn_date, t.txn_type, t.amount, t.note, t.created_at,
+                   s.name, s.class_level, s.room, s.number,
+                   us.full_name AS by_name
+            FROM bank_transactions t
+            JOIN students s ON s.id=t.student_id
+            LEFT JOIN users us ON us.id=t.created_by
+            WHERE t.txn_date BETWEEN ? AND ? {where} {extra}
+            ORDER BY t.txn_date ASC, t.id ASC
+        """, [start.isoformat(), end.isoformat()] + params).fetchall()
+    items = []
+    for r in rows:
+        d = dict(r); d['amount'] = round(d['amount'], 2); items.append(d)
+    return jsonify(period=period, start=start.isoformat(), end=end.isoformat(), items=items)
+
+
 @app.get('/api/bank/stats')
 @login_required
 def api_bank_stats():

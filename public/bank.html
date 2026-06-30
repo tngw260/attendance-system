@@ -130,6 +130,15 @@
           </div>
         </div>
         <div class="col-auto">
+          <label class="form-label small fw-600 mb-1">มุมมอง</label>
+          <div class="btn-group" role="group">
+            <input type="radio" class="btn-check" name="rpView" id="rpSum" value="summary" checked onchange="loadReport()">
+            <label class="btn btn-outline-success" for="rpSum">สรุปยอด</label>
+            <input type="radio" class="btn-check" name="rpView" id="rpItem" value="item" onchange="loadReport()">
+            <label class="btn btn-outline-success" for="rpItem">ทีละรายการ</label>
+          </div>
+        </div>
+        <div class="col-auto">
           <label class="form-label small fw-600 mb-1">วันที่อ้างอิง</label>
           <input type="date" id="rpDate" class="form-control">
         </div>
@@ -146,13 +155,18 @@
       </div>
     </div></div>
     <div id="rpHead" class="mb-2"></div>
-    <div class="row g-2 mb-3" id="rpCards"></div>
-    <div class="table-responsive">
-      <table class="table align-middle">
-        <thead><tr><th>วันที่</th><th class="text-end">ฝาก</th><th class="text-end">ถอน</th><th class="text-end">สุทธิ</th><th class="text-center">รายการ</th></tr></thead>
-        <tbody id="rpBody"><tr><td colspan="5" class="text-center text-muted py-4">เลือกช่วงแล้วกด "ดูรายงาน"</td></tr></tbody>
-      </table>
+    <!-- มุมมองสรุปยอด -->
+    <div id="rpSummaryView">
+      <div class="row g-2 mb-3" id="rpCards"></div>
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead><tr><th>วันที่</th><th class="text-end">ฝาก</th><th class="text-end">ถอน</th><th class="text-end">สุทธิ</th><th class="text-center">รายการ</th></tr></thead>
+          <tbody id="rpBody"><tr><td colspan="5" class="text-center text-muted py-4">เลือกช่วงแล้วกด "ดูรายงาน"</td></tr></tbody>
+        </table>
+      </div>
     </div>
+    <!-- มุมมองทีละรายการ -->
+    <div id="rpItemView" style="display:none;"></div>
   </div>
 </div>
 
@@ -502,12 +516,21 @@ async function loadRank() {
 }
 
 /* ===== รายงาน ===== */
-async function loadReport() {
+function reportQS() {
   const period = document.querySelector('input[name="rpPeriod"]:checked').value;
   const date = document.getElementById('rpDate').value;
   let qs = `period=${period}&date=${date}`;
   const cv = document.getElementById('rpClass').value;
   if (cv) { const [l,r]=cv.split('_'); qs += `&level=${l}&room=${r}`; }
+  return {qs, period};
+}
+
+async function loadReport() {
+  const view = document.querySelector('input[name="rpView"]:checked').value;
+  document.getElementById('rpSummaryView').style.display = view==='summary' ? '' : 'none';
+  document.getElementById('rpItemView').style.display = view==='item' ? '' : 'none';
+  if (view === 'item') return loadItemReport();
+  const {qs, period} = reportQS();
   try {
     const d = await apiFetch(`/api/bank/summary?${qs}`);
     const pName = {day:'รายวัน',week:'รายสัปดาห์',month:'รายเดือน'}[period];
@@ -527,6 +550,56 @@ async function loadReport() {
         <td class="text-center">${r.count}</td>
       </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted py-4">— ไม่มีรายการในช่วงนี้ —</td></tr>';
   } catch(e){ showToast(e.message,'danger'); }
+}
+
+async function loadItemReport() {
+  const {qs, period} = reportQS();
+  const pName = {day:'รายวัน',week:'รายสัปดาห์',month:'รายเดือน'}[period];
+  const box = document.getElementById('rpItemView');
+  box.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+  try {
+    const d = await apiFetch(`/api/bank/transactions?${qs}`);
+    document.getElementById('rpHead').innerHTML =
+      `<h5 class="mb-0">รายการเดินบัญชี (${pName}) • ${pcDate(d.start)}${d.start!==d.end?' ถึง '+pcDate(d.end):''}</h5>`;
+    if (!d.items.length) { box.innerHTML = '<div class="alert alert-warning">— ไม่มีรายการในช่วงนี้ —</div>'; return; }
+    // จัดกลุ่มตามวัน
+    const byDay = {};
+    d.items.forEach(t => { (byDay[t.txn_date] = byDay[t.txn_date] || []).push(t); });
+    let gDep=0, gWd=0, html='';
+    Object.keys(byDay).sort().forEach(day => {
+      const list = byDay[day];
+      let dDep=0, dWd=0;
+      const rows = list.map((t,i) => {
+        const dep = t.txn_type==='deposit';
+        if (dep) dDep+=t.amount; else dWd+=t.amount;
+        const tm = t.created_at ? (t.created_at.split(' ')[1]||'').slice(0,5) : '';
+        return `<tr>
+          <td class="text-center text-muted">${i+1}</td>
+          <td>${t.name} <span class="text-muted small">ม.${t.class_level}/${t.room}</span></td>
+          <td class="text-center">${dep?'<span class="badge bg-success">ฝาก</span>':'<span class="badge bg-danger">ถอน</span>'}</td>
+          <td class="text-end ${dep?'bal-pos':''}">${dep?money(t.amount):'-'}</td>
+          <td class="text-end" style="color:#c0392b;">${dep?'-':money(t.amount)}</td>
+          <td class="small text-muted">${t.note||''}${tm?` <span class="text-nowrap">⏱${tm}</span>`:''}${t.by_name?` <span class="text-nowrap">(${t.by_name})</span>`:''}</td>
+        </tr>`;
+      }).join('');
+      gDep+=dDep; gWd+=dWd;
+      html += `<div class="mb-3">
+        <div class="fw-700 mb-1 px-1" style="border-left:4px solid #0d3b8e;">📅 ${pcDate(day)} <span class="text-muted small fw-500">(${list.length} รายการ)</span></div>
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+          <thead class="table-light"><tr><th class="text-center" style="width:40px;">#</th><th>นักเรียน</th><th class="text-center">ประเภท</th><th class="text-end">ฝาก</th><th class="text-end">ถอน</th><th>หมายเหตุ / เวลา / ผู้ทำรายการ</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr class="table-light fw-700"><td colspan="3" class="text-end">รวมวันนี้</td><td class="text-end bal-pos">${money(dDep)}</td><td class="text-end" style="color:#c0392b;">${money(dWd)}</td><td>สุทธิ ${money(dDep-dWd)}</td></tr></tfoot>
+        </table></div>
+      </div>`;
+    });
+    html += `<div class="card"><div class="card-body d-flex justify-content-around flex-wrap gap-2 text-center">
+        <div><div class="small text-muted">ฝากรวมทั้งช่วง</div><div class="h5 mb-0 bal-pos">${money(gDep)}</div></div>
+        <div><div class="small text-muted">ถอนรวมทั้งช่วง</div><div class="h5 mb-0" style="color:#c0392b;">${money(gWd)}</div></div>
+        <div><div class="small text-muted">สุทธิ</div><div class="h5 mb-0 fw-700">${money(gDep-gWd)}</div></div>
+        <div><div class="small text-muted">จำนวนรายการ</div><div class="h5 mb-0">${d.items.length}</div></div>
+      </div></div>`;
+    box.innerHTML = html;
+  } catch(e){ box.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
 }
 </script>
 </body>
