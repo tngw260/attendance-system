@@ -260,7 +260,12 @@ def init_db():
                 book_code   TEXT UNIQUE,             -- รหัส/บาร์โค้ดหนังสือ
                 title       TEXT NOT NULL,
                 author      TEXT,
-                category    TEXT,
+                category    TEXT,                    -- หมวดหลัก
+                cat_code    TEXT,                    -- รหัสหมวด (000/100/...)
+                book_type   TEXT,                    -- ประเภท (แบบฝึก/อ่านเสริม/...)
+                publisher   TEXT,                    -- สำนักพิมพ์/หน่วยงาน
+                pub_year    TEXT,                    -- ปีพิมพ์
+                shelf       TEXT,                    -- ชั้นวาง
                 status      TEXT NOT NULL DEFAULT 'available'
                                 CHECK (status IN ('available','borrowed','damaged','lost')),
                 note        TEXT,
@@ -357,6 +362,13 @@ def init_db():
                 con.execute('ALTER TABLE home_visits ADD COLUMN submitted INTEGER DEFAULT 0')
             if 'confirmed' not in hvcols:
                 con.execute('ALTER TABLE home_visits ADD COLUMN confirmed INTEGER DEFAULT 0')
+
+        # Migrate: books - add catalog fields (สำหรับ import จาก Excel โรงเรียน)
+        bkcols = [r['name'] for r in con.execute('PRAGMA table_info(books)').fetchall()]
+        if bkcols:
+            for col in ('cat_code','book_type','publisher','pub_year','shelf'):
+                if col not in bkcols:
+                    con.execute(f'ALTER TABLE books ADD COLUMN {col} TEXT')
 
         # Migrate: behavior_logs - add note column
         bcols = [r['name'] for r in con.execute('PRAGMA table_info(behavior_logs)').fetchall()]
@@ -3152,10 +3164,12 @@ def api_books_list():
     """รายการหนังสือ — ?q=ค้นหา &status=available/borrowed/damaged/lost"""
     q = (request.args.get('q') or '').strip()
     status = request.args.get('status')
+    try: limit = min(int(request.args.get('limit', 200)), 1000)
+    except (TypeError, ValueError): limit = 200
     where, params = '', []
     if q:
-        where += ' AND (b.title LIKE ? OR b.author LIKE ? OR b.book_code LIKE ? OR b.category LIKE ?)'
-        p = f'%{q}%'; params += [p, p, p, p]
+        where += ' AND (b.title LIKE ? OR b.author LIKE ? OR b.book_code LIKE ? OR b.category LIKE ? OR b.publisher LIKE ? OR b.shelf LIKE ?)'
+        p = f'%{q}%'; params += [p, p, p, p, p, p]
     if status in ('available','borrowed','damaged','lost'):
         where += ' AND b.status=?'; params.append(status)
     with get_db() as con:
@@ -3168,8 +3182,9 @@ def api_books_list():
             LEFT JOIN book_loans ln ON ln.book_id=b.id AND ln.return_date IS NULL
             LEFT JOIN students s ON s.id=ln.student_id
             WHERE 1=1 {where}
-            ORDER BY b.title
-        """, params).fetchall()
+            ORDER BY b.id DESC
+            LIMIT ?
+        """, params + [limit]).fetchall()
     return jsonify(rows_to_list(rows))
 
 @app.get('/api/books/stats')
@@ -3204,11 +3219,12 @@ def api_book_add():
     with get_db() as con:
         if code and con.execute('SELECT 1 FROM books WHERE book_code=?', (code,)).fetchone():
             return jsonify(success=False, message='รหัสหนังสือนี้มีอยู่แล้ว'), 400
-        cur = con.execute("""INSERT INTO books (book_code,title,author,category,status,note)
-            VALUES (?,?,?,?,?,?)""",
-            (code, title, (b.get('author') or '').strip() or None,
-             (b.get('category') or '').strip() or None, status,
-             (b.get('note') or '').strip() or None))
+        g = lambda k: (b.get(k) or '').strip() or None
+        cur = con.execute("""INSERT INTO books
+            (book_code,title,author,category,cat_code,book_type,publisher,pub_year,shelf,status,note)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (code, title, g('author'), g('category'), g('cat_code'), g('book_type'),
+             g('publisher'), g('pub_year'), g('shelf'), status, g('note')))
         audit_log(con, 'add_book', 'book', cur.lastrowid, {'title': title})
     return jsonify(success=True, id=cur.lastrowid, message='เพิ่มหนังสือสำเร็จ')
 
@@ -3220,7 +3236,7 @@ def api_book_update(bid):
         bk = con.execute('SELECT * FROM books WHERE id=?', (bid,)).fetchone()
         if not bk: return jsonify(success=False, message='ไม่พบหนังสือ'), 404
         updates = {}
-        for f in ('title','author','category','note','book_code'):
+        for f in ('title','author','category','note','book_code','cat_code','book_type','publisher','pub_year','shelf'):
             if f in b: updates[f] = (b.get(f) or '').strip() or None
         if 'status' in b and b['status'] in ('available','borrowed','damaged','lost'):
             # ห้ามตั้ง available/borrowed มือถ้ากำลังถูกยืมอยู่ (ให้ใช้ระบบคืน)
@@ -3278,16 +3294,17 @@ def api_books_bulk():
 @admin_required
 def api_books_template():
     """ดาวน์โหลด Excel template สำหรับนำเข้าหนังสือ"""
-    wb = openpyxl.Workbook(); ws = wb.active; ws.title = 'หนังสือ'
-    headers = ['ชื่อหนังสือ *', 'ผู้แต่ง', 'หมวดหมู่', 'รหัส/บาร์โค้ด']
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = 'รายการหนังสือ'
+    headers = ['รหัสหนังสือ', 'ชื่อหนังสือ *', 'หมวดหลัก', 'รหัสหมวด', 'ประเภท',
+               'ผู้แต่ง/ผู้เรียบเรียง', 'สำนักพิมพ์/หน่วยงาน', 'ปีพิมพ์', 'ชั้นวาง', 'สถานะ']
     hfill = PatternFill(fill_type='solid', fgColor='198754')
     hfont = Font(bold=True, color='FFFFFF')
     for col, h in enumerate(headers, 1):
         c = ws.cell(row=1, column=col, value=h)
         c.fill = hfill; c.font = hfont; c.alignment = Alignment(horizontal='center')
-    ws.append(['แฮร์รี่ พอตเตอร์ เล่ม 1', 'J.K. Rowling', 'นิยาย', 'B001'])
-    ws.append(['คณิตศาสตร์ ม.1', 'สสวท.', 'เรียน', 'B002'])
-    for col, w in zip(ws.columns, [34, 22, 16, 16]):
+    ws.append(['B001', 'แฮร์รี่ พอตเตอร์ เล่ม 1', 'นวนิยาย', '800', 'หนังสืออ่านเสริม',
+               'J.K. Rowling', 'นานมีบุ๊คส์', '2560', 'ชั้น A1', 'พร้อมให้บริการ'])
+    for col, w in zip(ws.columns, [16, 34, 18, 10, 16, 20, 20, 10, 12, 14]):
         ws.column_dimensions[col[0].column_letter].width = w
     buf = io.BytesIO(); wb.save(buf); buf.seek(0)
     return send_file(buf, as_attachment=True, download_name='books_template.xlsx',
@@ -3305,23 +3322,69 @@ def api_books_import():
     try:
         wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
         ws = wb.active
-        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        all_rows = list(ws.iter_rows(min_row=1, values_only=True))
         wb.close()
     except Exception as e:
         return jsonify(success=False, message=f'เปิดไฟล์ไม่ได้: {e}'), 400
+    if not all_rows:
+        return jsonify(success=False, message='ไฟล์ว่าง'), 400
+
+    # อ่าน header แล้วแมปตามชื่อคอลัมน์ (รองรับทั้งไฟล์โรงเรียน 12 คอลัมน์ + template เดิม)
+    header = [str(h).strip() if h else '' for h in all_rows[0]]
+    def find_col(*keywords):
+        for i, h in enumerate(header):
+            for kw in keywords:
+                if kw in h:
+                    return i
+        return None
+    ci = {
+        'title':   find_col('ชื่อหนังสือ', 'ชื่อ'),
+        'code':    find_col('รหัสหนังสือ', 'รหัส/บาร์โค้ด', 'บาร์โค้ด'),
+        'author':  find_col('ผู้แต่ง', 'ผู้เรียบเรียง'),
+        'category':find_col('หมวดหลัก', 'หมวดหมู่', 'หมวด'),
+        'cat_code':find_col('รหัสหมวด'),
+        'type':    find_col('ประเภท'),
+        'pub':     find_col('สำนักพิมพ์', 'หน่วยงาน'),
+        'year':    find_col('ปีพิมพ์', 'ปี'),
+        'shelf':   find_col('ชั้นวาง', 'ชั้น'),
+        'status':  find_col('สถานะ'),
+    }
+    # ถ้าไม่เจอคอลัมน์ชื่อหนังสือเลย → เดาว่าใช้ template เดิม (คอลัมน์ 0=ชื่อ,1=ผู้แต่ง,2=หมวด,3=รหัส)
+    if ci['title'] is None:
+        ci = {'title':0,'author':1,'category':2,'code':3,
+              'cat_code':None,'type':None,'pub':None,'year':None,'shelf':None,'status':None}
+
+    def cell(row, key):
+        i = ci.get(key)
+        if i is None or i >= len(row) or row[i] is None: return None
+        v = str(row[i]).strip()
+        return v or None
+
+    STATUS_MAP = {
+        'พร้อมให้บริการ':'available','พร้อมยืม':'available','ว่าง':'available',
+        'ถูกยืม':'borrowed','ยืมอยู่':'borrowed',
+        'ชำรุด':'damaged','สูญหาย':'lost','หาย':'lost',
+        'available':'available','borrowed':'borrowed','damaged':'damaged','lost':'lost',
+    }
+
     count, skipped = 0, 0
     with get_db() as con:
-        for row in rows:
-            if not row or not row[0]: continue
-            title = str(row[0]).strip()
+        for row in all_rows[1:]:
+            if not row: continue
+            title = cell(row, 'title')
             if not title: skipped += 1; continue
-            author = str(row[1]).strip() if len(row) > 1 and row[1] else None
-            category = str(row[2]).strip() if len(row) > 2 and row[2] else None
-            code = str(row[3]).strip() if len(row) > 3 and row[3] else None
+            code = cell(row, 'code')
             if code and con.execute('SELECT 1 FROM books WHERE book_code=?', (code,)).fetchone():
                 skipped += 1; continue
-            con.execute("""INSERT INTO books (book_code,title,author,category,status)
-                VALUES (?,?,?,?,'available')""", (code, title, author, category))
+            raw_status = cell(row, 'status')
+            status = STATUS_MAP.get(raw_status, 'available') if raw_status else 'available'
+            # หนังสือถูกยืมจาก import = ถือเป็น available (ไม่มีข้อมูลผู้ยืม) เว้นชำรุด/สูญหาย
+            if status == 'borrowed': status = 'available'
+            con.execute("""INSERT INTO books
+                (book_code,title,author,category,cat_code,book_type,publisher,pub_year,shelf,status)
+                VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (code, title, cell(row,'author'), cell(row,'category'), cell(row,'cat_code'),
+                 cell(row,'type'), cell(row,'pub'), cell(row,'year'), cell(row,'shelf'), status))
             count += 1
         audit_log(con, 'import_books', 'book', None, {'count': count, 'skipped': skipped})
     msg = f'นำเข้าหนังสือ {count} เล่ม'
@@ -3340,17 +3403,23 @@ def api_loan_borrow():
     settings = get_settings()
     try: days = int(b.get('days') or settings.get('loan_days', '7'))
     except (TypeError, ValueError): days = 7
-    today = datetime.date.today()
-    due = (today + datetime.timedelta(days=days)).isoformat()
+    # วันยืม — กรอกย้อนหลังได้ (ถ้าไม่ส่งมา = วันนี้)
+    borrow_date = (b.get('borrow_date') or '').strip()
+    try:
+        bdate = datetime.date.fromisoformat(borrow_date) if borrow_date else datetime.date.today()
+    except ValueError:
+        bdate = datetime.date.today()
+    due = (bdate + datetime.timedelta(days=days)).isoformat()
     with get_db() as con:
         bk = con.execute('SELECT * FROM books WHERE id=?', (book_id,)).fetchone()
         if not bk: return jsonify(success=False, message='ไม่พบหนังสือ'), 404
         if bk['status'] != 'available':
-            return jsonify(success=False, message=f'หนังสือไม่พร้อมยืม (สถานะ: {bk["status"]})'), 400
+            STLABEL = {'borrowed':'ถูกยืมอยู่','damaged':'ชำรุด','lost':'สูญหาย'}
+            return jsonify(success=False, message=f'หนังสือเล่มนี้ไม่ว่าง — สถานะ: {STLABEL.get(bk["status"], bk["status"])}'), 400
         st = con.execute('SELECT name FROM students WHERE id=?', (student_id,)).fetchone()
         if not st: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
         con.execute("""INSERT INTO book_loans (book_id,student_id,borrow_date,due_date,borrowed_by)
-            VALUES (?,?,?,?,?)""", (book_id, student_id, today.isoformat(), due, u['id']))
+            VALUES (?,?,?,?,?)""", (book_id, student_id, bdate.isoformat(), due, u['id']))
         con.execute("UPDATE books SET status='borrowed' WHERE id=?", (book_id,))
         audit_log(con, 'borrow_book', 'book', book_id, {'student_id': student_id, 'due': due})
     return jsonify(success=True, due_date=due, message=f'ยืมสำเร็จ — กำหนดคืน {due}')

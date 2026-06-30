@@ -69,8 +69,8 @@
     </div>
     <div class="table-responsive">
       <table class="table table-hover align-middle">
-        <thead><tr><th>รหัส</th><th>ชื่อหนังสือ</th><th>ผู้แต่ง</th><th>หมวด</th><th>สถานะ</th><th class="no-print text-end">จัดการ</th></tr></thead>
-        <tbody id="booksBody"><tr><td colspan="6" class="text-center text-muted py-4">กำลังโหลด...</td></tr></tbody>
+        <thead><tr><th>รหัส</th><th>ชื่อหนังสือ</th><th>ผู้แต่ง</th><th>หมวด</th><th>ชั้นวาง</th><th>สถานะ</th><th class="no-print text-end">จัดการ</th></tr></thead>
+        <tbody id="booksBody"><tr><td colspan="7" class="text-center text-muted py-4">กำลังโหลด...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -107,10 +107,20 @@
         <div id="bookResults" class="picker-results"></div>
         <div id="bookChosen" class="mt-2"></div>
       </div>
-      <div class="mb-3">
-        <label class="form-label fw-600">3. จำนวนวันยืม</label>
-        <input id="loanDays" type="number" class="form-control" style="max-width:140px;" value="7" min="1" max="60">
-        <small class="text-muted">กำหนดคืน: <span id="duePreview">-</span></small>
+      <div class="row g-2 mb-3">
+        <div class="col-6 col-md-4">
+          <label class="form-label fw-600">3. วันที่ยืม</label>
+          <input id="borrowDate" type="date" class="form-control" onchange="updateDuePreview()">
+          <small class="text-muted">ย้อนหลังได้</small>
+        </div>
+        <div class="col-6 col-md-4">
+          <label class="form-label fw-600">จำนวนวัน</label>
+          <input id="loanDays" type="number" class="form-control" value="7" min="1" max="60" onchange="updateDuePreview()">
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-600">กำหนดคืน</label>
+          <div class="form-control bg-light fw-600" id="duePreview" style="border-style:dashed;">-</div>
+        </div>
       </div>
       <button class="btn btn-primary btn-lg" onclick="doBorrow()" id="borrowBtn" disabled>
         <i class="bi bi-check-circle me-1"></i>ยืนยันการยืม
@@ -169,7 +179,15 @@
       <div class="col-6 mb-2"><label class="form-label small fw-600">รหัส/บาร์โค้ด</label><input id="bm_code" class="form-control"></div>
       <div class="col-6 mb-2"><label class="form-label small fw-600">หมวดหมู่</label><input id="bm_category" class="form-control"></div>
     </div>
-    <div class="mb-2"><label class="form-label small fw-600">ผู้แต่ง</label><input id="bm_author" class="form-control"></div>
+    <div class="row g-2">
+      <div class="col-6 mb-2"><label class="form-label small fw-600">ผู้แต่ง</label><input id="bm_author" class="form-control"></div>
+      <div class="col-6 mb-2"><label class="form-label small fw-600">สำนักพิมพ์</label><input id="bm_publisher" class="form-control"></div>
+    </div>
+    <div class="row g-2">
+      <div class="col-4 mb-2"><label class="form-label small fw-600">ประเภท</label><input id="bm_type" class="form-control"></div>
+      <div class="col-4 mb-2"><label class="form-label small fw-600">ปีพิมพ์</label><input id="bm_year" class="form-control"></div>
+      <div class="col-4 mb-2"><label class="form-label small fw-600">ชั้นวาง</label><input id="bm_shelf" class="form-control"></div>
+    </div>
     <div class="mb-2" id="bm_statusWrap"><label class="form-label small fw-600">สถานะ</label>
       <select id="bm_status" class="form-select">
         <option value="available">พร้อมยืม</option>
@@ -279,6 +297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupPickers();
   loadClassDropdown();
   document.getElementById('loanDays').addEventListener('input', updateDuePreview);
+  document.getElementById('borrowDate').value = todayISO();
   updateDuePreview();
   loadStats(); loadBooks();
 });
@@ -363,12 +382,13 @@ async function loadBooks() {
         <td><code>${b.book_code||'-'}</code></td>
         <td class="fw-600">${b.title}${b.cur_student_name ? `<br><small class="text-warning">📕 ${b.cur_student_name} (ม.${b.cur_level}/${b.cur_room}) ครบ ${pcDate(b.cur_due)}</small>`:''}</td>
         <td>${b.author||'-'}</td><td>${b.category||'-'}</td>
+        <td>${b.shelf||'-'}</td>
         <td><span class="badge badge-st-${b.status}">${ST[b.status].l}</span></td>
         <td class="no-print text-end">
           <button class="btn btn-sm btn-link p-0 me-2" onclick='openBookForm(${JSON.stringify(b)})' title="แก้ไข"><i class="bi bi-pencil"></i></button>
           <button class="btn btn-sm btn-link text-danger p-0" onclick="delBook(${b.id})" title="ลบ"><i class="bi bi-trash"></i></button>
         </td>
-      </tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted py-4">— ไม่พบหนังสือ —</td></tr>';
+      </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted py-4">— ไม่พบหนังสือ —</td></tr>';
   } catch(e){ showToast(e.message,'danger'); }
 }
 
@@ -379,6 +399,10 @@ function openBookForm(b) {
   document.getElementById('bm_code').value = b?.book_code || '';
   document.getElementById('bm_category').value = b?.category || '';
   document.getElementById('bm_author').value = b?.author || '';
+  document.getElementById('bm_publisher').value = b?.publisher || '';
+  document.getElementById('bm_type').value = b?.book_type || '';
+  document.getElementById('bm_year').value = b?.pub_year || '';
+  document.getElementById('bm_shelf').value = b?.shelf || '';
   document.getElementById('bm_note').value = b?.note || '';
   // ตอนแก้ไข ถ้าถูกยืมอยู่ ซ่อน select สถานะ (จัดการผ่านระบบคืน)
   const isBorrowed = b?.status === 'borrowed';
@@ -395,6 +419,10 @@ async function saveBook() {
     book_code: document.getElementById('bm_code').value.trim(),
     category: document.getElementById('bm_category').value.trim(),
     author: document.getElementById('bm_author').value.trim(),
+    publisher: document.getElementById('bm_publisher').value.trim(),
+    book_type: document.getElementById('bm_type').value.trim(),
+    pub_year: document.getElementById('bm_year').value.trim(),
+    shelf: document.getElementById('bm_shelf').value.trim(),
     note: document.getElementById('bm_note').value.trim(),
   };
   if (document.getElementById('bm_statusWrap').style.display !== 'none')
@@ -493,9 +521,10 @@ function setupPickers() {
 
   bindPicker('bookPick','bookResults', '/api/books?status=available', (b)=>{
     chosenBook=b;
-    document.getElementById('bookChosen').innerHTML = `<span class="badge bg-success fs-6">📘 ${b.title}${b.book_code?' ('+b.book_code+')':''}</span>`;
+    const shelf = b.shelf ? ` · ชั้น ${b.shelf}` : '';
+    document.getElementById('bookChosen').innerHTML = `<span class="badge bg-success fs-6">📘 ${b.title}${b.book_code?' ('+b.book_code+')':''}${shelf}</span>`;
     checkBorrowReady();
-  }, (b)=>`${b.title} <small class="text-muted">${b.author||''} ${b.book_code||''}</small>`, 'q');
+  }, (b)=>`${b.title} <small class="text-muted">${b.book_code||''} ${b.shelf?'· ชั้น '+b.shelf:''} ${b.category||''}</small>`, 'q');
 
   bindPicker('histPick','histResults', '/api/students/search-all', (s)=>{
     document.getElementById('histPick').value = s.name;
@@ -532,20 +561,23 @@ function checkBorrowReady() {
 }
 function updateDuePreview() {
   const days = parseInt(document.getElementById('loanDays').value)||7;
-  const d = new Date(); d.setDate(d.getDate()+days);
+  const bd = document.getElementById('borrowDate').value || todayISO();
+  const d = new Date(bd+'T00:00:00'); d.setDate(d.getDate()+days);
   document.getElementById('duePreview').textContent = pcDate(d.toISOString().split('T')[0]);
 }
 
 async function doBorrow() {
   if (!chosenStu || !chosenBook) return;
   const days = parseInt(document.getElementById('loanDays').value)||7;
+  const borrow_date = document.getElementById('borrowDate').value || todayISO();
   try {
-    const r = await apiFetch('/api/loans', {method:'POST', body:JSON.stringify({book_id:chosenBook.id, student_id:chosenStu.id, days})});
+    const r = await apiFetch('/api/loans', {method:'POST', body:JSON.stringify({book_id:chosenBook.id, student_id:chosenStu.id, days, borrow_date})});
     showToast(r.message);
     // reset
     chosenStu=chosenBook=null;
     document.getElementById('stuPick').value=''; document.getElementById('bookPick').value='';
     document.getElementById('stuChosen').innerHTML=''; document.getElementById('bookChosen').innerHTML='';
+    document.getElementById('borrowDate').value=todayISO();
     checkBorrowReady(); loadStats();
   } catch(e){ showToast(e.message,'danger'); }
 }
