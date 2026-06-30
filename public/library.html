@@ -78,7 +78,12 @@
   <!-- ===== แท็บ: ยืม ===== -->
   <div id="tab-borrow" class="lib-tab" style="display:none;">
     <div class="card"><div class="card-body">
-      <h5 class="mb-3"><i class="bi bi-box-arrow-right me-2"></i>ยืมหนังสือ</h5>
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h5 class="mb-0"><i class="bi bi-box-arrow-right me-2"></i>ยืมหนังสือ</h5>
+        <button class="btn btn-outline-primary btn-sm" onclick="openLoanImport()">
+          <i class="bi bi-file-earmark-excel me-1"></i>นำเข้าการยืม (Excel)
+        </button>
+      </div>
       <div class="mb-3">
         <label class="form-label fw-600">1. เลือกนักเรียน</label>
         <!-- วิธี A: เลือกจากห้อง → รายชื่อขึ้นอัตโนมัติ -->
@@ -234,7 +239,7 @@
   <div class="modal-body">
     <ol class="small">
       <li>ดาวน์โหลดไฟล์ตัวอย่าง → กรอกข้อมูล</li>
-      <li>คอลัมน์: ชื่อหนังสือ* / ผู้แต่ง / หมวดหมู่ / รหัส</li>
+      <li>คอลัมน์: รหัสหนังสือ / ชื่อหนังสือ* / หมวดหลัก / รหัสหมวด / ประเภท / ผู้แต่ง / สำนักพิมพ์ / ปีพิมพ์ / ชั้นวาง / สถานะ</li>
       <li>อัพโหลดไฟล์กลับ</li>
     </ol>
     <a class="btn btn-outline-success btn-sm mb-3" href="/api/books/template"><i class="bi bi-download me-1"></i>ดาวน์โหลดไฟล์ตัวอย่าง</a>
@@ -244,6 +249,28 @@
   <div class="modal-footer">
     <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
     <button class="btn btn-success" onclick="doImport()"><i class="bi bi-upload me-1"></i>นำเข้า</button>
+  </div>
+</div></div></div>
+
+<!-- Modal: นำเข้าการยืมจาก Excel -->
+<div class="modal fade" id="loanImportModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header bg-primary text-white">
+    <h5 class="modal-title"><i class="bi bi-file-earmark-excel me-2"></i>นำเข้าการยืมจาก Excel</h5>
+    <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+  </div>
+  <div class="modal-body">
+    <ol class="small">
+      <li>ดาวน์โหลดไฟล์ตัวอย่าง → กรอกข้อมูล</li>
+      <li><b>รหัสหนังสือ</b> = บังคับ • นักเรียนใช้ <b>รหัสนักเรียน</b> หรือ <b>ชั้น/ห้อง/เลขที่</b> หรือ <b>ชื่อ</b> อย่างใดอย่างหนึ่ง</li>
+      <li><b>วันที่คืน</b> เว้นว่าง = ยังไม่คืน, กรอก = คืนแล้ว (เก็บเป็นประวัติ)</li>
+    </ol>
+    <a class="btn btn-outline-primary btn-sm mb-3" href="/api/loans/template"><i class="bi bi-download me-1"></i>ดาวน์โหลดไฟล์ตัวอย่าง</a>
+    <input type="file" id="loanImportFile" class="form-control" accept=".xlsx,.xls">
+    <div id="loanImportResult" class="mt-3"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
+    <button class="btn btn-primary" onclick="doLoanImport()"><i class="bi bi-upload me-1"></i>นำเข้า</button>
   </div>
 </div></div></div>
 
@@ -277,7 +304,7 @@
 <script>
 const ST = { available:{l:'พร้อมยืม',c:'available'}, borrowed:{l:'ถูกยืม',c:'borrowed'},
   damaged:{l:'ชำรุด',c:'damaged'}, lost:{l:'สูญหาย',c:'lost'} };
-let bookModal, returnModal, bulkModal, importModal, chosenStu=null, chosenBook=null;
+let bookModal, returnModal, bulkModal, importModal, loanImportModal, chosenStu=null, chosenBook=null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
@@ -290,6 +317,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   returnModal = new bootstrap.Modal('#returnModal');
   bulkModal = new bootstrap.Modal('#bulkModal');
   importModal = new bootstrap.Modal('#importModal');
+  loanImportModal = new bootstrap.Modal('#loanImportModal');
   // tabs
   document.querySelectorAll('#libTabs .nav-link').forEach(a => {
     a.addEventListener('click', e => { e.preventDefault(); switchTab(a.dataset.tab); });
@@ -505,6 +533,35 @@ async function doImport() {
     if (d.success) {
       box.innerHTML = `<div class="alert alert-success mb-0"><i class="bi bi-check-circle me-1"></i>${d.message}</div>`;
       loadBooks(); loadStats();
+    } else {
+      box.innerHTML = `<div class="alert alert-danger mb-0">${d.message}</div>`;
+    }
+  } catch(e){ box.innerHTML = `<div class="alert alert-danger mb-0">ผิดพลาด: ${e.message}</div>`; }
+}
+
+/* ===== นำเข้าการยืม Excel ===== */
+function openLoanImport() {
+  document.getElementById('loanImportFile').value='';
+  document.getElementById('loanImportResult').innerHTML='';
+  loanImportModal.show();
+}
+async function doLoanImport() {
+  const f = document.getElementById('loanImportFile').files[0];
+  if (!f) { showToast('เลือกไฟล์ก่อน','warning'); return; }
+  const fd = new FormData(); fd.append('file', f);
+  const box = document.getElementById('loanImportResult');
+  box.innerHTML = '<div class="spinner-border spinner-border-sm"></div> กำลังนำเข้า...';
+  try {
+    const r = await fetch('/api/loans/import', {method:'POST', body:fd, credentials:'same-origin'});
+    const d = await r.json();
+    if (d.success) {
+      let html = `<div class="alert alert-success mb-2"><i class="bi bi-check-circle me-1"></i>${d.message}</div>`;
+      if (d.errors && d.errors.length) {
+        html += `<div class="alert alert-warning mb-0 small"><b>แถวที่มีปัญหา:</b><ul class="mb-0 ps-3">`
+          + d.errors.map(e=>`<li>${e}</li>`).join('') + `</ul></div>`;
+      }
+      box.innerHTML = html;
+      loadStats();
     } else {
       box.innerHTML = `<div class="alert alert-danger mb-0">${d.message}</div>`;
     }

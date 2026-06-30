@@ -3391,6 +3391,168 @@ def api_books_import():
     if skipped: msg += f' (ข้าม {skipped} — ชื่อว่าง/รหัสซ้ำ)'
     return jsonify(success=True, count=count, skipped=skipped, message=msg)
 
+
+def _parse_date_cell(v):
+    """แปลงค่าวันที่จาก Excel เป็น ISO (yyyy-mm-dd) — รองรับ date object / yyyy-mm-dd / dd-mm-yyyy + พ.ศ."""
+    if v is None: return None
+    if isinstance(v, (datetime.datetime, datetime.date)):
+        return v.date().isoformat() if isinstance(v, datetime.datetime) else v.isoformat()
+    s = str(v).strip()
+    if not s: return None
+    s = s.replace('.', '-').replace('/', '-')
+    parts = [p for p in s.split('-') if p != '']
+    try:
+        if len(parts) == 3:
+            if len(parts[0]) == 4:           # yyyy-mm-dd
+                y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+            else:                            # dd-mm-yyyy
+                d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
+            if y > 2400: y -= 543            # พ.ศ. -> ค.ศ.
+            return datetime.date(y, m, d).isoformat()
+    except (ValueError, TypeError):
+        return None
+    return None
+
+
+@app.get('/api/loans/template')
+@admin_required
+def api_loans_template():
+    """ดาวน์โหลด Excel template สำหรับนำเข้าข้อมูลการยืม"""
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = 'การยืม'
+    headers = ['รหัสหนังสือ *', 'รหัสนักเรียน', 'ชั้น', 'ห้อง', 'เลขที่', 'ชื่อนักเรียน',
+               'วันที่ยืม', 'จำนวนวัน', 'วันกำหนดคืน', 'วันที่คืน']
+    hfill = PatternFill(fill_type='solid', fgColor='0d6efd')
+    hfont = Font(bold=True, color='FFFFFF')
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.fill = hfill; c.font = hfont; c.alignment = Alignment(horizontal='center')
+    ws.append(['TNGW-LIB-0001', '', 1, 1, 5, 'สมชาย ใจดี', '2026-06-20', 7, '', ''])
+    ws.append(['TNGW-LIB-0002', '', 2, 3, 12, 'สมหญิง รักเรียน', '2026-06-15', '', '2026-06-22', '2026-06-21'])
+    # หมายเหตุใต้ตาราง
+    ws.append([])
+    ws.append(['* ระบุรหัสหนังสือเสมอ • นักเรียนใช้ รหัสนักเรียน หรือ ชั้น/ห้อง/เลขที่ หรือ ชื่อ อย่างใดอย่างหนึ่ง'])
+    ws.append(['* วันที่คืน: เว้นว่าง = ยังไม่คืน / กรอก = คืนแล้ว (เก็บเป็นประวัติ)'])
+    for col, w in zip(ws.columns, [16, 14, 7, 7, 8, 22, 14, 10, 14, 14]):
+        ws.column_dimensions[col[0].column_letter].width = w
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name='loans_template.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@app.post('/api/loans/import')
+@admin_required
+def api_loans_import():
+    """นำเข้าข้อมูลการยืมจาก Excel"""
+    u = current_user()
+    if 'file' not in request.files:
+        return jsonify(success=False, message='ไม่พบไฟล์'), 400
+    f = request.files['file']
+    if not f.filename.lower().endswith(('.xlsx', '.xls')):
+        return jsonify(success=False, message='ต้องเป็นไฟล์ Excel'), 400
+    try:
+        wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
+        ws = wb.active
+        all_rows = list(ws.iter_rows(min_row=1, values_only=True))
+        wb.close()
+    except Exception as e:
+        return jsonify(success=False, message=f'เปิดไฟล์ไม่ได้: {e}'), 400
+    if not all_rows:
+        return jsonify(success=False, message='ไฟล์ว่าง'), 400
+
+    header = [str(h).strip() if h else '' for h in all_rows[0]]
+    def find_col(*keywords):
+        for i, h in enumerate(header):
+            for kw in keywords:
+                if kw in h: return i
+        return None
+    ci = {
+        'book':   find_col('รหัสหนังสือ', 'บาร์โค้ด'),
+        'scode':  find_col('รหัสนักเรียน'),
+        'level':  find_col('ชั้น'),
+        'room':   find_col('ห้อง'),
+        'number': find_col('เลขที่'),
+        'sname':  find_col('ชื่อนักเรียน', 'ชื่อ'),
+        'bdate':  find_col('วันที่ยืม'),
+        'days':   find_col('จำนวนวัน'),
+        'due':    find_col('วันกำหนดคืน', 'กำหนดคืน'),
+        'rdate':  find_col('วันที่คืน'),
+    }
+    if ci['book'] is None:
+        return jsonify(success=False, message='ไม่พบคอลัมน์ "รหัสหนังสือ" ในไฟล์'), 400
+
+    def cell(row, key):
+        i = ci.get(key)
+        if i is None or i >= len(row) or row[i] is None: return None
+        v = row[i]
+        if isinstance(v, str): v = v.strip()
+        return v if v != '' else None
+
+    settings = get_settings()
+    try: default_days = int(settings.get('loan_days', '7'))
+    except (TypeError, ValueError): default_days = 7
+
+    ok, errors = 0, []
+    with get_db() as con:
+        for ridx, row in enumerate(all_rows[1:], start=2):
+            if not row or not any(c is not None and str(c).strip() for c in row): continue
+            book_code = cell(row, 'book')
+            if not book_code: continue   # ข้ามแถวว่าง/แถวหมายเหตุ
+            book_code = str(book_code).strip()
+            bk = con.execute('SELECT * FROM books WHERE book_code=?', (book_code,)).fetchone()
+            if not bk:
+                errors.append(f'แถว {ridx}: ไม่พบหนังสือรหัส {book_code}'); continue
+
+            # หา นักเรียน
+            st = None
+            scode = cell(row, 'scode')
+            if scode:
+                st = con.execute('SELECT * FROM students WHERE student_code=?', (str(scode).strip(),)).fetchone()
+            if not st:
+                lv, rm, no = cell(row,'level'), cell(row,'room'), cell(row,'number')
+                if lv and rm and no:
+                    try:
+                        st = con.execute('SELECT * FROM students WHERE class_level=? AND room=? AND number=?',
+                            (int(float(lv)), int(float(rm)), int(float(no)))).fetchone()
+                    except (ValueError, TypeError): pass
+            if not st:
+                nm = cell(row, 'sname')
+                if nm:
+                    found = con.execute('SELECT * FROM students WHERE name=?', (str(nm).strip(),)).fetchall()
+                    if len(found) == 1: st = found[0]
+                    elif len(found) > 1:
+                        errors.append(f'แถว {ridx}: ชื่อ "{nm}" ซ้ำกันหลายคน — ใช้รหัสนักเรียนหรือชั้น/ห้อง/เลขที่แทน'); continue
+            if not st:
+                errors.append(f'แถว {ridx}: ไม่พบนักเรียน (รหัส/ชั้นห้องเลขที่/ชื่อ ไม่ตรง)'); continue
+
+            # วันที่
+            bdate = _parse_date_cell(cell(row, 'bdate')) or datetime.date.today().isoformat()
+            due = _parse_date_cell(cell(row, 'due'))
+            if not due:
+                days = cell(row, 'days')
+                try: days = int(float(days)) if days else default_days
+                except (ValueError, TypeError): days = default_days
+                due = (datetime.date.fromisoformat(bdate) + datetime.timedelta(days=days)).isoformat()
+            rdate = _parse_date_cell(cell(row, 'rdate'))   # คืนแล้วหรือยัง
+
+            # เช็คเล่มว่าง (เฉพาะรายการที่ยังไม่คืน)
+            if not rdate and bk['status'] != 'available':
+                errors.append(f'แถว {ridx}: หนังสือ {book_code} ไม่ว่าง (สถานะ {bk["status"]})'); continue
+
+            con.execute("""INSERT INTO book_loans
+                (book_id,student_id,borrow_date,due_date,return_date,return_cond,borrowed_by,returned_by)
+                VALUES (?,?,?,?,?,?,?,?)""",
+                (bk['id'], st['id'], bdate, due, rdate,
+                 'normal' if rdate else None, u['id'], u['id'] if rdate else None))
+            if not rdate:
+                con.execute("UPDATE books SET status='borrowed' WHERE id=?", (bk['id'],))
+            ok += 1
+        audit_log(con, 'import_loans', 'loan', None, {'count': ok, 'errors': len(errors)})
+
+    msg = f'นำเข้าการยืม {ok} รายการ'
+    if errors: msg += f' • มีปัญหา {len(errors)} แถว'
+    return jsonify(success=True, count=ok, errors=errors[:50], message=msg)
+
+
 @app.post('/api/loans')
 @admin_required
 def api_loan_borrow():
