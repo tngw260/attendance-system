@@ -49,6 +49,7 @@
   <ul class="nav nav-tabs mb-3 no-print" id="bankTabs">
     <li class="nav-item"><a class="nav-link active" href="#" data-tab="ops"><i class="bi bi-cash-coin me-1"></i>ฝาก-ถอน</a></li>
     <li class="nav-item"><a class="nav-link" href="#" data-tab="passbook"><i class="bi bi-journal-text me-1"></i>สมุดบัญชี</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" data-tab="rank"><i class="bi bi-trophy me-1"></i>อันดับนักออม</a></li>
     <li class="nav-item"><a class="nav-link" href="#" data-tab="report"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
   </ul>
 
@@ -78,6 +79,39 @@
       <div id="pbResults" class="picker-results" style="display:none;"></div>
     </div>
     <div id="pbContent"><div class="text-muted text-center py-5"><i class="bi bi-journal-text fs-1 d-block mb-2"></i>ค้นหานักเรียนเพื่อดูสมุดบัญชี</div></div>
+  </div>
+
+  <!-- ===== แท็บ: อันดับนักออม ===== -->
+  <div id="tab-rank" class="lib-tab" style="display:none;">
+    <div class="card mb-3 no-print"><div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-auto">
+          <label class="form-label small fw-600 mb-1">จัดอันดับตาม</label>
+          <div class="btn-group" role="group">
+            <input type="radio" class="btn-check" name="rkBy" id="rkBal" value="balance" checked>
+            <label class="btn btn-outline-primary" for="rkBal">ยอดคงเหลือสูงสุด</label>
+            <input type="radio" class="btn-check" name="rkBy" id="rkDep" value="deposit">
+            <label class="btn btn-outline-primary" for="rkDep">ออมเยอะเดือนนี้</label>
+          </div>
+        </div>
+        <div class="col-auto" id="rkClassWrap">
+          <label class="form-label small fw-600 mb-1">ห้อง</label>
+          <select id="rkClass" class="form-select"></select>
+        </div>
+        <div class="col-auto"><button class="btn btn-primary" onclick="loadRank()"><i class="bi bi-trophy me-1"></i>ดูอันดับ</button></div>
+        <div class="col-auto ms-auto d-flex gap-2">
+          <a class="btn btn-warning text-dark" href="/bank-certificate.html" target="_blank"><i class="bi bi-award me-1"></i>เกียรติบัตร</a>
+          <button class="btn btn-outline-dark" onclick="window.print()"><i class="bi bi-printer me-1"></i>พิมพ์</button>
+        </div>
+      </div>
+    </div></div>
+    <div id="rkPodium" class="row g-2 mb-3 justify-content-center"></div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead><tr><th class="text-center">อันดับ</th><th>ชื่อ</th><th>ชั้น</th><th class="text-center">ครั้งที่ฝาก</th><th class="text-end">ยอด (บาท)</th></tr></thead>
+        <tbody id="rkBody"><tr><td colspan="5" class="text-center text-muted py-4">กด "ดูอันดับ"</td></tr></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- ===== แท็บ: รายงาน ===== -->
@@ -190,6 +224,7 @@ function switchTab(tab) {
   document.querySelectorAll('.lib-tab').forEach(d => d.style.display='none');
   document.getElementById('tab-'+tab).style.display='';
   if (tab==='report') loadReport();
+  if (tab==='rank') loadRank();
 }
 
 async function loadClassDropdowns() {
@@ -198,10 +233,10 @@ async function loadClassDropdowns() {
   const isTeacher = currentUser?.role==='teacher' && currentUser?.assigned_level;
   const grouped = {};
   classes.forEach(c => { (grouped[c.class_level]=grouped[c.class_level]||[]).push(c); });
-  // opsClass + rpClass
-  ['opsClass','rpClass'].forEach(id => {
+  // opsClass + rpClass + rkClass
+  ['opsClass','rpClass','rkClass'].forEach(id => {
     const sel = document.getElementById(id);
-    sel.innerHTML = (id==='rpClass') ? '<option value="">ทั้งโรงเรียน</option>' : '';
+    sel.innerHTML = (id==='rpClass'||id==='rkClass') ? '<option value="">ทั้งโรงเรียน</option>' : '';
     Object.keys(grouped).sort((a,b)=>+a-+b).forEach(lv => {
       const og = document.createElement('optgroup'); og.label = `มัธยมศึกษาปีที่ ${lv}`;
       grouped[lv].forEach(c => {
@@ -218,6 +253,7 @@ async function loadClassDropdowns() {
     const ops = document.getElementById('opsClass');
     if ([...ops.options].some(o=>o.value===v)) ops.value = v;
     document.getElementById('rpClassWrap').style.display = 'none';
+    document.getElementById('rkClassWrap').style.display = 'none';
   }
 }
 
@@ -359,6 +395,7 @@ async function openPassbook(sid) {
         </div>
         <div class="text-end"><div class="small text-muted">ยอดคงเหลือ</div><div class="pb-balance">${money(d.balance)}</div></div>
       </div></div>
+      ${renderGoalBadges(d)}
       <div class="d-flex gap-2 mb-2 no-print">
         <button class="btn btn-success btn-sm" onclick='openTxn({student_id:${sid},name:${JSON.stringify(d.student.name)},class_level:${d.student.class_level},room:${d.student.room},balance:${d.balance},account_no:${JSON.stringify(a?a.account_no:"")}},"deposit")'><i class="bi bi-plus-lg me-1"></i>ฝาก</button>
         <button class="btn btn-danger btn-sm" onclick='openTxn({student_id:${sid},name:${JSON.stringify(d.student.name)},class_level:${d.student.class_level},room:${d.student.room},balance:${d.balance},account_no:${JSON.stringify(a?a.account_no:"")}},"withdraw")'><i class="bi bi-dash-lg me-1"></i>ถอน</button>
@@ -381,11 +418,86 @@ async function openPassbook(sid) {
   } catch(e){ box.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
 }
 
+function renderGoalBadges(d) {
+  const goal = d.goal || 0, pct = d.goal_pct || 0;
+  const reached = goal>0 && d.balance>=goal;
+  let goalHtml;
+  if (goal > 0) {
+    goalHtml = `<div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="fw-600"><i class="bi bi-bullseye me-1 text-danger"></i>เป้าหมายการออม ${money(goal)} บาท
+          ${reached?'<span class="badge bg-success ms-1">🎉 ถึงเป้าแล้ว!</span>':''}</span>
+        <span class="small text-muted">${pct}%</span>
+      </div>
+      <div class="progress" style="height:22px;">
+        <div class="progress-bar ${reached?'bg-success':'bg-primary'} fw-600" style="width:${pct}%;">${money(d.balance)}</div>
+      </div>
+      <div class="text-end mt-1 no-print"><button class="btn btn-sm btn-link p-0" onclick="setGoal(${d.student.id},${goal})">แก้เป้าหมาย</button></div>`;
+  } else {
+    goalHtml = `<div class="text-muted small">ยังไม่ตั้งเป้าหมายการออม
+      <button class="btn btn-sm btn-outline-danger ms-2 no-print" onclick="setGoal(${d.student.id},0)"><i class="bi bi-bullseye me-1"></i>ตั้งเป้าหมาย</button></div>`;
+  }
+  const badges = (d.badges||[]).map(b =>
+    `<span class="badge rounded-pill" style="background:${b.color};font-size:.85rem;"><i class="bi bi-${b.icon} me-1"></i>${b.label}</span>`).join(' ');
+  const streakTxt = d.streak>0 ? `<span class="ms-2 small text-muted">🔥 ออมต่อเนื่อง ${d.streak} สัปดาห์</span>` : '';
+  return `<div class="card mb-3"><div class="card-body">
+      ${goalHtml}
+      <hr class="my-2">
+      <div class="fw-600 mb-1"><i class="bi bi-award me-1 text-warning"></i>เหรียญตรานักออม ${streakTxt}</div>
+      <div class="d-flex gap-1 flex-wrap">${badges || '<span class="text-muted small">ยังไม่มีเหรียญ — เริ่มออมเพื่อรับเหรียญแรก!</span>'}</div>
+    </div></div>`;
+}
+
+async function setGoal(sid, cur) {
+  const v = prompt('ตั้งเป้าหมายการออม (บาท) — ใส่ 0 เพื่อยกเลิกเป้าหมาย', cur||'');
+  if (v===null) return;
+  const goal = parseFloat(v);
+  if (isNaN(goal) || goal<0) { showToast('จำนวนไม่ถูกต้อง','warning'); return; }
+  try {
+    const r = await apiFetch(`/api/bank/account/${sid}/goal`, {method:'PUT', body:JSON.stringify({goal})});
+    showToast(r.message,'success'); openPassbook(sid);
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
 async function delTxn(id) {
   if (!confirm('ลบรายการนี้? (ใช้กรณีบันทึกผิด)')) return;
   try {
     const r = await apiFetch(`/api/bank/txn/${id}`, {method:'DELETE'});
     showToast(r.message); openPassbook(pbStudentId); loadStats(); loadAccounts();
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+/* ===== อันดับนักออม ===== */
+async function loadRank() {
+  const by = document.querySelector('input[name="rkBy"]:checked').value;
+  let qs = `by=${by}&period=month&limit=30`;
+  const cv = document.getElementById('rkClass').value;
+  if (cv) { const [l,r]=cv.split('_'); qs += `&level=${l}&room=${r}`; }
+  try {
+    const d = await apiFetch(`/api/bank/leaderboard?${qs}`);
+    const items = d.items;
+    // โพเดียม Top 3
+    const medal = ['🥇','🥈','🥉'];
+    const order = [1,0,2]; // กลาง=ที่1
+    document.getElementById('rkPodium').innerHTML = items.length ? order.map(i => {
+      const it = items[i]; if (!it) return '';
+      const h = i===0?150:(i===1?120:100);
+      const bg = i===0?'#f1c40f':(i===1?'#bdc3c7':'#cd7f32');
+      return `<div class="col-4 col-md-3 text-center">
+        <div class="fs-3">${medal[i]}</div>
+        <div class="fw-700 text-truncate">${it.name}</div>
+        <div class="small text-muted">ม.${it.class_level}/${it.room}</div>
+        <div class="rounded-top mt-1 d-flex align-items-end justify-content-center pb-2 text-white fw-700"
+             style="height:${h}px;background:${bg};">${money(it.value)}</div>
+      </div>`;
+    }).join('') : '';
+    document.getElementById('rkBody').innerHTML = items.length ? items.map(it => `
+      <tr class="${it.rank<=3?'table-warning':''}">
+        <td class="text-center fw-700">${it.rank<=3?medal[it.rank-1]:it.rank}</td>
+        <td class="fw-600">${it.name}</td>
+        <td>ม.${it.class_level}/${it.room}${it.number?' เลขที่ '+it.number:''}</td>
+        <td class="text-center">${it.times||0}</td>
+        <td class="text-end bal-pos">${money(it.value)}</td>
+      </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted py-4">— ยังไม่มีข้อมูลการออม —</td></tr>';
   } catch(e){ showToast(e.message,'danger'); }
 }
 

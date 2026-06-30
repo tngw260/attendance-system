@@ -312,6 +312,7 @@ def init_db():
                 opened_date TEXT NOT NULL,          -- วันเปิดบัญชี
                 status      TEXT DEFAULT 'active'    -- active/closed
                               CHECK (status IN ('active','closed')),
+                goal        REAL DEFAULT 0,          -- เป้าหมายการออม (บาท)
                 note        TEXT,
                 created_at  TEXT DEFAULT (datetime('now','localtime'))
             );
@@ -414,6 +415,11 @@ def init_db():
         bcols = [r['name'] for r in con.execute('PRAGMA table_info(behavior_logs)').fetchall()]
         if 'note' not in bcols:
             con.execute('ALTER TABLE behavior_logs ADD COLUMN note TEXT')
+
+        # Migrate: bank_accounts - add goal column (เป้าหมายการออม)
+        bacols = [r['name'] for r in con.execute('PRAGMA table_info(bank_accounts)').fetchall()]
+        if bacols and 'goal' not in bacols:
+            con.execute('ALTER TABLE bank_accounts ADD COLUMN goal REAL DEFAULT 0')
 
         # Migrate: attendance - allow 'activity' status (rebuild if old CHECK constraint)
         try:
@@ -3941,7 +3947,7 @@ def api_bank_accounts():
     with get_db() as con:
         rows = con.execute(f"""
             SELECT s.id AS student_id, s.number, s.name, s.class_level, s.room, s.photo,
-                   a.account_no, a.opened_date, a.status,
+                   a.account_no, a.opened_date, a.status, a.goal,
                    COALESCE((SELECT SUM(CASE WHEN t.txn_type='deposit' THEN t.amount ELSE -t.amount END)
                              FROM bank_transactions t WHERE t.student_id=s.id),0) AS balance,
                    (SELECT MAX(t.txn_date) FROM bank_transactions t WHERE t.student_id=s.id) AS last_txn
@@ -3979,11 +3985,17 @@ def api_bank_account_detail(student_id):
         d['balance_after'] = round(running, 2)
         tlist.append(d)
     tlist.reverse()  # ใหม่→เก่า สำหรับแสดงผล
+    balance = round(running, 2)
+    with get_db() as con:
+        badges, streak = _bank_badges(con, student_id, balance)
+    goal = round((acc['goal'] if acc and acc['goal'] else 0) or 0, 2)
     return jsonify(
         student={'id': s['id'], 'number': s['number'], 'name': s['name'],
                  'class_level': s['class_level'], 'room': s['room'], 'photo': s['photo']},
         account=(dict(acc) if acc else None),
-        balance=round(running, 2),
+        balance=balance, goal=goal,
+        goal_pct=(round(min(balance/goal*100, 100), 1) if goal > 0 else 0),
+        badges=badges, streak=streak,
         transactions=tlist)
 
 
@@ -4137,6 +4149,114 @@ def api_bank_open_class():
         audit_log(con, 'bank_open_class', 'class', None, {'level': b.get('level'), 'room': b.get('room'), 'opened': opened})
     msg = f'เปิดบัญชีให้ {opened} คน' if opened else 'นักเรียนในห้องนี้มีบัญชีครบแล้ว'
     return jsonify(success=True, opened=opened, message=msg)
+
+
+def _week_index(d):
+    """ดัชนีสัปดาห์ต่อเนื่อง (อิงวันจันทร์) สำหรับนับ streak"""
+    monday = d - datetime.timedelta(days=d.weekday())
+    return monday.toordinal() // 7
+
+
+def _bank_streak(con, student_id):
+    """จำนวนสัปดาห์ที่ออมต่อเนื่อง (นับถอยจากสัปดาห์นี้/สัปดาห์ที่แล้ว)"""
+    rows = con.execute("SELECT DISTINCT txn_date FROM bank_transactions WHERE student_id=? AND txn_type='deposit'",
+                       (student_id,)).fetchall()
+    weeks = set()
+    for r in rows:
+        try: weeks.add(_week_index(datetime.date.fromisoformat(r['txn_date'])))
+        except (ValueError, TypeError): pass
+    if not weeks: return 0
+    cur = _week_index(datetime.date.today())
+    if cur not in weeks and (cur - 1) not in weeks:
+        return 0
+    w = cur if cur in weeks else cur - 1
+    streak = 0
+    while w in weeks:
+        streak += 1; w -= 1
+    return streak
+
+
+def _bank_badges(con, student_id, balance):
+    """รายการเหรียญตราที่ได้รับ + จำนวนสัปดาห์ที่ออมต่อเนื่อง"""
+    badges = []
+    dep = con.execute("SELECT COUNT(*) c FROM bank_transactions WHERE student_id=? AND txn_type='deposit'",
+                      (student_id,)).fetchone()['c']
+    if dep >= 1:
+        badges.append({'key': 'first', 'label': 'เริ่มออมแล้ว', 'icon': 'piggy-bank-fill', 'color': '#e84393'})
+    for m in (100, 500, 1000, 2000, 5000):
+        if balance >= m:
+            badges.append({'key': f'bal{m}', 'label': f'ออมครบ {m:,} บาท', 'icon': 'cash-stack', 'color': '#0d8a3e'})
+    streak = _bank_streak(con, student_id)
+    for wk in (2, 4, 8, 12):
+        if streak >= wk:
+            badges.append({'key': f'streak{wk}', 'label': f'ออมต่อเนื่อง {wk} สัปดาห์', 'icon': 'fire', 'color': '#e17055'})
+    return badges, streak
+
+
+@app.put('/api/bank/account/<int:student_id>/goal')
+@login_required
+def api_bank_set_goal(student_id):
+    """ตั้งเป้าหมายการออม — Body: {goal}"""
+    u = current_user()
+    b = request.get_json() or {}
+    try: goal = round(float(b.get('goal') or 0), 2)
+    except (TypeError, ValueError): goal = 0
+    if goal < 0: goal = 0
+    with get_db() as con:
+        s = con.execute('SELECT * FROM students WHERE id=?', (student_id,)).fetchone()
+        if not s: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if not can_access_student(u, s):
+            return jsonify(success=False, message='ไม่มีสิทธิ์'), 403
+        _ensure_account(con, student_id)
+        con.execute('UPDATE bank_accounts SET goal=? WHERE student_id=?', (goal, student_id))
+        audit_log(con, 'bank_set_goal', 'student', student_id, {'goal': goal})
+    return jsonify(success=True, goal=goal, message=('ตั้งเป้าหมาย %s บาท' % f'{goal:,.2f}' if goal else 'ยกเลิกเป้าหมายแล้ว'))
+
+
+@app.get('/api/bank/leaderboard')
+@login_required
+def api_bank_leaderboard():
+    """อันดับนักออม — ?by=balance|deposit &period=all|month &date &level &room &limit"""
+    u = current_user()
+    by = request.args.get('by') or 'balance'
+    period = request.args.get('period') or 'all'
+    try: limit = min(int(request.args.get('limit') or 20), 100)
+    except (TypeError, ValueError): limit = 20
+    where, params, _, _ = user_class_filter(u, {'level': request.args.get('level'), 'room': request.args.get('room')})
+    try: ref = datetime.date.fromisoformat(request.args.get('date') or today_iso())
+    except ValueError: ref = datetime.date.today()
+    with get_db() as con:
+        if by == 'deposit':
+            # ยอดฝากในช่วง (เดือน หรือ ทั้งหมด) — วัดความขยันออม
+            if period == 'month':
+                start = ref.replace(day=1).isoformat()
+                end = ((ref.replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)).isoformat()
+                drange = ' AND t.txn_date BETWEEN ? AND ?'; dp = [start, end]
+            else:
+                drange = ''; dp = []
+            rows = con.execute(f"""
+                SELECT s.id AS student_id, s.name, s.class_level, s.room, s.number, s.photo,
+                       COALESCE(SUM(t.amount),0) AS value, COUNT(*) AS times
+                FROM students s JOIN bank_transactions t
+                  ON t.student_id=s.id AND t.txn_type='deposit' {drange}
+                WHERE 1=1 {where}
+                GROUP BY s.id HAVING value > 0
+                ORDER BY value DESC, times DESC LIMIT ?
+            """, dp + params + [limit]).fetchall()
+        else:
+            rows = con.execute(f"""
+                SELECT s.id AS student_id, s.name, s.class_level, s.room, s.number, s.photo,
+                       COALESCE(SUM(CASE WHEN t.txn_type='deposit' THEN t.amount ELSE -t.amount END),0) AS value,
+                       SUM(CASE WHEN t.txn_type='deposit' THEN 1 ELSE 0 END) AS times
+                FROM students s JOIN bank_transactions t ON t.student_id=s.id
+                WHERE 1=1 {where}
+                GROUP BY s.id HAVING value > 0
+                ORDER BY value DESC LIMIT ?
+            """, params + [limit]).fetchall()
+    result = []
+    for i, r in enumerate(rows, 1):
+        d = dict(r); d['rank'] = i; d['value'] = round(d['value'] or 0, 2); result.append(d)
+    return jsonify(by=by, period=period, items=result)
 
 
 # ── HOME VISITS (เยี่ยมบ้าน) ───────────────────────────────
