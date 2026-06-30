@@ -58,6 +58,7 @@
       <select id="opsClass" class="form-select" style="max-width:230px;" onchange="loadAccounts()"></select>
       <input id="opsSearch" class="form-control" style="max-width:240px;" placeholder="🔍 ค้นชื่อ/เลขบัญชี" oninput="loadAccounts()">
       <button class="btn btn-outline-primary" onclick="loadAccounts()"><i class="bi bi-arrow-clockwise me-1"></i>โหลด</button>
+      <button class="btn btn-success" onclick="openClassAccounts()"><i class="bi bi-folder-plus me-1"></i>เปิดบัญชีทั้งห้อง</button>
       <button class="btn btn-outline-dark ms-auto" onclick="window.print()"><i class="bi bi-printer me-1"></i>พิมพ์รายชื่อ</button>
     </div>
     <div class="table-responsive">
@@ -258,6 +259,18 @@ async function loadAccounts() {
     }).join('') : '<tr><td colspan="5" class="text-center text-muted py-4">— ไม่พบนักเรียน —</td></tr>';
     document.getElementById('accFoot').innerHTML = list.length
       ? `<tr class="table-light fw-700"><td colspan="3" class="text-end">ยอดรวมทั้งห้อง</td><td class="text-end bal-pos">${money(total)}</td><td class="no-print"></td></tr>` : '';
+  } catch(e){ showToast(e.message,'danger'); }
+}
+
+async function openClassAccounts() {
+  const v = document.getElementById('opsClass').value;
+  if (!v) { showToast('เลือกห้องก่อน','warning'); return; }
+  const [level, room] = v.split('_');
+  if (!confirm(`เปิดบัญชีให้นักเรียนทุกคนในห้องนี้ที่ยังไม่มีบัญชี (ยอด 0 บาท)?`)) return;
+  try {
+    const r = await apiFetch('/api/bank/open-class', {method:'POST', body:JSON.stringify({level:+level, room:+room})});
+    showToast(r.message, 'success');
+    loadAccounts(); loadStats();
   } catch(e){ showToast(e.message,'danger'); }
 }
 

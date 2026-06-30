@@ -4114,6 +4114,31 @@ def api_bank_stats():
                    today_deposit=round(td['dep'], 2), today_withdraw=round(td['wd'], 2))
 
 
+@app.post('/api/bank/open-class')
+@login_required
+def api_bank_open_class():
+    """เปิดบัญชีให้นักเรียนทุกคนในห้องที่ยังไม่มีบัญชี (ยอด 0) — Body: {level, room}"""
+    u = current_user()
+    b = request.get_json() or {}
+    where, params, _, _ = user_class_filter(u, {'level': b.get('level'), 'room': b.get('room')})
+    # ครูทั่วไป (ไม่มี assigned) หรือแอดมิน ต้องระบุห้อง เพื่อกันเปิดทั้งโรงเรียนพลาด
+    if not (u['role'] == 'teacher' and u.get('assigned_level')):
+        if not (b.get('level') and b.get('room')):
+            return jsonify(success=False, message='เลือกห้องก่อนเปิดบัญชี'), 400
+    opened = 0
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT s.id FROM students s
+            WHERE NOT EXISTS (SELECT 1 FROM bank_accounts a WHERE a.student_id=s.id) {where}
+            ORDER BY s.class_level, s.room, s.number
+        """, params).fetchall()
+        for r in rows:
+            _ensure_account(con, r['id']); opened += 1
+        audit_log(con, 'bank_open_class', 'class', None, {'level': b.get('level'), 'room': b.get('room'), 'opened': opened})
+    msg = f'เปิดบัญชีให้ {opened} คน' if opened else 'นักเรียนในห้องนี้มีบัญชีครบแล้ว'
+    return jsonify(success=True, opened=opened, message=msg)
+
+
 # ── HOME VISITS (เยี่ยมบ้าน) ───────────────────────────────
 
 @app.get('/api/home-visits')
