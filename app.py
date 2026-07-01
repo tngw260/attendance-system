@@ -144,7 +144,7 @@ DEFAULT_SETTINGS = {
     'sem2_start':        '11-01',
     'sem2_end':          '03-31',
     'school_name':       'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม',
-    'theme_color':       '#1a5276',
+    'theme_color':       '#1d7a41',
     'school_logo':       '',
     'director_name':     'นางสาวปัทมา จีนดี',
     'director_title':    'ผู้อำนวยการ',

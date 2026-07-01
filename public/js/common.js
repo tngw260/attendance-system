@@ -570,9 +570,17 @@ async function applyTheme() {
     const s = await r.json();
     if (s.theme_color) {
       const c = s.theme_color;
-      document.documentElement.style.setProperty('--primary', c);
-      document.documentElement.style.setProperty('--primary-dark',
-        adjustColor(c, -20));
+      const root = document.documentElement.style;
+      root.setProperty('--primary', c);
+      root.setProperty('--primary-dark', adjustColor(c, -20));
+      root.setProperty('--primary-light', adjustColor(c, 25));
+      // ลากสี Bootstrap (.btn-primary/.text-primary/.bg-primary) ให้ตรงกับ theme_color เดียวกัน
+      root.setProperty('--bs-primary', c);
+      const hex = c.replace('#', '');
+      const num = parseInt(hex, 16);
+      root.setProperty('--bs-primary-rgb', `${(num>>16)&0xff}, ${(num>>8)&0xff}, ${num&0xff}`);
+      root.setProperty('--bs-link-color', c);
+      root.setProperty('--bs-link-hover-color', adjustColor(c, -20));
     }
     if (s.school_logo) {
       document.querySelectorAll('.navbar-brand i.bi-mortarboard-fill').forEach(icon => {
