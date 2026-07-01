@@ -3066,9 +3066,15 @@ def api_restore():
             names = zf.namelist()
             if 'school.db' not in names:
                 return jsonify(success=False, message='ไฟล์ backup ไม่ถูกต้อง (ไม่พบ school.db)'), 400
-            # Restore DB
-            with zf.open('school.db') as src, open(DB_PATH, 'wb') as dst:
+            # Restore DB — เขียนลงไฟล์ชั่วคราวก่อนแล้วสลับแบบ atomic (os.replace)
+            # กันไฟล์เสียหายครึ่งเดียวถ้าเขียนไม่จบ และเคลียร์ -wal/-shm เก่าที่อาจค้างอยู่
+            tmp_db = DB_PATH + '.restoring'
+            with zf.open('school.db') as src, open(tmp_db, 'wb') as dst:
                 shutil.copyfileobj(src, dst)
+            os.replace(tmp_db, DB_PATH)
+            for ext in ('-wal', '-shm'):
+                try: os.remove(DB_PATH + ext)
+                except OSError: pass
             # Restore photos
             for n in names:
                 if n.startswith('photos/') and not n.endswith('/'):
@@ -3679,6 +3685,8 @@ def api_loan_borrow():
         bdate = datetime.date.today()
     due = (bdate + datetime.timedelta(days=days)).isoformat()
     with get_db() as con:
+        # BEGIN IMMEDIATE ล็อกเขียนทันที กันสองรายการยืมเล่มเดียวกันพร้อมกัน (race condition)
+        con.execute('BEGIN IMMEDIATE')
         bk = con.execute('SELECT * FROM books WHERE id=?', (book_id,)).fetchone()
         if not bk: return jsonify(success=False, message='ไม่พบหนังสือ'), 404
         if bk['status'] != 'available':
@@ -3753,7 +3761,12 @@ def api_loan_return(loan_id):
 @login_required
 def api_loan_history(student_id):
     """ประวัติการยืมของนักเรียน 1 คน"""
+    u = current_user()
     with get_db() as con:
+        s = con.execute('SELECT * FROM students WHERE id=?', (student_id,)).fetchone()
+        if not s: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        if not can_access_student(u, s):
+            return jsonify(success=False, message='ไม่มีสิทธิ์เข้าถึงนักเรียนคนนี้'), 403
         rows = con.execute("""
             SELECT ln.*, b.title, b.book_code
             FROM book_loans ln JOIN books b ON b.id=ln.book_id
@@ -4062,6 +4075,8 @@ def api_bank_txn():
         return jsonify(success=False, message='เลือกวันที่ในอนาคตไม่ได้'), 400
     note = (b.get('note') or '').strip()
     with get_db() as con:
+        # BEGIN IMMEDIATE ล็อกเขียนทันที กันสองรายการฝาก/ถอนพร้อมกันอ่านยอดเก่าซ้ำ (race condition)
+        con.execute('BEGIN IMMEDIATE')
         s = con.execute('SELECT * FROM students WHERE id=?', (student_id,)).fetchone()
         if not s: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
         if not can_access_student(u, s):
