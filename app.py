@@ -2500,7 +2500,7 @@ def api_pcform_save():
     title      = (b.get('title') or '').strip() or None
     payload    = b.get('payload') or {}
 
-    if form_type not in ('pc1', 'pc3', 'pc4', 'pc5'):
+    if form_type not in ('pc1', 'pc3', 'pc4', 'pc5', 'pc7', 'leave'):
         return jsonify(success=False, message='ชนิดฟอร์มไม่ถูกต้อง'), 400
     if not student_id:
         return jsonify(success=False, message='ไม่พบนักเรียน'), 400

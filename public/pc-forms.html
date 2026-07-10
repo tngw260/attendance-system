@@ -106,6 +106,8 @@
           <option value="pc3">ปค.3 — บันทึกการทำทัณฑ์บนนักเรียน</option>
           <option value="pc4">ปค.4 — ตัดคะแนนความประพฤติ</option>
           <option value="pc5">ปค.5 — บันทึกพฤติกรรมรายบุคคล</option>
+          <option value="pc7">ปค.7 — หนังสือเชิญผู้ปกครอง (พฤติกรรม)</option>
+          <option value="leave">ใบขออนุญาตออกนอกบริเวณโรงเรียน</option>
         </select>
       </div>
       <div class="col-md-4">
@@ -261,6 +263,8 @@ function render() {
   el('content').innerHTML = (form === 'pc1') ? renderPC1()
                           : (form === 'pc3') ? renderPC3()
                           : (form === 'pc4') ? renderPC4()
+                          : (form === 'pc7') ? renderPC7()
+                          : (form === 'leave') ? renderLeave()
                           : renderPC5();
   el('printBtn').disabled = false;
   el('saveBtn').disabled = false;
@@ -691,6 +695,111 @@ function renderPC5() {
       <div class="sign-line">ลงชื่อ ………………………………………</div>
       <div>( ${directorName()} )</div>
       <div>ผู้อำนวยการ${schoolName()}</div>
+    </div>
+  </div>`;
+}
+
+/* ===== ปค.7 — หนังสือเชิญผู้ปกครอง (นักเรียนประพฤติผิดระเบียบ) ===== */
+function renderPC7() {
+  const s = curData.student;
+  const ed = (w) => `<span class="editable" contenteditable="true" style="min-width:${w};text-align:center;"></span>`;
+  const pf = (val, w) => `<span class="editable" contenteditable="true" style="min-width:${w};">${val||''}</span>`;
+  const bl = () => `<span class="editable" contenteditable="true" style="display:block;min-height:5mm;"></span>`;
+  return `<div class="doc-page" style="position:relative;">
+    <span class="pc-tag" style="top:12mm;right:18mm;">ปค 7</span>
+    <div class="doc-body" style="margin-top:2mm;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>ที่ ศธ. ${ed('20mm')} / ${ed('16mm')}</div>
+        <div style="text-align:center;">
+          <div>${schoolName()}</div>
+          <div>อำเภอตะกั่วทุ่ง จังหวัดพังงา</div>
+        </div>
+      </div>
+      <p style="text-align:center; margin-top:3mm;">วันที่ ${ed('12mm')} เดือน ${ed('26mm')} พ.ศ. ${ed('14mm')}</p>
+
+      <p style="margin-top:3mm;">เรื่อง&nbsp;&nbsp;&nbsp;&nbsp;นักเรียนประพฤติผิดระเบียบของโรงเรียน</p>
+      <p>เรียน&nbsp;&nbsp;&nbsp;&nbsp;ผู้ปกครอง ${pf(s.parent_name, '85mm')}</p>
+
+      <p style="margin-top:2mm;"><span class="ti"></span>ด้วย
+        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span>
+        นักเรียนชั้น ม.<span class="fill-inline" style="min-width:20mm;">${s.class_level}/${s.room}</span>
+        ในความปกครองของท่าน</p>
+      <p>ได้ประพฤติผิดระเบียบวินัยของโรงเรียน คือ
+        <span class="editable" contenteditable="true" style="display:inline-block;min-width:75mm;"></span></p>
+      <p>${bl()}</p>
+      <p style="margin-top:1mm;"><span class="ti"></span>ทางโรงเรียนจึงขอเชิญท่านมาพบ เพื่อทราบรายละเอียดและให้ความร่วมมือกับทางโรงเรียน
+        เพื่อหาวิธีการปรับปรุงแก้ไขพฤติกรรมนักเรียนให้เป็นไปในทางที่ดี ในวันที่ ${ed('12mm')} เดือน ${ed('24mm')} พ.ศ. ${ed('14mm')}
+        เวลา ${ed('16mm')} น. ณ ห้องประชุม${schoolName()}</p>
+      <p style="margin-top:1mm;"><span class="ti"></span>จึงเรียนมาเพื่อทราบและหวังว่าคงได้รับความร่วมมือจากท่านเป็นอย่างดี</p>
+    </div>
+
+    <div class="director-sign" style="margin-top:5mm;">
+      <div>ขอแสดงความนับถือ</div>
+      <div class="sign-line" style="margin-top:6mm;">ลงชื่อ ………………………………………</div>
+      <div>( ${directorName()} )</div>
+      <div>${directorTitle()}${schoolName()}</div>
+    </div>
+
+    <div style="border-top:1px dashed #000; margin-top:6mm; padding-top:2mm; text-align:center;">✂ ฉีกส่วนนี้ส่งคืนโรงเรียน</div>
+    <div class="doc-body" style="margin-top:1mm;">
+      <p style="text-align:center; font-weight:700;">แบบตอบรับ</p>
+      <p>เรียน&nbsp;&nbsp;&nbsp;&nbsp;${directorTitle()}${schoolName()}</p>
+      <p style="margin-top:1mm;"><span class="ti"></span>ข้าพเจ้า ${pf(s.parent_name, '55mm')} ผู้ปกครองของ
+        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span></p>
+      <p>นักเรียนชั้น ม.<span class="fill-inline" style="min-width:18mm;">${s.class_level}/${s.room}</span>
+        &nbsp;☐ สามารถมาตามวันนัดหมาย คือวันที่ ${ed('10mm')} เดือน ${ed('22mm')} พ.ศ. ${ed('12mm')}</p>
+      <p>&nbsp;&nbsp;&nbsp;&nbsp;☐ ขอเลื่อนเป็นวันที่ ${ed('10mm')} เดือน ${ed('22mm')} พ.ศ. ${ed('12mm')}</p>
+    </div>
+    <div class="director-sign" style="margin-top:4mm;">
+      <div class="sign-line">ลงชื่อ ……………………………………… ผู้ปกครอง</div>
+      <div>(………………………………………)</div>
+    </div>
+  </div>`;
+}
+
+/* ===== ใบขออนุญาตออกนอกบริเวณโรงเรียน ===== */
+function renderLeave() {
+  const s = curData.student;
+  const ed = (w) => `<span class="editable" contenteditable="true" style="min-width:${w};text-align:center;"></span>`;
+  const bl = () => `<span class="editable" contenteditable="true" style="display:block;min-height:5mm;"></span>`;
+  const rsign = (line, role) => `<div style="margin-top:4mm; text-align:center;">
+      <div>${line} ${role}</div>
+      <div>(………………………………………)</div>
+    </div>`;
+  return `<div class="doc-page" style="position:relative;">
+    <div class="doc-head" style="margin-bottom:2mm;">
+      ${logoTag()}
+      <div class="sub" style="color:#777;">ระบบการดูแลช่วยเหลือนักเรียน</div>
+      <h2>ใบขออนุญาตออกนอกบริเวณโรงเรียน</h2>
+    </div>
+    <div class="doc-body" style="margin-top:2mm;">
+      <p style="text-align:right;">สถานที่ ${ed('55mm')}</p>
+      <p style="text-align:right;">วันที่ ${ed('12mm')} เดือน ${ed('26mm')} พ.ศ. ${ed('14mm')}</p>
+      <p style="margin-top:2mm;">เรื่อง&nbsp;&nbsp;&nbsp;&nbsp;ขออนุญาตออกนอกบริเวณโรงเรียน</p>
+      <p>เรียน&nbsp;&nbsp;&nbsp;&nbsp;หัวหน้าฝ่ายกิจการนักเรียน</p>
+
+      <p style="margin-top:2mm;"><span class="ti"></span>ด้วยข้าพเจ้า (ด.ช./ด.ญ./นาย/นางสาว)
+        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span>
+        นักเรียนชั้น ม.<span class="fill-inline" style="min-width:18mm;">${s.class_level}/${s.room}</span></p>
+      <p>พร้อมด้วย <span class="editable" contenteditable="true" style="display:inline-block;min-width:120mm;"></span></p>
+      <p>${bl()}</p>
+      <p>มีความจำเป็นต้องออกนอกโรงเรียนเพื่อ
+        <span class="editable" contenteditable="true" style="display:inline-block;min-width:78mm;"></span></p>
+      <p>${bl()}</p>
+      <p>สถานที่ไป <span class="editable" contenteditable="true" style="display:inline-block;min-width:120mm;"></span></p>
+      <p>หมู่ที่ ${ed('12mm')} ตำบล ${ed('28mm')} อำเภอ ${ed('30mm')} จังหวัด ${ed('30mm')}</p>
+      <p>จึงขออนุญาตออกนอกโรงเรียนในวันที่ ${ed('12mm')} เดือน ${ed('24mm')} พ.ศ. ${ed('14mm')}</p>
+      <p>ตั้งแต่เวลา ${ed('18mm')} น. ถึง เวลา ${ed('18mm')} น.</p>
+      <p style="margin-top:1mm;"><span class="ti"></span>ข้าพเจ้าขอรับรองว่า ข้อความข้างต้นในการขออนุญาตออกนอกโรงเรียนในครั้งนี้ เป็นความจริง
+        ถ้าเกิดอะไรขึ้นเป็นผลเสียหาย จะไม่ถือว่าเป็นความผิดของโรงเรียน</p>
+    </div>
+
+    <div style="width:75mm; margin-left:auto; margin-top:4mm;">
+      <div style="text-align:center;">ขอแสดงความนับถือ</div>
+      ${rsign('ลงชื่อ ……………………………………','นักเรียน')}
+      ${rsign('ลงชื่อ ……………………………………','ผู้ปกครอง')}
+      ${rsign('ลงชื่อ ……………………………………','ครูที่ปรึกษา')}
+      ${rsign('ลงชื่อ ……………………………………','ครูฝ่ายกิจการนักเรียน')}
     </div>
   </div>`;
 }
