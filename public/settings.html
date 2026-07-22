@@ -115,6 +115,29 @@
             </div>
           </div>
         </div>
+
+        <div class="card mt-4">
+          <div class="card-header bg-success text-white"><i class="bi bi-book-half me-2"></i>ห้องสมุด (ยืม-คืน)</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-600">ต้องเป็นสมาชิกก่อนยืมหนังสือ</label>
+              <select name="require_membership" class="form-select">
+                <option value="0">ไม่ต้อง — ยืมได้เลยทุกคน</option>
+                <option value="1">ต้อง — สมัครสมาชิกก่อนถึงยืมได้</option>
+              </select>
+              <small class="text-muted">ถ้าเลือก "ต้อง" นักเรียนที่ยังไม่สมัครสมาชิกจะยืมไม่ได้</small>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-600">จำนวนวันยืมเริ่มต้น</label>
+              <input type="number" name="loan_days" class="form-control" min="1" max="60">
+            </div>
+            <div class="mb-0">
+              <label class="form-label fw-600">จำนวนเล่มที่สมาชิกยืมพร้อมกัน (สูงสุด)</label>
+              <input type="number" name="member_borrow_limit" class="form-control" min="0" max="20">
+              <small class="text-muted">ใช้เฉพาะเมื่อเปิดระบบสมาชิก • 0 = ไม่จำกัด</small>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="col-md-6">

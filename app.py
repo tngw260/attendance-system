@@ -138,7 +138,7 @@ DEFAULT_SETTINGS = {
     'alert_threshold':   '5',
     'loan_days':         '7',   # จำนวนวันยืมหนังสือเริ่มต้น
     'member_borrow_limit':'3',   # จำนวนเล่มที่สมาชิกยืมพร้อมกันได้ (ค่าเริ่มต้น)
-    'require_membership': '1',   # 1=ต้องเป็นสมาชิกถึงยืมได้
+    'require_membership': '0',   # 1=ต้องเป็นสมาชิกถึงยืมได้ (default ปิด — ยืมได้เลย)
     'sem1_start':        '05-16',
     'sem1_end':          '10-15',
     'sem2_start':        '11-01',
@@ -480,6 +480,13 @@ def init_db():
         # Default settings
         for k, v in DEFAULT_SETTINGS.items():
             con.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', (k, v))
+
+        # One-time migrate: ปิดกฎ require_membership ที่เคย default เป็น '1'
+        # (ผู้ใช้ไม่ต้องการให้บังคับสมัครสมาชิกก่อนยืม) — ทำครั้งเดียว ปรับกลับได้ในหน้าตั้งค่า
+        if not con.execute("SELECT 1 FROM settings WHERE key='require_membership_migrated'").fetchone():
+            con.execute("UPDATE settings SET value='0' WHERE key='require_membership'")
+            con.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('require_membership_migrated','1')")
+            print("  [Migrate] ปิดกฎ require_membership (ยืมได้เลยไม่ต้องสมัคร)")
 
         # Auto-gen director_view_key ถ้ายังว่าง
         cur = con.execute("SELECT value FROM settings WHERE key='director_view_key'").fetchone()
