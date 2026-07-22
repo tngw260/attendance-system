@@ -825,24 +825,32 @@ function setupPickers() {
 
 function bindPicker(inputId, boxId, url, onPick, render, qparam='q') {
   const input = document.getElementById(inputId), box = document.getElementById(boxId);
-  let timer;
+  let timer, curList = [];
+  const choose = (x) => { onPick(x); box.style.display='none'; };
   input.addEventListener('input', () => {
     clearTimeout(timer);
     const q = input.value.trim();
-    if (q.length < 1) { box.style.display='none'; return; }
+    if (q.length < 1) { box.style.display='none'; curList=[]; return; }
     timer = setTimeout(async () => {
       try {
         const sep = url.includes('?') ? '&' : '?';
         const list = await apiFetch(`${url}${sep}${qparam}=${encodeURIComponent(q)}`);
+        curList = list;
         if (!list.length) { box.innerHTML='<div class="hit text-muted">— ไม่พบ —</div>'; box.style.display=''; return; }
+        // เหลือรายการเดียว → เลือกให้อัตโนมัติเลย (กันลืมกด)
+        if (list.length === 1) { choose(list[0]); return; }
         box.innerHTML = list.slice(0,15).map((x,i)=>`<div class="hit" data-i="${i}">${render(x)}</div>`).join('');
         box.style.display='';
         box.querySelectorAll('.hit').forEach((el)=>{
           if (el.dataset.i===undefined) return;
-          el.addEventListener('click', ()=>{ onPick(list[+el.dataset.i]); box.style.display='none'; });
+          el.addEventListener('click', ()=>{ choose(list[+el.dataset.i]); });
         });
       } catch(e){}
     }, 250);
+  });
+  // กด Enter = เลือกรายการแรก
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && curList.length) { e.preventDefault(); choose(curList[0]); }
   });
   document.addEventListener('click', e => { if (!input.contains(e.target) && !box.contains(e.target)) box.style.display='none'; });
 }
