@@ -3652,14 +3652,14 @@ def api_loans_import():
 
 def check_member_can_borrow(con, student_id, settings):
     """ตรวจสิทธิ์การยืมของสมาชิก → (ok:bool, message:str)
-       - require_membership=1 : ต้องเป็นสมาชิก active
-       - เช็คสถานะระงับ + จำนวนเล่มที่ยืมค้างอยู่ ไม่เกิน borrow_limit"""
-    require = settings.get('require_membership', '1') == '1'
+       - require_membership=0 : ปิดระบบสมาชิก → ยืมได้เลย ไม่เช็คอะไร
+       - require_membership=1 : ต้องเป็นสมาชิก active + เช็คระงับ + จำนวนเล่มไม่เกิน borrow_limit"""
+    require = settings.get('require_membership', '0') == '1'
+    if not require:
+        return True, ''   # ปิดระบบสมาชิก → ยืมได้ทุกคน ไม่สนสถานะสมาชิก
     m = con.execute('SELECT * FROM members WHERE student_id=?', (student_id,)).fetchone()
     if not m:
-        if require:
-            return False, 'นักเรียนยังไม่เป็นสมาชิกห้องสมุด — สมัครสมาชิกก่อนยืม'
-        return True, ''   # ไม่บังคับสมาชิก → ยืมได้เลย
+        return False, 'นักเรียนยังไม่เป็นสมาชิกห้องสมุด — สมัครสมาชิกก่อนยืม'
     if m['status'] == 'suspended':
         return False, 'สมาชิกถูกระงับการยืม'
     limit = m['borrow_limit'] if m['borrow_limit'] is not None else 3
