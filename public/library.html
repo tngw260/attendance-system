@@ -49,6 +49,7 @@
     <li class="nav-item"><a class="nav-link" href="#" data-tab="borrow"><i class="bi bi-box-arrow-right me-1"></i>ยืมหนังสือ</a></li>
     <li class="nav-item"><a class="nav-link" href="#" data-tab="return"><i class="bi bi-box-arrow-in-left me-1"></i>คืนหนังสือ</a></li>
     <li class="nav-item"><a class="nav-link" href="#" data-tab="overdue"><i class="bi bi-exclamation-triangle me-1"></i>ค้างคืน</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" data-tab="signin"><i class="bi bi-door-open me-1"></i>ลงชื่อเข้าใช้</a></li>
     <li class="nav-item"><a class="nav-link" href="#" data-tab="members"><i class="bi bi-person-badge me-1"></i>สมาชิก</a></li>
     <li class="nav-item"><a class="nav-link" href="#" data-tab="report"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
   </ul>
@@ -155,6 +156,52 @@
       <table class="table align-middle">
         <thead><tr><th>นักเรียน</th><th>ชั้น</th><th>หนังสือ</th><th>กำหนดคืน</th><th>เกิน (วัน)</th></tr></thead>
         <tbody id="overdueBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== แท็บ: ลงชื่อเข้าใช้ ===== -->
+  <div id="tab-signin" class="lib-tab" style="display:none;">
+    <div class="row g-2 mb-3" id="siStatBar"></div>
+    <div class="card mb-3 no-print"><div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h5 class="mb-0"><i class="bi bi-door-open me-2"></i>ลงชื่อเข้า-ออกห้องสมุด</h5>
+        <button class="btn btn-outline-secondary btn-sm" onclick="openManualVisit()">
+          <i class="bi bi-clock-history me-1"></i>ใส่ข้อมูลย้อนหลัง
+        </button>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-5">
+          <select id="siClass" class="form-select" onchange="siLoadClassStudents()"></select>
+        </div>
+        <div class="col-7">
+          <select id="siFromClass" class="form-select" onchange="siPickFromClass()" disabled>
+            <option value="">-- เลือกนักเรียน --</option>
+          </select>
+        </div>
+      </div>
+      <div class="position-relative mb-2">
+        <input id="siPick" class="form-control" placeholder="หรือพิมพ์ชื่อ / เลขที่ ค้นหา" autocomplete="off">
+        <div id="siResults" class="picker-results"></div>
+      </div>
+      <div id="siChosen" class="mb-2"></div>
+      <button class="btn btn-success btn-lg w-100" onclick="siSignIn()" id="siBtn" disabled>
+        <i class="bi bi-pencil-square me-1"></i>ลงชื่อเข้า/ออก
+      </button>
+      <div class="small text-muted mt-2"><i class="bi bi-info-circle me-1"></i>ลงชื่อครั้งแรก = เข้า, ลงชื่ออีกครั้ง = ออก (บันทึกเวลาอัตโนมัติ)</div>
+    </div></div>
+
+    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+      <h6 class="mb-0"><i class="bi bi-list-check me-2"></i>รายการเข้าใช้ <span id="siListDate" class="text-muted small"></span></h6>
+      <div class="d-flex gap-2 no-print">
+        <input type="date" id="siDate" class="form-control form-control-sm" style="max-width:160px;" onchange="siLoadList()">
+        <a class="btn btn-outline-dark btn-sm" href="/library-visits.html" target="_blank"><i class="bi bi-printer me-1"></i>รายงาน/พิมพ์</a>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead><tr><th>#</th><th>นักเรียน</th><th>ชั้น</th><th class="text-center">เวลาเข้า</th><th class="text-center">เวลาออก</th><th class="no-print"></th></tr></thead>
+        <tbody id="siBody"><tr><td colspan="6" class="text-center text-muted py-4">— ยังไม่มีการเข้าใช้ —</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -366,6 +413,35 @@
   </div>
 </div></div></div>
 
+<!-- Modal: ใส่ข้อมูลเข้าใช้ย้อนหลัง -->
+<div class="modal fade" id="manualVisitModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header bg-secondary text-white">
+    <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>ใส่ข้อมูลเข้าใช้ย้อนหลัง</h5>
+    <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+  </div>
+  <div class="modal-body">
+    <div class="mb-2 position-relative">
+      <label class="form-label small fw-600">นักเรียน *</label>
+      <input id="mvPick" class="form-control" placeholder="🔍 พิมพ์ชื่อนักเรียน" autocomplete="off">
+      <div id="mvResults" class="picker-results" style="display:none;"></div>
+      <div id="mvChosen" class="mt-2"></div>
+    </div>
+    <div class="mb-2"><label class="form-label small fw-600">วันที่ *</label>
+      <input type="date" id="mv_date" class="form-control"></div>
+    <div class="row g-2">
+      <div class="col-6 mb-0"><label class="form-label small fw-600">เวลาเข้า *</label>
+        <input type="time" id="mv_in" class="form-control"></div>
+      <div class="col-6 mb-0"><label class="form-label small fw-600">เวลาออก</label>
+        <input type="time" id="mv_out" class="form-control"></div>
+    </div>
+    <div class="small text-muted mt-2"><i class="bi bi-info-circle me-1"></i>เวลาออกไม่บังคับ (เว้นว่าง = ยังไม่ออก)</div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+    <button class="btn btn-primary" onclick="saveManualVisit()"><i class="bi bi-check-lg me-1"></i>บันทึก</button>
+  </div>
+</div></div></div>
+
 <div class="toast-container position-fixed bottom-0 end-0 p-3">
   <div id="mainToast" class="toast align-items-center border-0" role="alert"><div class="d-flex">
     <div class="toast-body fw-500"></div>
@@ -378,7 +454,7 @@
 <script>
 const ST = { available:{l:'พร้อมยืม',c:'available'}, borrowed:{l:'ถูกยืม',c:'borrowed'},
   damaged:{l:'ชำรุด',c:'damaged'}, lost:{l:'สูญหาย',c:'lost'} };
-let bookModal, returnModal, bulkModal, importModal, loanImportModal, memberModal, memberBulkModal, chosenStu=null, chosenBook=null, memChosenStu=null;
+let bookModal, returnModal, bulkModal, importModal, loanImportModal, memberModal, memberBulkModal, manualVisitModal, chosenStu=null, chosenBook=null, memChosenStu=null, mvChosen=null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
@@ -394,6 +470,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   loanImportModal = new bootstrap.Modal('#loanImportModal');
   memberModal = new bootstrap.Modal('#memberModal');
   memberBulkModal = new bootstrap.Modal('#memberBulkModal');
+  manualVisitModal = new bootstrap.Modal('#manualVisitModal');
+  bindPicker('mvPick','mvResults','/api/students/search-all', (s)=>{
+    mvChosen = s;
+    document.getElementById('mvChosen').innerHTML = `<span class="badge bg-primary fs-6">${s.name} (ม.${s.class_level}/${s.room})</span>`;
+  }, (s)=>`${s.name} <small class="text-muted">ม.${s.class_level}/${s.room}${s.number?' เลขที่ '+s.number:''}</small>`);
   // tabs
   document.querySelectorAll('#libTabs .nav-link').forEach(a => {
     a.addEventListener('click', e => { e.preventDefault(); switchTab(a.dataset.tab); });
@@ -462,6 +543,7 @@ function switchTab(tab) {
   if (tab==='return') loadReturn();
   if (tab==='overdue') loadOverdue();
   if (tab==='members') { loadMemberStats(); loadMembers(); }
+  if (tab==='signin') { siInit(); }
 }
 
 async function loadStats() {
@@ -475,6 +557,125 @@ async function loadStats() {
       <div class="col"><div class="stat-pill badge-st-lost"><div class="n">${s.lost||0}</div><div class="l">สูญหาย</div></div></div>
       <div class="col"><div class="stat-pill" style="background:#c0392b;"><div class="n">${s.overdue||0}</div><div class="l">ค้างคืน</div></div></div>`;
   } catch(e){}
+}
+
+/* ===== ลงชื่อเข้าใช้ห้องสมุด ===== */
+let siClassStudents = [], siChosen = null, siInited = false;
+function siInit() {
+  if (!siInited) {
+    // เติม dropdown ห้อง
+    apiFetch('/api/classes').then(classes => {
+      const sel = document.getElementById('siClass');
+      sel.innerHTML = '<option value="">-- เลือกห้อง --</option>';
+      const g = {}; classes.forEach(c => (g[c.class_level]=g[c.class_level]||[]).push(c));
+      Object.keys(g).sort((a,b)=>+a-+b).forEach(lv => {
+        const og = document.createElement('optgroup'); og.label = `มัธยมศึกษาปีที่ ${lv}`;
+        g[lv].forEach(c => { const o=document.createElement('option'); o.value=`${c.class_level}_${c.room}`; o.textContent=`ม.${c.class_level}/${c.room}`; og.appendChild(o); });
+        sel.appendChild(og);
+      });
+    }).catch(()=>{});
+    bindPicker('siPick','siResults','/api/students/search-all', (s)=>{
+      siChosen = s;
+      document.getElementById('siChosen').innerHTML = `<span class="badge bg-success fs-6">${s.name} (ม.${s.class_level}/${s.room})</span>`;
+      document.getElementById('siBtn').disabled = false;
+    }, (s)=>`${s.name} <small class="text-muted">ม.${s.class_level}/${s.room}${s.number?' เลขที่ '+s.number:''}</small>`);
+    document.getElementById('siDate').value = todayISO();
+    siInited = true;
+  }
+  siLoadStats(); siLoadList();
+}
+async function siLoadClassStudents() {
+  const v = document.getElementById('siClass').value;
+  const sel2 = document.getElementById('siFromClass');
+  if (!v) { sel2.innerHTML='<option value="">-- เลือกนักเรียน --</option>'; sel2.disabled=true; return; }
+  const [level, room] = v.split('_');
+  sel2.disabled = true; sel2.innerHTML = '<option>กำลังโหลด...</option>';
+  try {
+    siClassStudents = await apiFetch(`/api/students?level=${level}&room=${room}`);
+    sel2.innerHTML = '<option value="">-- เลือกนักเรียน --</option>' +
+      siClassStudents.map(s => `<option value="${s.id}">${s.number?s.number+'. ':''}${s.name}</option>`).join('');
+    sel2.disabled = false;
+  } catch(e){ sel2.innerHTML='<option value="">โหลดไม่สำเร็จ</option>'; }
+}
+function siPickFromClass() {
+  const id = +document.getElementById('siFromClass').value;
+  if (!id) return;
+  const s = siClassStudents.find(x => x.id === id);
+  if (!s) return;
+  siChosen = s;
+  document.getElementById('siChosen').innerHTML = `<span class="badge bg-success fs-6">${s.name} (ม.${s.class_level}/${s.room})</span>`;
+  document.getElementById('siPick').value = '';
+  document.getElementById('siBtn').disabled = false;
+}
+async function siSignIn() {
+  if (!siChosen) return;
+  try {
+    const r = await apiFetch('/api/library/visits', {method:'POST', body:JSON.stringify({student_id:siChosen.id})});
+    showToast(r.message, r.action==='in'?'success':'primary');
+    // reset ช่องเลือก
+    siChosen = null;
+    document.getElementById('siChosen').innerHTML=''; document.getElementById('siBtn').disabled=true;
+    document.getElementById('siPick').value=''; document.getElementById('siFromClass').value='';
+    // ให้แสดงวันนี้เสมอหลังลงชื่อ
+    document.getElementById('siDate').value = todayISO();
+    siLoadStats(); siLoadList();
+  } catch(e){ showToast(e.message,'danger'); }
+}
+async function siLoadStats() {
+  try {
+    const s = await apiFetch('/api/library/visits/stats');
+    document.getElementById('siStatBar').innerHTML = `
+      <div class="col-6"><div class="stat-pill" style="background:#0d8a3e;"><div class="n">${s.today_total||0}</div><div class="l">เข้าใช้วันนี้ (ครั้ง)</div></div></div>
+      <div class="col-6"><div class="stat-pill" style="background:#0d3b8e;"><div class="n">${s.inside||0}</div><div class="l">กำลังอยู่ในห้องสมุด</div></div></div>`;
+  } catch(e){}
+}
+async function siLoadList() {
+  const date = document.getElementById('siDate').value || todayISO();
+  document.getElementById('siListDate').textContent = '('+pcDate(date)+')';
+  try {
+    const list = await apiFetch(`/api/library/visits?date=${date}`);
+    document.getElementById('siBody').innerHTML = list.length ? list.map((v,i)=>`
+      <tr class="${!v.check_out?'table-success':''}">
+        <td>${i+1}</td>
+        <td class="fw-600">${v.name}</td>
+        <td>ม.${v.class_level}/${v.room}${v.number?' เลขที่ '+v.number:''}</td>
+        <td class="text-center">${v.check_in} น.</td>
+        <td class="text-center">${v.check_out?v.check_out+' น.':'<span class="badge bg-success">ยังอยู่</span>'}</td>
+        <td class="no-print"><button class="btn btn-sm btn-link text-danger p-0" onclick="siDelVisit(${v.id})" title="ลบ"><i class="bi bi-trash"></i></button></td>
+      </tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted py-4">— ยังไม่มีการเข้าใช้ —</td></tr>';
+  } catch(e){ showToast(e.message,'danger'); }
+}
+async function siDelVisit(id) {
+  if (!confirm('ลบรายการเข้าใช้นี้?')) return;
+  try {
+    const r = await apiFetch(`/api/library/visits/${id}`, {method:'DELETE'});
+    showToast(r.message); siLoadStats(); siLoadList();
+  } catch(e){ showToast(e.message,'danger'); }
+}
+function openManualVisit() {
+  mvChosen = null;
+  document.getElementById('mvPick').value = '';
+  document.getElementById('mvChosen').innerHTML = '';
+  document.getElementById('mv_date').value = document.getElementById('siDate').value || todayISO();
+  document.getElementById('mv_in').value = '';
+  document.getElementById('mv_out').value = '';
+  manualVisitModal.show();
+}
+async function saveManualVisit() {
+  if (!mvChosen) { showToast('เลือกนักเรียนก่อน','warning'); return; }
+  const visit_date = document.getElementById('mv_date').value;
+  const check_in = document.getElementById('mv_in').value;
+  const check_out = document.getElementById('mv_out').value;
+  if (!visit_date || !check_in) { showToast('กรอกวันที่และเวลาเข้า','warning'); return; }
+  try {
+    const r = await apiFetch('/api/library/visits/manual', {method:'POST',
+      body:JSON.stringify({student_id:mvChosen.id, visit_date, check_in, check_out})});
+    showToast(r.message,'success');
+    manualVisitModal.hide();
+    // ให้ list แสดงวันที่ที่เพิ่งบันทึก
+    document.getElementById('siDate').value = visit_date;
+    siLoadStats(); siLoadList();
+  } catch(e){ showToast(e.message,'danger'); }
 }
 
 /* ===== สมาชิกห้องสมุด ===== */

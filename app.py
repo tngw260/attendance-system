@@ -331,6 +331,19 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_bank_txn_student ON bank_transactions(student_id);
             CREATE INDEX IF NOT EXISTS idx_bank_txn_date    ON bank_transactions(txn_date);
 
+            CREATE TABLE IF NOT EXISTS library_visits (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id  INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+                visit_date  TEXT NOT NULL,           -- วันที่เข้าใช้ (ISO)
+                check_in    TEXT NOT NULL,           -- เวลาเข้า HH:MM
+                check_out   TEXT,                    -- เวลาออก HH:MM (NULL = ยังอยู่)
+                purpose     TEXT,                    -- วัตถุประสงค์ (เผื่ออนาคต)
+                created_by  INTEGER REFERENCES users(id),
+                created_at  TEXT DEFAULT (datetime('now','localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_libvisit_date    ON library_visits(visit_date);
+            CREATE INDEX IF NOT EXISTS idx_libvisit_student ON library_visits(student_id);
+
             CREATE TABLE IF NOT EXISTS holidays (
                 date       TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
@@ -4353,6 +4366,125 @@ def api_bank_leaderboard():
     for i, r in enumerate(rows, 1):
         d = dict(r); d['rank'] = i; d['value'] = round(d['value'] or 0, 2); result.append(d)
     return jsonify(by=by, period=period, items=result)
+
+
+# ── LIBRARY VISITS (ลงชื่อเข้าใช้ห้องสมุด) ──────────────────
+
+@app.post('/api/library/visits')
+@login_required
+def api_libvisit_signin():
+    """ลงชื่อเข้า/ออกห้องสมุด — Body: {student_id}
+       ถ้ายังมีรายการค้าง (เข้าแล้วยังไม่ออก) วันนี้ → บันทึกเวลาออก
+       ถ้าไม่มี → บันทึกเวลาเข้าใหม่"""
+    u = current_user()
+    b = request.get_json() or {}
+    student_id = b.get('student_id')
+    if not student_id:
+        return jsonify(success=False, message='เลือกนักเรียน'), 400
+    now = datetime.datetime.now()
+    today = now.date().isoformat()
+    hhmm = now.strftime('%H:%M')
+    with get_db() as con:
+        s = con.execute('SELECT name, class_level, room FROM students WHERE id=?', (student_id,)).fetchone()
+        if not s: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        # หา visit ที่ยังไม่เช็คเอาท์ วันนี้
+        open_v = con.execute("""SELECT * FROM library_visits
+            WHERE student_id=? AND visit_date=? AND check_out IS NULL
+            ORDER BY id DESC LIMIT 1""", (student_id, today)).fetchone()
+        if open_v:
+            con.execute('UPDATE library_visits SET check_out=? WHERE id=?', (hhmm, open_v['id']))
+            audit_log(con, 'lib_checkout', 'student', student_id, {'date': today, 'time': hhmm})
+            action, msg = 'out', f'{s["name"]} ออกจากห้องสมุด เวลา {hhmm} น.'
+        else:
+            con.execute("""INSERT INTO library_visits (student_id,visit_date,check_in,created_by)
+                VALUES (?,?,?,?)""", (student_id, today, hhmm, u['id']))
+            audit_log(con, 'lib_checkin', 'student', student_id, {'date': today, 'time': hhmm})
+            action, msg = 'in', f'{s["name"]} เข้าห้องสมุด เวลา {hhmm} น.'
+    return jsonify(success=True, action=action, time=hhmm, message=msg)
+
+
+@app.post('/api/library/visits/manual')
+@login_required
+def api_libvisit_manual():
+    """ใส่ข้อมูลเข้าใช้ย้อนหลัง — Body: {student_id, visit_date, check_in, check_out?}"""
+    u = current_user()
+    b = request.get_json() or {}
+    student_id = b.get('student_id')
+    visit_date = (b.get('visit_date') or '').strip()
+    check_in = (b.get('check_in') or '').strip()
+    check_out = (b.get('check_out') or '').strip() or None
+    if not student_id or not visit_date or not check_in:
+        return jsonify(success=False, message='กรอกนักเรียน วันที่ และเวลาเข้า'), 400
+    try:
+        d = datetime.date.fromisoformat(visit_date)
+    except ValueError:
+        return jsonify(success=False, message='วันที่ไม่ถูกต้อง'), 400
+    if d > datetime.date.today():
+        return jsonify(success=False, message='เลือกวันที่ในอนาคตไม่ได้'), 400
+    if check_out and check_out < check_in:
+        return jsonify(success=False, message='เวลาออกต้องไม่ก่อนเวลาเข้า'), 400
+    with get_db() as con:
+        s = con.execute('SELECT name FROM students WHERE id=?', (student_id,)).fetchone()
+        if not s: return jsonify(success=False, message='ไม่พบนักเรียน'), 404
+        con.execute("""INSERT INTO library_visits (student_id,visit_date,check_in,check_out,created_by)
+            VALUES (?,?,?,?,?)""", (student_id, visit_date, check_in, check_out, u['id']))
+        audit_log(con, 'lib_visit_manual', 'student', student_id,
+                  {'date': visit_date, 'in': check_in, 'out': check_out})
+    return jsonify(success=True, message=f'บันทึกย้อนหลัง {s["name"]} วันที่ {visit_date} สำเร็จ')
+
+
+@app.get('/api/library/visits')
+@login_required
+def api_libvisit_list():
+    """รายการเข้าใช้ — ?date หรือ ?start&end &level &room &q"""
+    u = current_user()
+    date = request.args.get('date')
+    start = request.args.get('start'); end = request.args.get('end')
+    if not (start and end):
+        d = date or today_iso(); start = end = d
+    q = (request.args.get('q') or '').strip()
+    where, params = '', []
+    where, params, _, _ = user_class_filter(u, {'level': request.args.get('level'), 'room': request.args.get('room')})
+    if q:
+        where += ' AND s.name LIKE ?'; params.append(f'%{q}%')
+    with get_db() as con:
+        rows = con.execute(f"""
+            SELECT v.id, v.visit_date, v.check_in, v.check_out,
+                   s.id AS student_id, s.name, s.class_level, s.room, s.number
+            FROM library_visits v JOIN students s ON s.id=v.student_id
+            WHERE v.visit_date BETWEEN ? AND ? {where}
+            ORDER BY v.visit_date DESC, v.check_in DESC, v.id DESC
+        """, [start, end] + params).fetchall()
+    return jsonify(rows_to_list(rows))
+
+
+@app.get('/api/library/visits/stats')
+@login_required
+def api_libvisit_stats():
+    """สรุปวันนี้ — จำนวนเข้าใช้ + กำลังอยู่ในห้องสมุด"""
+    u = current_user()
+    today = today_iso()
+    where, params, _, _ = user_class_filter(u, {'level': request.args.get('level'), 'room': request.args.get('room')})
+    with get_db() as con:
+        total = con.execute(f"""SELECT COUNT(*) c FROM library_visits v
+            JOIN students s ON s.id=v.student_id WHERE v.visit_date=? {where}""", [today]+params).fetchone()['c']
+        inside = con.execute(f"""SELECT COUNT(*) c FROM library_visits v
+            JOIN students s ON s.id=v.student_id
+            WHERE v.visit_date=? AND v.check_out IS NULL {where}""", [today]+params).fetchone()['c']
+    return jsonify(today_total=total, inside=inside)
+
+
+@app.delete('/api/library/visits/<int:vid>')
+@login_required
+def api_libvisit_delete(vid):
+    """ลบรายการเข้าใช้ (บันทึกผิด)"""
+    u = current_user()
+    with get_db() as con:
+        v = con.execute('SELECT * FROM library_visits WHERE id=?', (vid,)).fetchone()
+        if not v: return jsonify(success=False, message='ไม่พบรายการ'), 404
+        con.execute('DELETE FROM library_visits WHERE id=?', (vid,))
+        audit_log(con, 'lib_visit_delete', 'student', v['student_id'], {'visit_id': vid})
+    return jsonify(success=True, message='ลบรายการแล้ว')
 
 
 # ── HOME VISITS (เยี่ยมบ้าน) ───────────────────────────────
