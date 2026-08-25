@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>รายชื่อกลุ่มเสี่ยง (มาสาย/ขาดบ่อย)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    .controls { background:#f0f7f0; padding:12px 0; border-bottom:2px solid var(--primary); }
+    .rk-class { break-inside:avoid; page-break-inside:avoid; margin-bottom:8mm; }
+    .rk-class h3 { font-size:1.1rem; font-weight:700; color:var(--primary); border-bottom:2px solid var(--primary);
+      padding-bottom:3px; margin-bottom:8px; }
+    .rk-cols { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .rk-box h6 { font-weight:700; margin-bottom:4px; }
+    table.rk { width:100%; border-collapse:collapse; font-size:.92rem; }
+    table.rk th, table.rk td { border:1px solid #bbb; padding:3px 7px; }
+    table.rk th { background:#e8f2e8; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    table.rk td.n { text-align:center; width:14mm; }
+    table.rk td.c { text-align:center; font-weight:700; width:18mm; }
+    .rk-none { color:#888; font-size:.9rem; padding:4px; }
+    .doc { max-width:210mm; margin:14px auto; background:#fff; color:#000; padding:12mm 14mm;
+      box-shadow:0 2px 14px rgba(0,0,0,.15); font-family:'Sarabun',sans-serif; }
+    .doc-head { text-align:center; margin-bottom:6mm; }
+    .doc-head img { width:16mm; height:16mm; object-fit:contain; }
+    .doc-head h2 { font-size:1.3rem; font-weight:700; margin:2mm 0 0; }
+    .doc-head .sub { color:#555; font-size:.95rem; }
+    @media print {
+      .no-print, nav { display:none !important; }
+      .doc { box-shadow:none; margin:0; max-width:100%; padding:0; }
+      .rk-late th { background:#fde8cf !important; }
+      .rk-absent th { background:#f7d6d6 !important; }
+      @page { size:A4; margin:12mm; }
+    }
+    .rk-late th { background:#fde8cf; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .rk-absent th { background:#f7d6d6; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    [data-theme="dark"] .doc { color:#000; background:#fff; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <div id="userBadge" class="d-flex align-items-center"></div>
+  </div>
+</nav>
+
+<div class="controls no-print">
+  <div class="container">
+    <div class="row g-2 align-items-end">
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-600 mb-1">ตั้งแต่วันที่</label>
+        <input type="date" id="fFrom" class="form-control form-control-sm">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-600 mb-1">ถึงวันที่</label>
+        <input type="date" id="fTo" class="form-control form-control-sm">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-600 mb-1">มาสายตั้งแต่ (ครั้ง)</label>
+        <input type="number" id="thLate" class="form-control form-control-sm" value="3" min="1">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-600 mb-1">ขาดตั้งแต่ (ครั้ง)</label>
+        <input type="number" id="thAbsent" class="form-control form-control-sm" value="3" min="1">
+      </div>
+      <div class="col-6 col-md-2 d-grid">
+        <button class="btn btn-primary btn-sm" onclick="loadRisk()"><i class="bi bi-search me-1"></i>ดูรายงาน</button>
+      </div>
+      <div class="col-6 col-md-2 d-grid">
+        <button class="btn btn-dark btn-sm" onclick="window.print()" id="printBtn" disabled><i class="bi bi-printer me-1"></i>พิมพ์</button>
+      </div>
+    </div>
+    <div class="small text-muted mt-2"><i class="bi bi-info-circle me-1"></i>เว้นช่องวันที่ = ดูทั้งหมด • ปรับเกณฑ์ "ตั้งแต่กี่ครั้ง" ได้ • แยกรายชั้น พิมพ์เป็นเอกสารได้</div>
+  </div>
+</div>
+
+<div id="content">
+  <div class="doc"><div class="text-center text-muted py-5"><i class="bi bi-people fs-1 d-block mb-2"></i>กด "ดูรายงาน" เพื่อสรุปนักเรียนกลุ่มเสี่ยง</div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let school='โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม', logo='';
+function thDate(iso){ if(!iso) return '';
+  const m=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const d=new Date(iso+'T00:00:00'); if(isNaN(d)) return iso;
+  return `${d.getDate()} ${m[d.getMonth()]} ${d.getFullYear()+543}`; }
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  try {
+    const t = await (await fetch('/api/public/theme')).json();
+    if (t.school_name) school = t.school_name;
+    if (t.school_logo) logo = t.school_logo;
+  } catch(e){}
+});
+
+async function loadRisk() {
+  const from = document.getElementById('fFrom').value;
+  const to = document.getElementById('fTo').value;
+  const thLate = parseInt(document.getElementById('thLate').value)||1;
+  const thAbsent = parseInt(document.getElementById('thAbsent').value)||1;
+  let qs = [];
+  if (from) qs.push('from='+from);
+  if (to) qs.push('to='+to);
+  document.getElementById('content').innerHTML = '<div class="doc"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>';
+  try {
+    const d = await apiFetch('/api/report?' + qs.join('&'));
+    render(d.rows||[], d.range, thLate, thAbsent);
+    document.getElementById('printBtn').disabled = false;
+  } catch(e){ document.getElementById('content').innerHTML = `<div class="doc"><div class="alert alert-danger">${e.message}</div></div>`; }
+}
+
+function render(rows, range, thLate, thAbsent) {
+  // จัดกลุ่มตามชั้น/ห้อง
+  const byClass = {};
+  rows.forEach(r => {
+    const key = `${r.class_level}/${r.room}`;
+    (byClass[key] = byClass[key] || []).push(r);
+  });
+  const keys = Object.keys(byClass).sort((a,b)=>{
+    const [al,ar]=a.split('/').map(Number), [bl,br]=b.split('/').map(Number);
+    return al-bl || ar-br;
+  });
+  let totalLate=0, totalAbsent=0, html='';
+  keys.forEach(k => {
+    const list = byClass[k];
+    const lateList = list.filter(r=>(r.late||0)>=thLate).sort((a,b)=>b.late-a.late);
+    const absentList = list.filter(r=>(r.absent||0)>=thAbsent).sort((a,b)=>b.absent-a.absent);
+    if (!lateList.length && !absentList.length) return;  // ห้องนี้ไม่มีใครเข้าเกณฑ์
+    totalLate += lateList.length; totalAbsent += absentList.length;
+    const lateRows = lateList.length ? lateList.map((r,i)=>`
+      <tr><td class="n">${i+1}</td><td>${r.name}</td><td class="c">${r.late}</td></tr>`).join('')
+      : '<tr><td colspan="3" class="rk-none">— ไม่มี —</td></tr>';
+    const absentRows = absentList.length ? absentList.map((r,i)=>`
+      <tr><td class="n">${i+1}</td><td>${r.name}</td><td class="c">${r.absent}</td></tr>`).join('')
+      : '<tr><td colspan="3" class="rk-none">— ไม่มี —</td></tr>';
+    html += `<div class="rk-class">
+      <h3>ชั้นมัธยมศึกษาปีที่ ${k}</h3>
+      <div class="rk-cols">
+        <div class="rk-box">
+          <h6 style="color:#b5651d;"><i class="bi bi-clock-history me-1"></i>มาสายบ่อย (≥ ${thLate} ครั้ง)</h6>
+          <table class="rk rk-late"><thead><tr><th>ที่</th><th>ชื่อ-สกุล</th><th>สาย</th></tr></thead><tbody>${lateRows}</tbody></table>
+        </div>
+        <div class="rk-box">
+          <h6 style="color:#b02a2a;"><i class="bi bi-x-circle me-1"></i>ขาดเรียนบ่อย (≥ ${thAbsent} ครั้ง)</h6>
+          <table class="rk rk-absent"><thead><tr><th>ที่</th><th>ชื่อ-สกุล</th><th>ขาด</th></tr></thead><tbody>${absentRows}</tbody></table>
+        </div>
+      </div>
+    </div>`;
+  });
+  if (!html) html = '<div class="alert alert-success">🎉 ไม่มีนักเรียนเข้าเกณฑ์กลุ่มเสี่ยงตามที่กำหนด</div>';
+  const rangeTxt = (range && range.from) ? `ระหว่างวันที่ ${thDate(range.from)} ถึง ${thDate(range.to)}` : 'ข้อมูลทั้งหมด';
+  document.getElementById('content').innerHTML = `<div class="doc">
+    <div class="doc-head">
+      ${logo?`<img src="${logo}">`:''}
+      <h2>รายชื่อนักเรียนกลุ่มเสี่ยง (มาสาย / ขาดเรียนบ่อย)</h2>
+      <div class="sub">${school}</div>
+      <div class="sub">${rangeTxt} • มาสาย ${totalLate} คน • ขาดเรียน ${totalAbsent} คน</div>
+    </div>
+    ${html}
+  </div>`;
+}
+</script>
+</body>
+</html>

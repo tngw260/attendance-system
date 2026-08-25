@@ -307,6 +307,7 @@ function setupUserUI() {
     upgradeBehaviorMenu();
     // Add Heatmap link (after รายงาน) if not present
     injectHeatmapLink();
+    injectRiskReportLink();
     injectHomeVisitLink();
     injectLibraryLink();
     injectBankLink();
@@ -347,6 +348,18 @@ function setupUserUI() {
   } catch (e) {
     console.error(e);
   }
+}
+
+function injectRiskReportLink() {
+  if (document.querySelector('a.nav-link[href="/risk-report.html"]')) return;
+  const anchor = document.querySelector('a.nav-link[href="/report.html"]');
+  if (!anchor) return;
+  const li = document.createElement('li');
+  li.className = 'nav-item';
+  const isActive = location.pathname === '/risk-report.html';
+  li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/risk-report.html"><i class="bi bi-people me-1"></i>กลุ่มเสี่ยง</a>`;
+  const anchorLi = anchor.closest('li.nav-item');
+  anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
 }
 
 function injectHeatmapLink() {
