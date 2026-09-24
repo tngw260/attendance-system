@@ -311,6 +311,7 @@ function setupUserUI() {
     injectHomeVisitLink();
     injectLibraryLink();
     injectBankLink();
+    injectTimetableLink();
     // Add global student search
     injectGlobalSearch();
     // Apply theme color and logo from settings
@@ -418,6 +419,23 @@ function injectBankLink() {
   li.className = 'nav-item';
   const isActive = location.pathname === '/bank.html';
   li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/bank.html"><i class="bi bi-bank2 me-1"></i>ธนาคาร</a>`;
+  anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
+}
+
+function injectTimetableLink() {
+  // ตารางสอน — ครูทุกคนดูได้ (แอดมินจัด/แก้)
+  if (!(currentUser?.role === 'admin' || currentUser?.role === 'teacher')) return;
+  if (document.querySelector('a.nav-link[href="/timetable.html"]')) return;
+  const anchor = document.querySelector('a.nav-link[href="/bank.html"]')
+              || document.querySelector('a.nav-link[href="/library.html"]')
+              || document.querySelector('a.nav-link[href="/students.html"]');
+  if (!anchor) return;
+  const anchorLi = anchor.closest('li.nav-item');
+  if (!anchorLi) return;
+  const li = document.createElement('li');
+  li.className = 'nav-item';
+  const isActive = location.pathname === '/timetable.html';
+  li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/timetable.html"><i class="bi bi-calendar-week me-1"></i>ตารางสอน</a>`;
   anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
 }
 

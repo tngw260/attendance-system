@@ -5102,6 +5102,10 @@ def cli_list_users():
         print(f"  [{r['role']:7}] {r['username']:15} {r['full_name']}{cls}")
     print()
 
+# ── ตารางสอน (ฝ่ายวิชาการ) — แยกไว้ใน timetable.py ──
+import timetable
+timetable.init(app, get_db, login_required, admin_required, current_user, get_settings)
+
 if __name__ == '__main__':
     import sys
     args = sys.argv[1:]

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ตารางสอน — ฝ่ายวิชาการ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <link rel="preload" href="/fonts/THSarabunNew-Regular.woff" as="font" type="font/woff" crossorigin>
+  <link rel="preload" href="/fonts/THSarabunNew-Bold.woff" as="font" type="font/woff" crossorigin>
+  <style>
+    @font-face { font-family: 'THSarabunDoc'; font-weight: 400; font-display: block; src: url('/fonts/THSarabunNew-Regular.woff') format('woff'); }
+    @font-face { font-family: 'THSarabunDoc'; font-weight: 700; font-display: block; src: url('/fonts/THSarabunNew-Bold.woff') format('woff'); }
+
+    /* ต้องอยู่นอก @media print (Safari ไม่อ่าน @page ที่ซ้อนใน @media) */
+    @page { size: A4 landscape; margin: 0; }
+
+    .controls { background: #f0f4fb; padding: 12px 0; border-bottom: 2px solid var(--primary); }
+    .tt-wrap { overflow-x: auto; padding: 12px 0 20px; }
+
+    /* ===== หน้า A4 แนวนอน — ขนาด/ตำแหน่งวัดจากไฟล์ตารางครู 1-2569.pdf (หน่วย pt) ===== */
+    .tt-page {
+      position: relative; width: 297mm; height: 210mm; margin: 0 auto 16px; box-sizing: border-box;
+      background: #fff; color: #000; box-shadow: 0 2px 14px rgba(0,0,0,.15);
+      font-family: 'THSarabunDoc', 'TH Sarabun New', 'TH SarabunPSK', sans-serif; font-size: 16pt; line-height: 21pt;
+    }
+    [data-theme="dark"] .tt-page { background: #fff; color: #000; }
+    .tt-page * { font-family: inherit; }
+    .tt-title { position: absolute; left: 0; right: 0; top: 77pt; text-align: center; font-weight: 700; }
+    .tt-box { position: absolute; left: 700pt; top: 14pt; width: 118pt; border: 1pt solid #000; padding: 1pt 7pt;
+      font-weight: 700; line-height: 19pt; white-space: nowrap; }
+    .tt-box u { text-decoration: none; border-bottom: 1pt dotted #000; padding: 0 4pt; }
+    table.tt-grid { margin: 0 0 0 16.7pt; width: 779pt; border-collapse: collapse; table-layout: fixed; }
+    .tt-page { padding-top: 119pt; }
+    table.tt-grid td, table.tt-grid th { border: 2.25pt double #000; text-align: center; vertical-align: middle;
+      padding: 0 2pt; font-weight: 400; overflow: hidden; }
+    table.tt-grid th { font-weight: 700; }
+    table.tt-grid tr.tt-h1 > * { height: 21pt; font-size: 16pt; }
+    table.tt-grid tr.tt-h2 > * { height: 40pt; font-size: 15pt; }
+    table.tt-grid tr.day > * { height: 43pt; }
+    table.tt-grid tr.day > td { vertical-align: top; }   /* Word ชิดบนช่อง */
+    table.tt-grid th.dayname { text-align: left; padding-left: 5pt; }
+    table.tt-grid td.rot { font-size: 15pt; padding: 4pt 0; }
+    table.tt-grid td.rot div { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; margin: 0 auto; }
+    table.tt-grid th.diag { position: relative; padding: 0; }
+    table.tt-grid th.diag svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    table.tt-grid th.diag .d1 { position: absolute; left: 5pt; top: 1pt; font-size: 14pt; font-weight: 400; }
+    table.tt-grid th.diag .d2 { position: absolute; right: 18pt; bottom: 0; font-size: 14pt; font-weight: 400; }
+    .tt-cell .ln1, .tt-cell .ln2 { display: block; }
+    .tt-cell.multi { font-size: 12pt; line-height: 14pt; padding-top: 2pt; padding-bottom: 2pt; }   /* หลายสาย/กลุ่มเรียนพร้อมกัน */
+    .tt-cell.multi .ln1 + .ln1 { border-top: 0.5pt dotted #999; }
+    .tt-signs { display: flex; margin: 50pt 0 0 94pt; }
+    .tt-sign { width: 300pt; margin-right: 68pt; text-align: center; line-height: 21pt; }
+
+    /* มือถือ: ดูเป็นรายวัน */
+    .tt-mobile .day { background: var(--surface,#fff); border: 1px solid var(--border,#dee2e6); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+    .tt-mobile .day.today { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 30%, transparent); }
+    .tt-mobile .day h6 { margin: 0; padding: 8px 12px; background: color-mix(in srgb, var(--primary) 10%, transparent); font-weight: 700; }
+    .tt-mobile .row1 { display: flex; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--border,#eee); align-items: center; }
+    .tt-mobile .row1 .t { width: 92px; flex-shrink: 0; color: #6c757d; font-size: .85rem; line-height: 1.2; }
+    .tt-mobile .row1 .t b { color: var(--text,#222); font-size: .95rem; }
+    .tt-mobile .row1.now { background: #fff6d6; }
+    .tt-mobile .row1.free .s { color: #adb5bd; }
+    .tt-mobile .row1.act .s { color: #6f42c1; }
+
+    .load-table td, .load-table th { vertical-align: middle; }
+    @media (max-width: 767px) { .tt-desktop-only { display: none !important; } }
+    @media (min-width: 768px) { .tt-mobile-only { display: none !important; } }
+
+    @media print {
+      body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
+      nav, .controls, .no-print, footer, .modal { display: none !important; }
+      .tt-wrap { padding: 0; overflow: visible; }
+      .container, .container-fluid { max-width: none !important; padding: 0 !important; margin: 0 !important; }
+      .tt-page { margin: 0; box-shadow: none; height: 209.5mm; overflow: hidden; break-after: page; page-break-after: always; }
+      .tt-page:last-child { break-after: auto; page-break-after: auto; }
+      .tt-mobile-only { display: none !important; }
+      .tt-desktop-only { display: block !important; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <div id="userBadge" class="d-flex align-items-center"></div>
+  </div>
+</nav>
+
+<div class="controls no-print">
+  <div class="container">
+    <div class="row g-2 align-items-end">
+      <div class="col-4 col-md-2">
+        <label class="form-label small fw-600 mb-1">ภาคเรียน</label>
+        <select id="selTerm" class="form-select form-select-sm" onchange="loadTerm(this.value)"></select>
+      </div>
+      <div class="col-8 col-md-3">
+        <label class="form-label small fw-600 mb-1">ดูตาราง</label>
+        <div class="btn-group btn-group-sm w-100" role="group">
+          <input type="radio" class="btn-check" name="mode" id="mTeacher" value="teacher" checked onchange="setMode('teacher')">
+          <label class="btn btn-outline-primary text-nowrap" for="mTeacher"><i class="bi bi-person-badge d-none d-sm-inline"></i> รายครู</label>
+          <input type="radio" class="btn-check" name="mode" id="mClass" value="class" onchange="setMode('class')">
+          <label class="btn btn-outline-primary text-nowrap" for="mClass"><i class="bi bi-people d-none d-sm-inline"></i> รายห้อง</label>
+          <input type="radio" class="btn-check" name="mode" id="mLoad" value="load" onchange="setMode('load')">
+          <label class="btn btn-outline-primary text-nowrap" for="mLoad"><i class="bi bi-list-ol d-none d-sm-inline"></i> ภาระงาน</label>
+        </div>
+      </div>
+      <div class="col-12 col-md-3" id="pickWrap">
+        <label class="form-label small fw-600 mb-1" id="pickLabel">ครู</label>
+        <select id="selPick" class="form-select form-select-sm" onchange="view.key=this.value; render()"></select>
+      </div>
+      <div class="col-12 col-md-4 d-flex gap-1">
+        <button class="btn btn-success btn-sm flex-fill" onclick="printDoc(false)" id="btnPrint"><i class="bi bi-printer-fill me-1"></i>พิมพ์</button>
+        <button class="btn btn-outline-success btn-sm flex-fill" onclick="printDoc(true)" id="btnPrintAll"><i class="bi bi-printer me-1"></i>พิมพ์ทุก<span id="allLabel">คน</span></button>
+      </div>
+    </div>
+    <div id="adminBar" class="mt-2 small" style="display:none;"></div>
+  </div>
+</div>
+
+<div class="container-fluid tt-wrap">
+  <div id="content"><div class="text-center text-muted py-5"><div class="spinner-border"></div></div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let T = null;                 // ข้อมูลภาคเรียนที่เปิดอยู่ (จาก /api/tt/terms/:id)
+let IDX = null;               // ดัชนีค้นเร็ว
+let view = { mode: 'teacher', key: '' };
+let myTeacherId = null;
+const DAYS = ['จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์'];
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const el = id => document.getElementById(id);
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  let terms;
+  try { terms = await apiFetch('/api/tt/terms'); } catch (e) { el('content').innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; return; }
+  try { const my = await apiFetch('/api/tt/my'); myTeacherId = my.teacher ? my.teacher.id : null; } catch (e) {}
+  showAdminBar(terms);
+  const sel = el('selTerm');
+  sel.innerHTML = terms.terms.map(t => `<option value="${t.id}">${esc(t.name)}${t.published ? '' : ' (ร่าง)'}</option>`).join('');
+  if (!terms.terms.length) {
+    el('content').innerHTML = `<div class="text-center text-muted py-5"><i class="bi bi-calendar-week fs-1 d-block mb-2"></i>ยังไม่มีตารางสอน${currentUser?.role === 'admin' ? ' — กดนำเข้าด้านบน' : ''}</div>`;
+    return;
+  }
+  if (myTeacherId) view.key = String(myTeacherId);
+  await loadTerm(terms.terms[0].id);
+});
+
+function showAdminBar(terms) {
+  if (currentUser?.role !== 'admin') return;
+  const bar = el('adminBar');
+  const seeds = (terms.seeds || []).map(s =>
+    `<button class="btn btn-sm btn-warning" onclick="importSeed('${esc(s.file)}', '${esc(s.name)}')">
+       <i class="bi bi-cloud-download me-1"></i>นำเข้าตารางภาคเรียน ${esc(s.name)} (จากไฟล์ PDF เดิม)</button>`).join(' ');
+  if (seeds) { bar.style.display = ''; bar.innerHTML = seeds; }
+}
+
+async function importSeed(file, name) {
+  if (!confirm(`นำเข้าตารางสอนภาคเรียน ${name} จากไฟล์ "ตารางครู ${name}.pdf" ที่อ่านไว้แล้ว?`)) return;
+  try {
+    const r = await apiFetch('/api/tt/import-seed', { method: 'POST', body: JSON.stringify({ file }) });
+    alert(r.message); location.reload();
+  } catch (e) { alert(e.message); }
+}
+
+async function loadTerm(id) {
+  el('selTerm').value = id;
+  el('content').innerHTML = '<div class="text-center text-muted py-5"><div class="spinner-border"></div></div>';
+  T = await apiFetch(`/api/tt/terms/${id}`);
+  buildIndex();
+  fillPicker();
+  try { await document.fonts.load('16pt THSarabunDoc', 'กขค'); await document.fonts.load('bold 16pt THSarabunDoc', 'กขค'); } catch (e) {}
+  render();
+}
+
+/* ===== ดัชนี: ครู → ช่อง, ห้อง → ช่อง ===== */
+function buildIndex() {
+  const byTeacher = {}, byClass = {}, teachers = {};
+  T.teachers.forEach(t => { teachers[t.id] = t; });
+  T.lessons.forEach(l => {
+    l.slots.forEach(([d, p]) => {
+      l.teacher_ids.forEach(tid => ((byTeacher[tid] = byTeacher[tid] || {})[`${d}-${p}`] = byTeacher[tid][`${d}-${p}`] || []).push(l));
+      l.classes.forEach(c => ((byClass[c] = byClass[c] || {})[`${d}-${p}`] = byClass[c][`${d}-${p}`] || []).push(l));
+    });
+  });
+  const classes = (T.term.config.classes && T.term.config.classes.length) ? T.term.config.classes
+                : [...new Set(T.lessons.flatMap(l => l.classes))].sort();
+  IDX = { byTeacher, byClass, teachers, classes };
+}
+
+function fillPicker() {
+  const sel = el('selPick');
+  if (view.mode === 'teacher') {
+    el('pickLabel').textContent = 'ครู'; el('allLabel').textContent = 'คน';
+    const list = T.teachers.filter(t => IDX.byTeacher[t.id]);
+    sel.innerHTML = list.map(t => `<option value="${t.id}">ครู${esc(t.name)}${t.id === T.me ? ' (ฉัน)' : ''}</option>`).join('');
+    if (!list.some(t => String(t.id) === view.key)) view.key = String((list[0] || {}).id || '');
+  } else if (view.mode === 'class') {
+    el('pickLabel').textContent = 'ห้อง'; el('allLabel').textContent = 'ห้อง';
+    sel.innerHTML = IDX.classes.map(c => `<option value="${c}">${classFull(c)}</option>`).join('');
+    if (!IDX.classes.includes(view.key)) view.key = IDX.classes[0] || '';
+  }
+  sel.value = view.key;
+  el('pickWrap').style.visibility = view.mode === 'load' ? 'hidden' : '';
+  el('btnPrintAll').style.display = view.mode === 'load' ? 'none' : '';
+}
+
+function setMode(m) {
+  view.mode = m;
+  if (m === 'teacher') view.key = String(T.me || myTeacherId || '');
+  else if (m === 'class') view.key = '';
+  fillPicker(); render();
+}
+
+/* ===== ป้ายชื่อ ===== */
+const allRoomOne = () => IDX.classes.every(c => c.endsWith('/1'));
+function classShort(c) { const [lv, rm] = c.split('/'); return allRoomOne() ? `ม.${lv}` : `ม.${lv}/${rm}`; }
+function classFull(c) { const [lv, rm] = c.split('/'); return `มัธยมศึกษาปีที่ ${lv}${allRoomOne() ? '' : '/' + rm}`; }
+function classLabel(l) {
+  if (!l.classes.length) return '';
+  let s;
+  const lv = l.classes.map(c => +c.split('/')[0]).sort((a, b) => a - b);
+  const consecutive = lv.every((v, i) => i === 0 || v === lv[i - 1] + 1);
+  if (lv.length > 1 && consecutive && allRoomOne()) s = `ม.${lv[0]}-${lv[lv.length - 1]}`;
+  else s = l.classes.map(classShort).join(', ');
+  const g = /^กลุ่ม\s*(\d+)$/.exec(l.track || '');
+  if (g) return `${s}/${g[1]}`;            // ตามแบบเดิมในตาราง เช่น ม.5/2
+  return l.track ? `${s} ${l.track}` : s;
+}
+const lessonName = l => l.code || l.title;
+const teacherShort = id => { const t = IDX.teachers[id]; return t ? 'ครู' + t.name.split(' ')[0] : ''; };
+const isMeeting = l => /^ประชุม/.test(l.title || '');
+
+/* ===== ข้อมูลในช่อง (วัน, คาบ) ของมุมมองปัจจุบัน ===== */
+function cellLessons(mode, key, d, p) {
+  const map = mode === 'teacher' ? IDX.byTeacher[key] : IDX.byClass[key];
+  return (map && map[`${d}-${p}`]) || [];
+}
+function cellHTML(mode, ls) {
+  if (!ls.length) return '';
+  if (mode === 'teacher') {
+    return ls.map(l => {
+      const lab = (l.kind === 'activity' && l.classes.length > 1) ? '' : classLabel(l);   // กิจกรรมรวมหลายชั้น ไม่ต้องใส่ชั้น (ตามแบบเดิม)
+      return `<span class="ln1">${esc(lessonName(l))}</span>${lab ? `<span class="ln2">${esc(lab)}</span>` : ''}`;
+    }).join('');
+  }
+  if (ls.length === 1) {
+    const l = ls[0];
+    const who = l.teacher_ids.length > 2 ? `ครู ${l.teacher_ids.length} ท่าน` : l.teacher_ids.map(teacherShort).join(', ');
+    return `<span class="ln1">${esc(lessonName(l))}</span><span class="ln2">${esc(who)}</span>`;
+  }
+  return ls.map(l => `<span class="ln1">${esc(lessonName(l))}${l.track ? ' (' + esc(l.track) + ')' : ''} · ${esc(l.teacher_ids.map(teacherShort).join(','))}</span>`).join('');
+}
+
+/* ===== หน้า A4 แนวนอน (หน้าตาเหมือนไฟล์เดิม) ===== */
+function pageHTML(mode, key) {
+  const cfg = T.term.config, P = cfg.periods, lunchAfter = cfg.lunch_after || 4;
+  const sig = ls => ls.map(l => l.id).join(',');
+  let rows = '';
+  DAYS.forEach((dn, di) => {
+    const d = di + 1;
+    let cells = `<th class="dayname">${dn}</th>`;
+    let p = 1;
+    while (p <= P.length) {
+      const ls = cellLessons(mode, key, d, p);
+      let span = 1;
+      // รวมคาบติดกันที่เป็นรายการเดียวกัน (ไม่ข้ามพักกลางวัน)
+      while (ls.length && p + span <= P.length && !(p + span - 1 === lunchAfter) &&
+             sig(cellLessons(mode, key, d, p + span)) === sig(ls)) span++;
+      cells += `<td class="tt-cell${ls.length > 1 && mode === 'class' ? ' multi' : ''}"${span > 1 ? ` colspan="${span}"` : ''}>${cellHTML(mode, ls)}</td>`;
+      p += span;
+      if (p - 1 === lunchAfter && di === 0) { /* คอลัมน์พักอยู่ในแถวหัว (rowspan) */ }
+    }
+    rows += `<tr class="day">${cells}</tr>`;
+  });
+  // แทรกคอลัมน์พักกลางวันหลังคาบ lunchAfter ในแถวหัว (rowspan ครอบทุกแถว) → แถววันต้องเว้นตำแหน่ง
+  const pre = (cfg.pre || []).map(x => `<td rowspan="7" class="rot"><div>${esc(x.start)} - ${esc(x.end)} น. ${esc(x.label)}</div></td>`).join('');
+  const lunch = `<td rowspan="7" class="rot"><div>${esc(cfg.lunch.start)} - ${esc(cfg.lunch.end)} น.  ${esc(cfg.lunch.label)}</div></td>`;
+  const h1 = `<th>คาบที่</th>${pre}` + P.map(x => `<th>${x.no}</th>` + (x.no === lunchAfter ? lunch : '')).join('');
+  const h2 = `<th class="diag"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" stroke="#000" stroke-width="1" vector-effect="non-scaling-stroke"/></svg><span class="d1">วัน</span><span class="d2">เวลา</span></th>`
+           + P.map(x => `<td>${esc(x.start)} - ${esc(x.end)} น.</td>`).join('');
+  const colw = [68, ...(cfg.pre || []).map(() => 43.5), ...P.map((x, i) => [83.5, (x.no === lunchAfter ? 36 : 0)])].flat().filter(w => w);
+  // แถววัน: คอลัมน์ rowspan (ก่อนเรียน/พัก) ถูกจองไว้แล้ว → เซลล์ของแต่ละวันเรียงต่อได้เลย
+  let title, box = '';
+  const termName = T.term.name, school = T.school.name || '';
+  if (mode === 'teacher') {
+    const t = IDX.teachers[key];
+    title = `ตารางสอนครู${t ? esc(t.name).replace(' ', '&nbsp; ') : ''} ภาคเรียนที่ ${esc(termName)} ${esc(school)}`;
+    const c = teacherCounts(+key);
+    box = `<div class="tt-box">คาบสอน <u>${c.teach}</u> คาบ<br>กิจกรรม <u>${c.act}</u> คาบ<br>รวม <u>${c.teach + c.act}</u> คาบ</div>`;
+  } else {
+    title = `ตารางเรียนชั้น${esc(classFull(key))} ภาคเรียนที่ ${esc(termName)} ${esc(school)}`;
+  }
+  const signers = (cfg.signers || []).slice(0, 1);
+  const dirTitle = (T.school.director_title || 'ผู้อำนวยการ');
+  const dirFull = school.startsWith('โรงเรียน') ? dirTitle.replace(/โรงเรียน$/, '') + school : dirTitle + school;
+  const sign = (cls, name, role) => `<div class="tt-sign ${cls}">ลงชื่อ.........................................................<br>(${esc(name)})<br>${esc(role)}</div>`;
+  return `<div class="tt-page">
+    ${box}
+    <div class="tt-title">${title}</div>
+    <table class="tt-grid">
+      <colgroup>${colw.map(w => `<col style="width:${w}pt">`).join('')}</colgroup>
+      <tr class="tt-h1">${h1}</tr>
+      <tr class="tt-h2">${h2}</tr>
+      ${rows}
+    </table>
+    <div class="tt-signs">${signers[0] ? sign('l', signers[0].name, signers[0].title) : ''}${sign('r', T.school.director || '', dirFull)}</div>
+  </div>`;
+}
+
+function teacherCounts(tid) {
+  let teach = 0, act = 0;
+  T.lessons.forEach(l => {
+    if (!l.teacher_ids.includes(tid)) return;
+    if (l.kind === 'subject') teach += l.slots.length;
+    else if (!isMeeting(l)) act += l.slots.length;       // ประชุมครูไม่นับ (ตามแบบเดิม)
+  });
+  return { teach, act };
+}
+
+/* ===== มือถือ: รายวัน ===== */
+function mobileHTML(mode, key) {
+  const P = T.term.config.periods, now = new Date();
+  const today = now.getDay();                     // 1=จันทร์
+  const hhmm = `${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`;
+  let html = '<div class="tt-mobile">';
+  DAYS.forEach((dn, di) => {
+    const d = di + 1;
+    html += `<div class="day${d === today ? ' today' : ''}"><h6>${dn}${d === today ? ' <span class="badge bg-primary">วันนี้</span>' : ''}</h6>`;
+    P.forEach(x => {
+      const ls = cellLessons(mode, key, d, x.no);
+      const cur = d === today && hhmm >= x.start && hhmm < x.end;
+      const txt = ls.length ? ls.map(l => mode === 'teacher'
+          ? `<b>${esc(lessonName(l))}</b> ${esc(classLabel(l))}`
+          : `<b>${esc(lessonName(l))}</b> ${esc(l.teacher_ids.map(teacherShort).join(', '))}`).join('<br>') : 'ว่าง';
+      const cls = !ls.length ? ' free' : ls.every(l => l.kind === 'activity') ? ' act' : '';
+      html += `<div class="row1${cur ? ' now' : ''}${cls}"><div class="t"><b>คาบ ${x.no}</b><br>${esc(x.start)}-${esc(x.end)}</div><div class="s">${txt}</div></div>`;
+    });
+    html += '</div>';
+  });
+  return html + '</div>';
+}
+
+/* ===== ภาระงานสอน ===== */
+function loadHTML() {
+  const rows = T.teachers.filter(t => IDX.byTeacher[t.id]).map((t, i) => {
+    const c = teacherCounts(t.id);
+    const subj = T.lessons.filter(l => l.teacher_ids.includes(t.id) && l.kind === 'subject')
+      .map(l => `<span class="badge text-bg-light border me-1 mb-1">${esc(lessonName(l))} ${esc(classLabel(l))} · ${l.slots.length}</span>`).join('');
+    return `<tr><td class="text-center">${i + 1}</td><td class="fw-600">ครู${esc(t.name)}${t.id === T.me ? ' <span class="badge bg-info">ฉัน</span>' : ''}</td>
+      <td class="text-center">${c.teach}</td><td class="text-center">${c.act}</td><td class="text-center fw-bold">${c.teach + c.act}</td><td>${subj}</td></tr>`;
+  }).join('');
+  return `<div class="container"><div class="card"><div class="card-body">
+    <h5 class="fw-bold mb-3"><i class="bi bi-list-ol me-1"></i>ภาระงานสอน ภาคเรียนที่ ${esc(T.term.name)} (คาบ/สัปดาห์)</h5>
+    <div class="table-responsive"><table class="table table-sm table-bordered load-table">
+      <thead class="table-light"><tr><th>ที่</th><th>ครู</th><th>คาบสอน</th><th>กิจกรรม</th><th>รวม</th><th>รายวิชา (รหัส ชั้น · คาบ)</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="small text-muted">กิจกรรมไม่นับประชุมครู (ตามแบบตารางเดิม)</div>
+  </div></div></div>`;
+}
+
+function render() {
+  if (!T) return;
+  if (view.mode === 'load') { el('content').innerHTML = loadHTML(); return; }
+  if (!view.key) { el('content').innerHTML = '<div class="text-center text-muted py-5">ไม่มีข้อมูล</div>'; return; }
+  if (el('selPick').value !== view.key) el('selPick').value = view.key;
+  el('content').innerHTML = `<div class="tt-desktop-only">${pageHTML(view.mode, view.key)}</div>
+    <div class="tt-mobile-only container">${mobileHTML(view.mode, view.key)}</div>`;
+  fitPages();
+}
+
+// ตารางสูงเกินกระดาษ (ห้องที่มีหลายสายเรียนพร้อมกัน) → ลดช่องว่างก่อนลงชื่อ → เลื่อนหัวขึ้น → ย่อตาราง
+// บนมือถือหน้า A4 ถูกซ่อน → เปิดชั่วคราวแบบมองไม่เห็นเพื่อวัดขนาด (ตอนพิมพ์จากมือถือจะได้พอดีหน้าเหมือนกัน)
+function fitPages() {
+  const wrap = document.querySelector('.tt-desktop-only');
+  if (!wrap) return;
+  const hidden = getComputedStyle(wrap).display === 'none';
+  if (hidden) wrap.setAttribute('style', 'display:block !important; position:absolute; left:-20000px; top:0; visibility:hidden;');
+  wrap.querySelectorAll('.tt-page').forEach(pg => {
+    const signs = pg.querySelector('.tt-signs'), title = pg.querySelector('.tt-title'), tb = pg.querySelector('table.tt-grid');
+    signs.style.marginTop = ''; pg.style.paddingTop = ''; title.style.top = ''; tb.style.zoom = '';
+    // px ที่ล้น: ลงชื่อบรรทัดสุดท้ายต้องเหลือขอบล่าง ≥ 36pt (48px) เหมือนต้นฉบับ
+    const over = () => signs.getBoundingClientRect().bottom - pg.getBoundingClientRect().top + 48 - pg.clientHeight;
+    const px2pt = 0.75;
+    let o = over();
+    if (o <= 0) return;
+    signs.style.marginTop = Math.max(14, 50 - o * px2pt) + 'pt';
+    if ((o = over()) > 0) {                                      // เลื่อนหัวเรื่อง + ตารางขึ้น (ไม่เกิน 30pt)
+      const up = Math.min(30, o * px2pt);
+      pg.style.paddingTop = (119 - up) + 'pt'; title.style.top = (77 - up) + 'pt';
+    }
+    if ((o = over()) > 0) {                                      // สุดท้าย: ย่อตารางทั้งตาราง
+      const h = tb.offsetHeight;
+      tb.style.zoom = Math.max(0.6, (h - o - 2) / h).toFixed(3);
+    }
+  });
+  if (hidden) wrap.removeAttribute('style');
+}
+window.addEventListener('beforeprint', fitPages);   // กดพิมพ์จากเมนูเบราว์เซอร์ก็พอดีหน้า
+
+async function printDoc(all) {
+  if (view.mode === 'load') { window.print(); return; }
+  if (all) {
+    const keys = view.mode === 'teacher' ? T.teachers.filter(t => IDX.byTeacher[t.id]).map(t => String(t.id)) : IDX.classes;
+    el('content').innerHTML = `<div class="tt-desktop-only">${keys.map(k => pageHTML(view.mode, k)).join('')}</div>`;
+  }
+  try { await document.fonts.ready; } catch (e) {}
+  try { await document.fonts.load('16pt THSarabunDoc', 'กขค'); await document.fonts.load('bold 16pt THSarabunDoc', 'กขค'); await document.fonts.ready; } catch (e) {}
+  fitPages();
+  window.print();
+  if (all) setTimeout(render, 500);
+}
+</script>
+</body>
+</html>
