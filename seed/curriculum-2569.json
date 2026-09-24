@@ -1,0 +1,2470 @@
+{
+ "source": "โครงสร้างหลักสูตร 67 ม3 ม6 และ 68 ม1 ม2 ม4 ม5.pdf (อ่านอัตโนมัติ 24 ก.ย. 2569)",
+ "grades": {
+  "3": {
+   "tracks": [
+    {
+     "abbr": "ทั่วไป",
+     "name": "ทั่วไป",
+     "page": 1,
+     "term1": [
+      {
+       "code": "ท23101",
+       "name": "ภาษาไทย 5",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ท23102",
+       "next_name": "ภาษาไทย 6",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ค23101",
+       "name": "คณิตศาสตร์ 5",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ค23102",
+       "next_name": "คณิตศาสตร์ 6",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว23101",
+       "name": "วิทยาศาสตร์ 5",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ว23102",
+       "next_name": "วิทยาศาสตร์ 6",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว23103",
+       "name": "การออกแบบและเทคโนโลยี 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ว23104",
+       "next_name": "วิทยาการคำนวณ 3",
+       "next_hours": 20.0
+      },
+      {
+       "code": "อ23101",
+       "name": "ภาษาอังกฤษ 5",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "อ23102",
+       "next_name": "ภาษาอังกฤษ 6",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส23101",
+       "name": "สังคมศึกษา 5",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ส23102",
+       "next_name": "สังคมศึกษา 6",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส23103",
+       "name": "ประวัติศาสตร์ 5",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ส23104",
+       "next_name": "ประวัติศาสตร์ 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ23101",
+       "name": "สุขศึกษาและพลศึกษา 5",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "พ23102",
+       "next_name": "สุขศึกษาและพลศึกษา 6",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ23101",
+       "name": "ศิลปะ 5",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ศ23102",
+       "next_name": "ศิลปะ 6",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง23101",
+       "name": "การงานอาชีพ 5",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง23102",
+       "next_name": "การงานอาชีพ 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20235",
+       "name": "หน้าที่พลเมือง 5",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20232",
+       "next_name": "หน้าที่พลเมือง 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20245",
+       "name": "สุจริตศึกษา 5",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20242",
+       "next_name": "สุจริตศึกษา 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส23205",
+       "name": "ศาสนา 5",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส21202",
+       "next_name": "ศาสนา 6",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ค23201",
+       "name": "คณิตศาสตร์เพิ่มเติม 5 วิชาเลือกเสรี **",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ค23202",
+       "next_name": "คณิตศาสตร์เพิ่มเติม 6 วิชาเลือกเสรี **",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": []
+    }
+   ]
+  },
+  "6": {
+   "tracks": [
+    {
+     "abbr": "วิทย์-คณิต",
+     "name": "วิทยาศาสตร์-คณิตศาสตร์",
+     "page": 2,
+     "term1": [
+      {
+       "code": "ท33101",
+       "name": "ภาษาไทย 5",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ท33102",
+       "next_name": "ภาษาไทย 6",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ค33101",
+       "name": "คณิตศาสตร์ 5",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ค33102",
+       "next_name": "คณิตศาสตร์ 6",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว33101",
+       "name": "วิทยาศาสตร์ชีวภาพ (เคมี)",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ว33101",
+       "next_name": "วิทยาการคำนวณ 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ว33105",
+       "name": "วิทยาศาสตร์โลกและอวกาศ",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "อ33102",
+       "next_name": "ภาษาอังกฤษ 6",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ33101",
+       "name": "ภาษาอังกฤษ 5",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส33102",
+       "next_name": "สังคมศึกษา 6",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ส33101",
+       "name": "สังคมศึกษา 5",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "พ33102",
+       "next_name": "สุขศึกษาและพลศึกษา 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ33101",
+       "name": "สุขศึกษาและพลศึกษา 5",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ศ33102",
+       "next_name": "ศิลปะ 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ศ33101",
+       "name": "ศิลปะ 5",
+       "hours": 20.0,
+       "section": "basic",
+       "next": null,
+       "next_name": null,
+       "next_hours": null
+      },
+      {
+       "code": "ค33201",
+       "name": "คณิตศาสตร์เพิ่มเติม 5",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ค33202",
+       "next_name": "คณิตศาสตร์เพิ่มเติม 6",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ค33204",
+       "name": "เสริมทักษะคณิตศาสตร์",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ค33203",
+       "next_name": "คณิตศาสตร์สู่ความเป็นเลิศ",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว33205",
+       "name": "ฟิสิกส์ 5",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ว33206",
+       "next_name": "ฟิสิกส์ 6",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว33225",
+       "name": "เคมี 5",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ว33226",
+       "next_name": "เคมี 6",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว33245",
+       "name": "ชีววิทยา 5",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ว33246",
+       "next_name": "ชีววิทยา 6",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส30235",
+       "name": "หน้าที่พลเมือง 5",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ว30269",
+       "next_name": "โลกดาราศาสตร์และอวกาศ 3",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส30245",
+       "name": "สุจริตศึกษา 5",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ว30270",
+       "next_name": "เคมีเพื่อการส่งเสริมศักยภาพ",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส33205",
+       "name": "ศาสนา 5",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว30271",
+       "next_name": "ชีววิทยาเพื่อการส่งเสริมศักยภาพ",
+       "next_hours": 20.0
+      },
+      {
+       "code": "อ33201",
+       "name": "ภาษาอังกฤษสำหรับการท่องเที่ยว 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "อ33202",
+       "next_name": "ภาษาอังกฤษสำหรับการท่องเที่ยว 2",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": [
+      {
+       "code": "ส30236",
+       "name": "หน้าที่พลเมือง 6",
+       "hours": 20.0,
+       "section": "extra"
+      },
+      {
+       "code": "ส30246",
+       "name": "สุจริตศึกษา 6",
+       "hours": 20.0,
+       "section": "extra"
+      },
+      {
+       "code": "ส31206",
+       "name": "ศาสนา 6",
+       "hours": 40.0,
+       "section": "extra"
+      }
+     ]
+    },
+    {
+     "abbr": "ศิลป์-ทั่วไป",
+     "name": "ศิลป์-ทั่วไป",
+     "page": 3,
+     "term1": [
+      {
+       "code": "ท33101",
+       "name": "ภาษาไทย 5",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ท33102",
+       "next_name": "ภาษาไทย 6",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ค33101",
+       "name": "คณิตศาสตร์ 5",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ค33102",
+       "next_name": "คณิตศาสตร์ 6",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว33101",
+       "name": "วิทยาศาสตร์ชีวภาพ (เคมี)",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ว33101",
+       "next_name": "วิทยาการคำนวณ 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ว33105",
+       "name": "วิทยาศาสตร์โลกและอวกาศ",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "อ33102",
+       "next_name": "ภาษาอังกฤษ 6",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ33101",
+       "name": "ภาษาอังกฤษ 5",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส33102",
+       "next_name": "สังคมศึกษา 6",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ส33101",
+       "name": "สังคมศึกษา 5",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "พ33102",
+       "next_name": "สุขศึกษาและพลศึกษา 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ33101",
+       "name": "สุขศึกษาและพลศึกษา 5",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ศ33102",
+       "next_name": "ศิลปะ 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ศ33101",
+       "name": "ศิลปะ 5",
+       "hours": 20.0,
+       "section": "basic",
+       "next": null,
+       "next_name": null,
+       "next_hours": null
+      },
+      {
+       "code": "ท33201",
+       "name": "หลักภาษาไทย 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ท33202",
+       "next_name": "หลักภาษาไทย 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ33201",
+       "name": "ภาษาอังกฤษสำหรับการท่องเที่ยว 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "อ33202",
+       "next_name": "ภาษาอังกฤษสำหรับการท่องเที่ยว 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ30217",
+       "name": "นาฏยประดิษฐ์",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ศ30218",
+       "next_name": "ศิลปะการแต่งหน้า",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ30205",
+       "name": "การเขียนภาพการ์ตูน",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ศ30206",
+       "next_name": "การเขียนผ้าบาติก",
+       "next_hours": 40.0
+      },
+      {
+       "code": "พ30201",
+       "name": "แบดมินตัน",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "พ30203",
+       "next_name": "เทเบิลเทนนิส",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง30213",
+       "name": "การทำขนมไทย",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ง30207",
+       "next_name": "งานห้องสมุด",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ส30235",
+       "name": "หน้าที่พลเมือง 5",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30236",
+       "next_name": "หน้าที่พลเมือง 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส30245",
+       "name": "สุจริตศึกษา 5",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30246",
+       "next_name": "สุจริตศึกษา 6",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส33205",
+       "name": "ศาสนา 5",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส31206",
+       "next_name": "ศาสนา 6",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": []
+    }
+   ]
+  },
+  "1": {
+   "tracks": [
+    {
+     "abbr": "DEP",
+     "name": "นวัตกรรมคหกรรม (DEP)",
+     "page": 4,
+     "term1": [
+      {
+       "code": "ท21101",
+       "name": "ภาษาไทย 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ท21102",
+       "next_name": "ภาษาไทย 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ค21101",
+       "name": "คณิตศาสตร์ 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ค21102",
+       "next_name": "คณิตศาสตร์ 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว21101",
+       "name": "วิทยาศาสตร์ 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ว21102",
+       "next_name": "วิทยาศาสตร์ 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว21103",
+       "name": "การออกแบบและเทคโนโลยี 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ว21104",
+       "next_name": "วิทยาการคำนวณ 1",
+       "next_hours": 20.0
+      },
+      {
+       "code": "อ21101",
+       "name": "ภาษาอังกฤษ 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "อ21102",
+       "next_name": "ภาษาอังกฤษ 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส21101",
+       "name": "สังคมศึกษา 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ส21102",
+       "next_name": "สังคมศึกษา 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส21103",
+       "name": "ประวัติศาสตร์ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ส21104",
+       "next_name": "ประวัติศาสตร์ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ21101",
+       "name": "สุขศึกษาและพลศึกษา 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "พ21102",
+       "next_name": "สุขศึกษาและพลศึกษา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ21101",
+       "name": "ศิลปะ 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ศ21102",
+       "next_name": "ศิลปะ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง21101",
+       "name": "การงานอาชีพ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง21102",
+       "next_name": "การงานอาชีพ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20231",
+       "name": "หน้าที่พลเมือง 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20232",
+       "next_name": "หน้าที่พลเมือง 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20241",
+       "name": "สุจริตศึกษา 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20242",
+       "next_name": "สุจริตศึกษา 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส21201",
+       "name": "ศาสนา 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส21202",
+       "next_name": "ศาสนา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว20207",
+       "name": "คอมพิวเตอร์เบื้องต้น 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว20208",
+       "next_name": "คอมพิวเตอร์เบื้องต้น 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว20211",
+       "name": "ปัญญาประดิษฐ์เบื้องต้น 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว20212",
+       "next_name": "ปัญญาประดิษฐ์เบื้องต้น 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง20201",
+       "name": "อาหารไทย",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ง20210",
+       "next_name": "การประดิษฐ์ของชำร่วย",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": []
+    },
+    {
+     "abbr": "APTP",
+     "name": "ศิลปะและนาฏศิลป์ (APTP)",
+     "page": 6,
+     "term1": [
+      {
+       "code": "ท21101",
+       "name": "ภาษาไทย 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ท21102",
+       "next_name": "ภาษาไทย 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ค21101",
+       "name": "คณิตศาสตร์ 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ค21102",
+       "next_name": "คณิตศาสตร์ 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว21101",
+       "name": "วิทยาศาสตร์ 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ว21102",
+       "next_name": "วิทยาศาสตร์ 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว21103",
+       "name": "การออกแบบและเทคโนโลยี 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ว21104",
+       "next_name": "วิทยาการคำนวณ 1",
+       "next_hours": 20.0
+      },
+      {
+       "code": "อ21101",
+       "name": "ภาษาอังกฤษ 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "อ21102",
+       "next_name": "ภาษาอังกฤษ 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส21101",
+       "name": "สังคมศึกษา 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ส21102",
+       "next_name": "สังคมศึกษา 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส21103",
+       "name": "ประวัติศาสตร์ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ส21104",
+       "next_name": "ประวัติศาสตร์ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ21101",
+       "name": "สุขศึกษาและพลศึกษา 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "พ21102",
+       "next_name": "สุขศึกษาและพลศึกษา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ21101",
+       "name": "ศิลปะ 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ศ21102",
+       "next_name": "ศิลปะ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง21101",
+       "name": "การงานอาชีพ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง21102",
+       "next_name": "การงานอาชีพ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20231",
+       "name": "หน้าที่พลเมือง 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20232",
+       "next_name": "หน้าที่พลเมือง 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20241",
+       "name": "สุจริตศึกษา 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20242",
+       "next_name": "สุจริตศึกษา 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส21201",
+       "name": "ศาสนา 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส21202",
+       "next_name": "ศาสนา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว20207",
+       "name": "คอมพิวเตอร์เบื้องต้น 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว20208",
+       "next_name": "คอมพิวเตอร์เบื้องต้น 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ20217",
+       "name": "พื้นฐานการวาดภาพระบายสี",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ศ20218",
+       "next_name": "ศิลปะประดิษฐ์",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ20211",
+       "name": "นาฏศิลป์สากล 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ศ20212",
+       "next_name": "นาฏศิลป์สากล 2",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": []
+    },
+    {
+     "abbr": "CSP",
+     "name": "พลศึกษาและกีฬาอาชีพ (CSP)",
+     "page": 8,
+     "term1": [
+      {
+       "code": "ท21101",
+       "name": "ภาษาไทย 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ท21102",
+       "next_name": "ภาษาไทย 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ค21101",
+       "name": "คณิตศาสตร์ 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ค21102",
+       "next_name": "คณิตศาสตร์ 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว21101",
+       "name": "วิทยาศาสตร์ 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ว21102",
+       "next_name": "วิทยาศาสตร์ 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว21103",
+       "name": "การออกแบบและเทคโนโลยี 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ว21104",
+       "next_name": "วิทยาการคำนวณ 1",
+       "next_hours": 20.0
+      },
+      {
+       "code": "อ21101",
+       "name": "ภาษาอังกฤษ 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "อ21102",
+       "next_name": "ภาษาอังกฤษ 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส21101",
+       "name": "สังคมศึกษา 1",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ส21102",
+       "next_name": "สังคมศึกษา 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส21103",
+       "name": "ประวัติศาสตร์ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ส21104",
+       "next_name": "ประวัติศาสตร์ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ21101",
+       "name": "สุขศึกษาและพลศึกษา 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "พ21102",
+       "next_name": "สุขศึกษาและพลศึกษา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ21101",
+       "name": "ศิลปะ 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ศ21102",
+       "next_name": "ศิลปะ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง21101",
+       "name": "การงานอาชีพ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง21102",
+       "next_name": "การงานอาชีพ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20231",
+       "name": "หน้าที่พลเมือง 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20232",
+       "next_name": "หน้าที่พลเมือง 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20241",
+       "name": "สุจริตศึกษา 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20242",
+       "next_name": "สุจริตศึกษา 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส21201",
+       "name": "ศาสนา 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส21202",
+       "next_name": "ศาสนา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว20207",
+       "name": "คอมพิวเตอร์เบื้องต้น 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว20208",
+       "next_name": "คอมพิวเตอร์เบื้องต้น 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "พ20212",
+       "name": "กาบัดดี้ 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "พ20213",
+       "next_name": "กาบัดดี้ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "พ20218",
+       "name": "การเสริมสร้างสมรรถภาพสำหรับนักกีฬา 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "พ20220",
+       "next_name": "การปฐมพยาบาลจากการเล่นกีฬา 1",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": []
+    }
+   ]
+  },
+  "2": {
+   "tracks": [
+    {
+     "abbr": "DEP",
+     "name": "นวัตกรรมคหกรรม (DEP)",
+     "page": 5,
+     "term1": [
+      {
+       "code": "ท22101",
+       "name": "ภาษาไทย 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ท22102",
+       "next_name": "ภาษาไทย 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ค22101",
+       "name": "คณิตศาสตร์ 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ค22102",
+       "next_name": "คณิตศาสตร์ 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว22101",
+       "name": "วิทยาศาสตร์ 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ว22102",
+       "next_name": "วิทยาศาสตร์ 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว22103",
+       "name": "การออกแบบและเทคโนโลยี 2",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ว22104",
+       "next_name": "วิทยาการคำนวณ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "อ22101",
+       "name": "ภาษาอังกฤษ 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "อ22102",
+       "next_name": "ภาษาอังกฤษ 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส22101",
+       "name": "สังคมศึกษา 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ส22102",
+       "next_name": "สังคมศึกษา 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส22103",
+       "name": "ประวัติศาสตร์ 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ส22104",
+       "next_name": "ประวัติศาสตร์ 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ22101",
+       "name": "สุขศึกษาและพลศึกษา 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "พ22102",
+       "next_name": "สุขศึกษาและพลศึกษา 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ22101",
+       "name": "ศิลปะ 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ศ22102",
+       "next_name": "ศิลปะ 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง22101",
+       "name": "การงานอาชีพ 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง22102",
+       "next_name": "การงานอาชีพ 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20233",
+       "name": "หน้าที่พลเมือง 3",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20234",
+       "next_name": "หน้าที่พลเมือง 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20243",
+       "name": "สุจริตศึกษา 3",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20244",
+       "next_name": "สุจริตศึกษา 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส21203",
+       "name": "ศาสนา 3",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส21204",
+       "next_name": "ศาสนา 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "I20201",
+       "name": "การศึกษาค้นคว้าและสร้างองค์ความรู้",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "I20202",
+       "next_name": "การสื่อสารและการนำเสนอ",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว20209",
+       "name": "คอมพิวเตอร์เพื่อชีวิต 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว20210",
+       "next_name": "คอมพิวเตอร์เพื่อชีวิต 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง20208",
+       "name": "การเย็บปักถักร้อย",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว20215",
+       "next_name": "ปัญญาประดิษฐ์เพื่อชีวิต",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": []
+    },
+    {
+     "abbr": "APTP",
+     "name": "ศิลปะและนาฏศิลป์ (APTP)",
+     "page": 7,
+     "term1": [
+      {
+       "code": "ท22101",
+       "name": "ภาษาไทย 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ท22102",
+       "next_name": "ภาษาไทย 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ค22101",
+       "name": "คณิตศาสตร์ 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ค22102",
+       "next_name": "คณิตศาสตร์ 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว22101",
+       "name": "วิทยาศาสตร์ 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ว22102",
+       "next_name": "วิทยาศาสตร์ 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว22103",
+       "name": "การออกแบบและเทคโนโลยี 2",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ว22104",
+       "next_name": "วิทยาการคำนวณ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "อ22101",
+       "name": "ภาษาอังกฤษ 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "อ22102",
+       "next_name": "ภาษาอังกฤษ 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส22101",
+       "name": "สังคมศึกษา 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ส22102",
+       "next_name": "สังคมศึกษา 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส22103",
+       "name": "ประวัติศาสตร์ 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ส22104",
+       "next_name": "ประวัติศาสตร์ 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ22101",
+       "name": "สุขศึกษาและพลศึกษา 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "พ22102",
+       "next_name": "สุขศึกษาและพลศึกษา 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ22101",
+       "name": "ศิลปะ 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ศ22102",
+       "next_name": "ศิลปะ 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง22101",
+       "name": "การงานอาชีพ 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง22102",
+       "next_name": "การงานอาชีพ 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20233",
+       "name": "หน้าที่พลเมือง 3",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20234",
+       "next_name": "หน้าที่พลเมือง 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20243",
+       "name": "สุจริตศึกษา 3",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20244",
+       "next_name": "สุจริตศึกษา 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส21203",
+       "name": "ศาสนา 3",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส21204",
+       "next_name": "ศาสนา 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "I20201",
+       "name": "การศึกษาค้นคว้าและสร้างองค์ความรู้",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "I20202",
+       "next_name": "การสื่อสารและการนำเสนอ",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว20209",
+       "name": "คอมพิวเตอร์เพื่อชีวิต 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว20210",
+       "next_name": "คอมพิวเตอร์เพื่อชีวิต 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ20201",
+       "name": "การเขียนทัศนียภาพ",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ศ20213",
+       "next_name": "นาฏยสร้างสรรค์",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": []
+    },
+    {
+     "abbr": "CSP",
+     "name": "พลศึกษาและกีฬาอาชีพ (CSP)",
+     "page": 9,
+     "term1": [
+      {
+       "code": "ท22101",
+       "name": "ภาษาไทย 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ท22102",
+       "next_name": "ภาษาไทย 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ค22101",
+       "name": "คณิตศาสตร์ 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ค22102",
+       "next_name": "คณิตศาสตร์ 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว22101",
+       "name": "วิทยาศาสตร์ 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ว22102",
+       "next_name": "วิทยาศาสตร์ 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว22103",
+       "name": "การออกแบบและเทคโนโลยี 2",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ว22104",
+       "next_name": "วิทยาการคำนวณ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "อ22101",
+       "name": "ภาษาอังกฤษ 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "อ22102",
+       "next_name": "ภาษาอังกฤษ 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส22101",
+       "name": "สังคมศึกษา 3",
+       "hours": 60.0,
+       "section": "basic",
+       "next": "ส22102",
+       "next_name": "สังคมศึกษา 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ส22103",
+       "name": "ประวัติศาสตร์ 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ส22104",
+       "next_name": "ประวัติศาสตร์ 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ22101",
+       "name": "สุขศึกษาและพลศึกษา 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "พ22102",
+       "next_name": "สุขศึกษาและพลศึกษา 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ22101",
+       "name": "ศิลปะ 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ศ22102",
+       "next_name": "ศิลปะ 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง22101",
+       "name": "การงานอาชีพ 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง22102",
+       "next_name": "การงานอาชีพ 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20233",
+       "name": "หน้าที่พลเมือง 3",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20234",
+       "next_name": "หน้าที่พลเมือง 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส20243",
+       "name": "สุจริตศึกษา 3",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส20244",
+       "next_name": "สุจริตศึกษา 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส21203",
+       "name": "ศาสนา 3",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส21204",
+       "next_name": "ศาสนา 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "I20201",
+       "name": "การศึกษาค้นคว้าและสร้างองค์ความรู้",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "I20202",
+       "next_name": "การสื่อสารและการนำเสนอ",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว20209",
+       "name": "คอมพิวเตอร์เพื่อชีวิต 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว20210",
+       "next_name": "คอมพิวเตอร์เพื่อชีวิต 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "พ20216",
+       "name": "วู้ดบอล 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "พ20217",
+       "next_name": "วู้ดบอล 2",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": []
+    }
+   ]
+  },
+  "4": {
+   "tracks": [
+    {
+     "abbr": "SMTP",
+     "name": "วิทย์ คณิต เทคโนโลยี (SMTP)",
+     "page": 10,
+     "term1": [
+      {
+       "code": "ท31101",
+       "name": "ภาษาไทย 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ท31102",
+       "next_name": "ภาษาไทย 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ค31101",
+       "name": "คณิตศาสตร์ 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ค31102",
+       "next_name": "คณิตศาสตร์ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว31101",
+       "name": "วิทยาศาสตร์ชีวภาพ",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ว31104",
+       "next_name": "วิทยาการคำนวณ 1",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ว31103",
+       "name": "การออกแบบและเทคโนโลยี 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "อ31102",
+       "next_name": "ภาษาอังกฤษ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ31101",
+       "name": "ภาษาอังกฤษ 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส31102",
+       "next_name": "สังคมศึกษา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ส31101",
+       "name": "สังคมศึกษา 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส31104",
+       "next_name": "ประวัติศาสตร์ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส31103",
+       "name": "ประวัติศาสตร์ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "พ31102",
+       "next_name": "สุขศึกษาและพลศึกษา 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ31101",
+       "name": "สุขศึกษาและพลศึกษา 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ศ31102",
+       "next_name": "ศิลปะ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ศ31101",
+       "name": "ศิลปะ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง31102",
+       "next_name": "การงานอาชีพ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ง31101",
+       "name": "การงานอาชีพ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": null,
+       "next_name": null,
+       "next_hours": null
+      },
+      {
+       "code": "ส30231",
+       "name": "หน้าที่พลเมือง 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30232",
+       "next_name": "หน้าที่พลเมือง 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส30241",
+       "name": "สุจริตศึกษา 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30242",
+       "next_name": "สุจริตศึกษา 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส31201",
+       "name": "ศาสนา 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส31202",
+       "next_name": "ศาสนา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ31201",
+       "name": "ภาษาอังกฤษฟัง-พูด 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "อ31202",
+       "next_name": "ภาษาอังกฤษฟัง-พูด 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ค31201",
+       "name": "คณิตศาสตร์เพิ่มเติม 1",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ค31202",
+       "next_name": "คณิตศาสตร์เพิ่มเติม 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว31201",
+       "name": "ฟิสิกส์ 1",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ว31202",
+       "next_name": "ฟิสิกส์ 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว31221",
+       "name": "เคมี 1",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ว31222",
+       "next_name": "เคมี 2",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว32241",
+       "name": "ชีววิทยา 2",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ว32242",
+       "next_name": "ชีววิทยา 2",
+       "next_hours": 60.0
+      }
+     ],
+     "term2_only": []
+    },
+    {
+     "abbr": "BEP",
+     "name": "ธุรกิจและคหกรรม (BEP)",
+     "page": 12,
+     "term1": [
+      {
+       "code": "ท31101",
+       "name": "ภาษาไทย 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ท31102",
+       "next_name": "ภาษาไทย 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ค31101",
+       "name": "คณิตศาสตร์ 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ค31102",
+       "next_name": "คณิตศาสตร์ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว31101",
+       "name": "วิทยาศาสตร์ชีวภาพ",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ว31104",
+       "next_name": "วิทยาการคำนวณ 1",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ว31103",
+       "name": "การออกแบบและเทคโนโลยี 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "อ31102",
+       "next_name": "ภาษาอังกฤษ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ31101",
+       "name": "ภาษาอังกฤษ 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส31102",
+       "next_name": "สังคมศึกษา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ส31101",
+       "name": "สังคมศึกษา 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส31104",
+       "next_name": "ประวัติศาสตร์ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส31103",
+       "name": "ประวัติศาสตร์ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "พ31102",
+       "next_name": "สุขศึกษาและพลศึกษา 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ31101",
+       "name": "สุขศึกษาและพลศึกษา 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ศ31102",
+       "next_name": "ศิลปะ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ศ31101",
+       "name": "ศิลปะ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง31102",
+       "next_name": "การงานอาชีพ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ง31101",
+       "name": "การงานอาชีพ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": null,
+       "next_name": null,
+       "next_hours": null
+      },
+      {
+       "code": "ส30231",
+       "name": "หน้าที่พลเมือง 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30232",
+       "next_name": "หน้าที่พลเมือง 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส30241",
+       "name": "สุจริตศึกษา 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30242",
+       "next_name": "สุจริตศึกษา 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส31201",
+       "name": "ศาสนา 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส31202",
+       "next_name": "ศาสนา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ31201",
+       "name": "ภาษาอังกฤษฟัง-พูด 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "อ31202",
+       "next_name": "ภาษาอังกฤษฟัง-พูด 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง30245",
+       "name": "การขายสำหรับนักธุรกิจมืออาชีพ",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ง30246",
+       "next_name": "เทคนิคการขายและการเจรจาต่อรอง",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว30275",
+       "name": "การเขียนโปรแกรมเบื้องต้น 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว30276",
+       "next_name": "การเขียนโปรแกรมเบื้องต้น 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว30277",
+       "name": "วิทยาศาสตร์การอาหาร",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว30278",
+       "next_name": "สะเต็มศึกษา",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง30203",
+       "name": "อาหารว่าง",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ง30205",
+       "next_name": "อาหารแปรรูป",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว30285",
+       "name": "ปัญญาประดิษฐ์เบื้องต้น 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว30286",
+       "next_name": "ปัญญาประดิษฐ์เบื้องต้น 2",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": []
+    },
+    {
+     "abbr": "FAP",
+     "name": "สหศิลป์ศึกษา (FAP)",
+     "page": 14,
+     "term1": [
+      {
+       "code": "ท31101",
+       "name": "ภาษาไทย 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ท31102",
+       "next_name": "ภาษาไทย 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ค31101",
+       "name": "คณิตศาสตร์ 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ค31102",
+       "next_name": "คณิตศาสตร์ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว31101",
+       "name": "วิทยาศาสตร์ชีวภาพ",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ว31104",
+       "next_name": "วิทยาการคำนวณ 1",
+       "next_hours": 20.0
+      },
+      {
+       "code": "อ31101",
+       "name": "ภาษาอังกฤษ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "อ31102",
+       "next_name": "ภาษาอังกฤษ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ส31101",
+       "name": "สังคมศึกษา 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส31102",
+       "next_name": "สังคมศึกษา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ส31103",
+       "name": "ประวัติศาสตร์ 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส31104",
+       "next_name": "ประวัติศาสตร์ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ว31103",
+       "name": "การออกแบบและเทคโนโลยี 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "พ31102",
+       "next_name": "สุขศึกษาและพลศึกษา 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ31101",
+       "name": "สุขศึกษาและพลศึกษา 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ศ31102",
+       "next_name": "ศิลปะ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ศ31101",
+       "name": "ศิลปะ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง31102",
+       "next_name": "การงานอาชีพ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ง31101",
+       "name": "การงานอาชีพ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": null,
+       "next_name": null,
+       "next_hours": null
+      },
+      {
+       "code": "ส30231",
+       "name": "หน้าที่พลเมือง 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30232",
+       "next_name": "หน้าที่พลเมือง 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส30241",
+       "name": "สุจริตศึกษา 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30242",
+       "next_name": "สุจริตศึกษา 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส31201",
+       "name": "ศาสนา 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส31202",
+       "next_name": "ศาสนา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ31201",
+       "name": "ภาษาอังกฤษฟัง-พูด 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "อ31202",
+       "next_name": "ภาษาอังกฤษฟัง-พูด 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง30245",
+       "name": "การขายสำหรับนักธุรกิจมืออาชีพ",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ง30246",
+       "next_name": "เทคนิคการขายและการเจรจาต่อรอง",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว30275",
+       "name": "การเขียนโปรแกรมเบื้องต้น 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว30276",
+       "next_name": "การเขียนโปรแกรมเบื้องต้น 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว30277",
+       "name": "วิทยาศาสตร์การอาหาร",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว30278",
+       "next_name": "สะเต็มศึกษา",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ30213",
+       "name": "นาฏศิลป์ไทย 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ศ30214",
+       "next_name": "นาฏศิลป์ไทย 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ศ30201",
+       "name": "การวาดเส้น",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ศ30202",
+       "next_name": "ออกแบบศิลป์",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": []
+    },
+    {
+     "abbr": "SPP",
+     "name": "วิทยาการกีฬา (SPP)",
+     "page": 15,
+     "term1": [
+      {
+       "code": "ท31101",
+       "name": "ภาษาไทย 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ท31102",
+       "next_name": "ภาษาไทย 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ค31101",
+       "name": "คณิตศาสตร์ 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ค31102",
+       "next_name": "คณิตศาสตร์ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว31101",
+       "name": "วิทยาศาสตร์ชีวภาพ",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ว31104",
+       "next_name": "วิทยาการคำนวณ 1",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ว31103",
+       "name": "การออกแบบและเทคโนโลยี 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "อ31102",
+       "next_name": "ภาษาอังกฤษ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ31101",
+       "name": "ภาษาอังกฤษ 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส31102",
+       "next_name": "สังคมศึกษา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ส31101",
+       "name": "สังคมศึกษา 1",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส31104",
+       "next_name": "ประวัติศาสตร์ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส31103",
+       "name": "ประวัติศาสตร์ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "พ31102",
+       "next_name": "สุขศึกษาและพลศึกษา 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ31101",
+       "name": "สุขศึกษาและพลศึกษา 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ศ31102",
+       "next_name": "ศิลปะ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ศ31101",
+       "name": "ศิลปะ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง31102",
+       "next_name": "การงานอาชีพ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ง31101",
+       "name": "การงานอาชีพ 1",
+       "hours": 20.0,
+       "section": "basic",
+       "next": null,
+       "next_name": null,
+       "next_hours": null
+      },
+      {
+       "code": "ส30231",
+       "name": "หน้าที่พลเมือง 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30232",
+       "next_name": "หน้าที่พลเมือง 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส30241",
+       "name": "สุจริตศึกษา 1",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30242",
+       "next_name": "สุจริตศึกษา 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส31201",
+       "name": "ศาสนา 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส31202",
+       "next_name": "ศาสนา 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ31201",
+       "name": "ภาษาอังกฤษฟัง-พูด 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "อ31202",
+       "next_name": "ภาษาอังกฤษฟัง-พูด 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ง30245",
+       "name": "การขายสำหรับนักธุรกิจมืออาชีพ",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ง30246",
+       "next_name": "เทคนิคการขายและการเจรจาต่อรอง",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว30275",
+       "name": "การเขียนโปรแกรมเบื้องต้น 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว30276",
+       "next_name": "การเขียนโปรแกรมเบื้องต้น 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว30277",
+       "name": "วิทยาศาสตร์การอาหาร",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว30278",
+       "next_name": "สะเต็มศึกษา",
+       "next_hours": 40.0
+      },
+      {
+       "code": "พ30212",
+       "name": "กาบัดดี้ 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "พ30213",
+       "next_name": "กาบัดดี้ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "พ30218",
+       "name": "การสร้างเสริมสมรรถภาพทางกายสำหรับนักกีฬา 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "พ30220",
+       "next_name": "การปฐมพยาบาลและการบาดเจ็บจากการเล่นกีฬาเบื้องต้น 1",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": []
+    }
+   ]
+  },
+  "5": {
+   "tracks": [
+    {
+     "abbr": "SMTP",
+     "name": "วิทย์ คณิต เทคโนโลยี (SMTP)",
+     "page": 11,
+     "term1": [
+      {
+       "code": "ท32101",
+       "name": "ภาษาไทย 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ท32102",
+       "next_name": "ภาษาไทย 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ค32101",
+       "name": "คณิตศาสตร์ 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ค32102",
+       "next_name": "คณิตศาสตร์ 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว32101",
+       "name": "วิทยาศาสตร์กายภาพ (ฟิสิกส์)",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ว32104",
+       "next_name": "วิทยาการคำนวณ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ว32103",
+       "name": "การออกแบบและเทคโนโลยี 2",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "อ32102",
+       "next_name": "ภาษาอังกฤษ 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ32101",
+       "name": "ภาษาอังกฤษ 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส32102",
+       "next_name": "สังคมศึกษา 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ส32101",
+       "name": "สังคมศึกษา 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส32104",
+       "next_name": "ประวัติศาสตร์ 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส32103",
+       "name": "ประวัติศาสตร์ 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "พ32102",
+       "next_name": "สุขศึกษาและพลศึกษา 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ32101",
+       "name": "สุขศึกษาและพลศึกษา 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ศ32102",
+       "next_name": "ศิลปะ 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ศ32101",
+       "name": "ศิลปะ 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง32101",
+       "next_name": "การงานอาชีพ 3",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส30233",
+       "name": "หน้าที่พลเมือง 3",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30234",
+       "next_name": "หน้าที่พลเมือง 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส30243",
+       "name": "สุจริตศึกษา 3",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30244",
+       "next_name": "สุจริตศึกษา 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส31203",
+       "name": "ศาสนา 3",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส31204",
+       "next_name": "ศาสนา 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ32201",
+       "name": "ภาษาอังกฤษฟัง-เขียน 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "อ32202",
+       "next_name": "ภาษาอังกฤษฟัง-เขียน 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ค32201",
+       "name": "คณิตศาสตร์เพิ่มเติม 3",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ค32202",
+       "next_name": "คณิตศาสตร์เพิ่มเติม 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว32201",
+       "name": "ฟิสิกส์ 3",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ว32202",
+       "next_name": "ฟิสิกส์ 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว32221",
+       "name": "เคมี 3",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ว32222",
+       "next_name": "เคมี 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "ว32243",
+       "name": "ชีววิทยา 3",
+       "hours": 60.0,
+       "section": "extra",
+       "next": "ว32244",
+       "next_name": "ชีววิทยา 4",
+       "next_hours": 60.0
+      },
+      {
+       "code": "I32201",
+       "name": "การศึกษาค้นคว้าและสร้างองค์ความรู้",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "I32202",
+       "next_name": "การสื่อสารและการนำเสนอ",
+       "next_hours": 4.0
+      }
+     ],
+     "term2_only": []
+    },
+    {
+     "abbr": "BEP",
+     "name": "ธุรกิจและคหกรรม (BEP)",
+     "page": 13,
+     "term1": [
+      {
+       "code": "ท32101",
+       "name": "ภาษาไทย 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ท32102",
+       "next_name": "ภาษาไทย 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ค32101",
+       "name": "คณิตศาสตร์ 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ค32102",
+       "next_name": "คณิตศาสตร์ 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว32101",
+       "name": "วิทยาศาสตร์กายภาพ (ฟิสิกส์)",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ว32104",
+       "next_name": "วิทยาการคำนวณ 2",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ว32103",
+       "name": "การออกแบบและเทคโนโลยี 2",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "อ32102",
+       "next_name": "ภาษาอังกฤษ 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ32101",
+       "name": "ภาษาอังกฤษ 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส32102",
+       "next_name": "สังคมศึกษา 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ส32101",
+       "name": "สังคมศึกษา 3",
+       "hours": 40.0,
+       "section": "basic",
+       "next": "ส32104",
+       "next_name": "ประวัติศาสตร์ 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส32103",
+       "name": "ประวัติศาสตร์ 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "พ32102",
+       "next_name": "สุขศึกษาและพลศึกษา 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "พ32101",
+       "name": "สุขศึกษาและพลศึกษา 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ศ32102",
+       "next_name": "ศิลปะ 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ศ32101",
+       "name": "ศิลปะ 3",
+       "hours": 20.0,
+       "section": "basic",
+       "next": "ง32101",
+       "next_name": "การงานอาชีพ 3",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส30233",
+       "name": "หน้าที่พลเมือง 3",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30234",
+       "next_name": "หน้าที่พลเมือง 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส30243",
+       "name": "สุจริตศึกษา 3",
+       "hours": 20.0,
+       "section": "extra",
+       "next": "ส30244",
+       "next_name": "สุจริตศึกษา 4",
+       "next_hours": 20.0
+      },
+      {
+       "code": "ส31203",
+       "name": "ศาสนา 3",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ส31204",
+       "next_name": "ศาสนา 4",
+       "next_hours": 40.0
+      },
+      {
+       "code": "อ32201",
+       "name": "ภาษาอังกฤษฟัง-เขียน 1 การศึกษาค้นคว้าและสร้าง",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "อ32202",
+       "next_name": "ภาษาอังกฤษฟัง-เขียน 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "I32201",
+       "name": "องค์ความรู้",
+       "hours": null,
+       "section": "extra",
+       "next": null,
+       "next_name": null,
+       "next_hours": null
+      },
+      {
+       "code": "ง30247",
+       "name": "การเปลี่ยนผ่านธุรกิจสมัยใหม่",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ง30248",
+       "next_name": "การตลาด digital",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว30283",
+       "name": "การสร้างงานนำเสนอ",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว30284",
+       "next_name": "การออกแบบภาพ infographic",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว30279",
+       "name": "ปฏิบัติการทางวิทยาศาสตร์ 1",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ว30280",
+       "next_name": "ปฏิบัติการทางวิทยาศาสตร์ 2",
+       "next_hours": 40.0
+      },
+      {
+       "code": "ว30287",
+       "name": "ปัญญาประดิษฐ์ประยุกต์",
+       "hours": 40.0,
+       "section": "extra",
+       "next": "ง30213",
+       "next_name": "การทำขนมไทย",
+       "next_hours": 40.0
+      }
+     ],
+     "term2_only": [
+      {
+       "code": "I32202",
+       "name": "การสื่อสารและการนำเสนอ",
+       "hours": 4.0,
+       "section": "extra"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}
