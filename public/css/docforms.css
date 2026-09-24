@@ -1,0 +1,115 @@
+/* ===== เอกสารราชการพิมพ์ A4 — ให้ออกมาเหมือนพิมพ์จาก Microsoft Word =====
+   • ฝังฟอนต์ TH Sarabun New ไว้ในเว็บ → ทุกเครื่องพิมพ์ออกมาขนาดเท่ากัน
+     (ถ้าไม่ฝัง เครื่องที่ไม่มีฟอนต์จะใช้ Sarabun ของ Google ซึ่งใหญ่กว่า ~30% → ล้นเป็น 2 หน้า)
+   • 16pt ระยะบรรทัด 21pt = Word "single" ของ TH Sarabun
+   • จัดทีละบรรทัด (.ln) ตัดบรรทัดตรงต้นฉบับ ไม่ปล่อยให้เบราว์เซอร์ตัดเอง */
+
+@font-face { font-family: 'THSarabunDoc'; font-weight: 400; font-style: normal; font-display: block;
+  src: url('/fonts/THSarabunNew-Regular.woff') format('woff'); }
+@font-face { font-family: 'THSarabunDoc'; font-weight: 700; font-style: normal; font-display: block;
+  src: url('/fonts/THSarabunNew-Bold.woff') format('woff'); }
+@font-face { font-family: 'THSarabunDoc'; font-weight: 400; font-style: italic; font-display: block;
+  src: url('/fonts/THSarabunNew-Italic.woff') format('woff'); }
+@font-face { font-family: 'THSarabunDoc'; font-weight: 700; font-style: italic; font-display: block;
+  src: url('/fonts/THSarabunNew-BoldItalic.woff') format('woff'); }
+
+.doc-page {
+  display: flow-root;          /* กัน margin บรรทัดแรกทะลุออกนอกกระดาษ */
+  position: relative;
+  width: 210mm;
+  min-height: 297mm;
+  margin: 14px auto;
+  padding: 0 36pt 0 72pt;
+  box-sizing: border-box;
+  background: #fff;
+  color: #000;
+  box-shadow: 0 2px 14px rgba(0,0,0,.15);
+  font-family: 'THSarabunDoc', 'TH Sarabun New', 'TH SarabunPSK', sans-serif;
+  font-size: 16pt;
+  line-height: 21pt;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+}
+.doc-page * { font-family: inherit; }
+[data-theme="dark"] .doc-page { color: #000; background: #fff; }
+
+/* บรรทัด 1 บรรทัด = 1 แถว ไม่ตัดคำ */
+.doc-page .ln {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  white-space: nowrap;
+  min-height: 21pt;
+}
+.doc-page .ln > * { flex: 0 0 auto; }
+.doc-page .ln.r { justify-content: flex-end; }
+.doc-page .ln.c { justify-content: center; }
+.doc-page .b { font-weight: 700; }
+.doc-page .biu { font-weight: 700; font-style: italic; text-decoration: underline; }
+.doc-page .u { text-decoration: underline; }
+.doc-page .sp { display: inline-block; }                 /* ช่องว่าง/ย่อหน้า กำหนดกว้างเป็น pt */
+.doc-page .cell { position: absolute; top: 0; display: flex; align-items: baseline; }
+.doc-page .cell.c { justify-content: center; }
+
+/* ช่องกรอก: จุดไข่ปลาเป็นตัวอักษรจริง (เหมือน Word) ข้อความอยู่กลาง จุดเหลือซ้าย-ขวา */
+.doc-page .f, .doc-page .d {
+  display: inline-flex;
+  align-items: baseline;
+  flex: 0 0 auto;
+}
+.doc-page .f.x, .doc-page .d.x { flex: 1 1 0; }       /* ยาวถึงสุดบรรทัด (แต่ไม่แคบกว่าข้อความข้างใน) */
+.doc-page .f::before, .doc-page .f::after, .doc-page .d::before {
+  content: '................................................................................................................................................................................................................................................................';
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  overflow: clip;
+}
+.doc-page .f::before { direction: rtl; }       /* จุดฝั่งซ้ายชิดข้อความ */
+.doc-page .f .v { outline: none; white-space: nowrap; padding: 0 2pt; }
+.doc-page .f .v:empty { padding: 0; }
+.doc-page .f .v:empty::before { content: '\200b'; }
+.doc-page .f.l .v { order: -1; padding-left: 0; } /* ข้อความชิดซ้าย จุดตามหลัง */
+.doc-page .f.l::before { display: none; }
+
+/* บนจอ: ช่องกรอกได้เป็นสีเหลืองอ่อน / ตอนพิมพ์หายไป */
+@media screen {
+  .doc-page .f { background: #fff7d1; border-radius: 2px; cursor: text; }
+  .doc-page .f:hover { background: #ffef9f; }
+  .doc-page .f .v:focus { background: #ffe06b; }
+}
+
+/* ตาราง ปค.5 */
+.doc-page table.grid { border-collapse: collapse; table-layout: fixed; font-size: 14pt; line-height: 18pt; }
+.doc-page table.grid th, .doc-page table.grid td {
+  border: 0.75pt solid #000; padding: 0 3pt; text-align: center; vertical-align: middle;
+  font-weight: 400; background: none; color: #000; white-space: normal; word-break: break-word;
+}
+.doc-page table.grid th, .doc-page table.grid td.b { font-weight: 700; }
+.doc-page table.grid td.l { text-align: left; }
+.doc-page table.grid [contenteditable] { outline: none; }
+/* ข้อความธรรมดาที่แก้ได้ (ไม่มีจุด) เช่น ชื่อในวงเล็บที่พิมพ์ไว้แล้ว */
+.doc-page .e { outline: none; }
+@media screen {
+  .doc-page table.grid td[contenteditable], .doc-page .e { background: #fffbea; cursor: text; }
+  .doc-page table.grid td[contenteditable]:focus, .doc-page .e:focus { background: #ffe98a; }
+}
+
+@media print {
+  @page { size: A4; margin: 0; }
+  html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+  body { padding-bottom: 0 !important; }                 /* common.js ใส่ 70px ไว้เผื่อแถบท้าย */
+  nav, .controls, .no-print, .modal, .modal-backdrop, footer { display: none !important; }
+  #content { margin: 0 !important; padding: 0 !important; }
+  .doc-page {
+    margin: 0 !important;
+    box-shadow: none !important;
+    height: 296.5mm;          /* บังคับ 1 หน้าพอดี A4 */
+    min-height: 0;
+    overflow: hidden;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .doc-page.grow { height: auto; overflow: visible; }  /* ปค.5 ถ้ารายการเยอะให้ขึ้นหน้าใหม่ได้ */
+  .doc-page .f, .doc-page .f .v, .doc-page .e, .doc-page td { background: none !important; }
+}

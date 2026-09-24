@@ -4,87 +4,38 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>แบบฟอร์ม ปค. — งานกิจการนักเรียน</title>
-  <!-- Sarabun (Google) = ฟอนต์เอกสารราชการ ใช้แทน TH Sarabun PSK บนเว็บ -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="/css/style.css" rel="stylesheet">
+  <!-- ฟอนต์ TH Sarabun ฝังในเว็บ + ระบบจัดบรรทัดแบบ Word -->
+  <link href="/css/docforms.css" rel="stylesheet">
+  <link rel="preload" href="/fonts/THSarabunNew-Regular.woff" as="font" type="font/woff" crossorigin>
+  <link rel="preload" href="/fonts/THSarabunNew-Bold.woff" as="font" type="font/woff" crossorigin>
   <style>
-    /* ===== A4 document — แบบฟอร์มราชการ =====
-       ฟอนต์ TH Sarabun 16pt (มาตรฐานหนังสือราชการ) • หัวเรื่อง 18pt
-       ขอบ: ซ้าย 2.8 ซม. (เผื่อเข้าเล่ม) / ขวา 1.8 / บน 1.5 / ล่าง 1.2 ซม.
-       (บีบให้ทุกฟอร์มพอดี 1 หน้า A4) • หน่วย pt ตรงกับ Microsoft Word 1:1 */
-    .doc-page {
-      width: 210mm;
-      min-height: 297mm;
-      margin: 14px auto;
-      background: white;
-      color: #000;
-      padding: 15mm 18mm 12mm 28mm;
-      box-sizing: border-box;
-      box-shadow: 0 2px 14px rgba(0,0,0,.15);
-      /* ใช้ PSK ในเครื่องก่อน (ตรงเอกสารราชการ) ถ้าไม่มี → Sarabun จาก Google */
-      font-family: 'TH Sarabun PSK', 'TH SarabunPSK', 'TH Sarabun New', 'Sarabun', sans-serif;
-      font-size: 16pt;
-      line-height: 1.2;
-    }
-    .doc-page .pc-tag {
-      position: absolute;
-      font-weight: 700;
-      font-size: 14pt;
-    }
-    .doc-head { text-align: center; margin-bottom: 3mm; }
-    .doc-head .logo { width: 18mm; height: 18mm; object-fit: contain; }
-    .doc-head h2 { font-size: 18pt; font-weight: 700; margin: 1mm 0 0; }
-    .doc-head .sub { font-size: 16pt; }
-    .doc-title {
-      text-align: center; font-size: 18pt; font-weight: 700;
-      margin: 2mm 0 4mm; text-decoration: underline;
-    }
-    .doc-body p { margin: 0 0 1.5mm; text-indent: 0; }
-    /* ย่อหน้าแบบราชการ เยื้อง 2.5 ซม. เท่า Word */
-    .ti { display: inline-block; width: 2.5cm; }
-    .fill { border-bottom: 1px dotted #000; padding: 0 4px; }
-    .fill-inline { display: inline-block; min-width: 40mm; border-bottom: 1px dotted #000; padding: 0 4px; text-align: center; }
-    .editable {
-      background: #fffbe6;
-      outline: none;
-      min-width: 30mm;
-      display: inline-block;
-      border-bottom: 1px dotted #888;
-      padding: 0 4px;
-    }
-    .editable:focus { background: #fff3b0; }
-
-    /* signature grid */
-    .sign-grid {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 2mm 10mm; margin-top: 4mm; text-align: center;
-    }
-    .sign-grid .sign-cell { font-size: 16pt; }
-    .sign-line { margin-bottom: 1mm; }
-    .director-sign { text-align: center; margin-top: 4mm; font-size: 16pt; }
-
-    /* ปค.5 table — ตารางหนาแน่น ราชการอนุโลม 14pt */
-    table.pc5 { width: 100%; border-collapse: collapse; font-size: 14pt; margin-top: 3mm; table-layout: fixed; }
-    table.pc5 th, table.pc5 td { border: 1px solid #000; padding: 1.2mm 1.5mm; vertical-align: top; word-wrap: break-word; }
-    table.pc5 td:first-child { white-space: normal !important; }  /* วันที่ขึ้นบรรทัดได้ ไม่ทับชื่อ */
-    table.pc5 th { text-align: center; font-weight: 700; background: #f0f0f0;
-                   -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    table.pc5 td.c { text-align: center; }
-
     .controls { background: #f0f4fb; padding: 14px 0; border-bottom: 2px solid var(--primary); }
+    @media screen { #content { overflow-x: auto; padding-bottom: 10px; } }
 
-    @media print {
-      body { background: white; }
-      .no-print, nav { display: none !important; }
-      .doc-page { box-shadow: none; margin: 0; padding: 15mm 18mm 12mm 28mm; }
-      .editable { background: transparent !important; border-bottom: 1px dotted #000; }
-      @page { size: A4; margin: 0; }
-    }
-    [data-theme="dark"] .doc-page { color: #000; }  /* เอกสารคงสีขาวเสมอ */
+    /* ===== ฟอร์มที่บันทึกไว้ก่อนปรับแบบใหม่ (ก.ย. 2569) — ยังเปิด/พิมพ์ได้เหมือนเดิม ===== */
+    .doc-page.legacy { display: block; padding: 15mm 18mm 12mm 28mm !important; line-height: 1.2; }
+    .legacy .pc-tag { position: absolute; font-weight: 700; font-size: 14pt; }
+    .legacy .doc-head { text-align: center; margin-bottom: 3mm; }
+    .legacy .doc-head .logo { width: 18mm; height: 18mm; object-fit: contain; }
+    .legacy .doc-head h2 { font-size: 18pt; font-weight: 700; margin: 1mm 0 0; }
+    .legacy .doc-head .sub { font-size: 16pt; }
+    .legacy .doc-body p { margin: 0 0 1.5mm; text-indent: 0; }
+    .legacy .ti { display: inline-block; width: 2.5cm; }
+    .legacy .fill { border-bottom: 1px dotted #000; padding: 0 4px; }
+    .legacy .fill-inline { display: inline-block; min-width: 40mm; border-bottom: 1px dotted #000; padding: 0 4px; text-align: center; }
+    .legacy .editable { outline: none; min-width: 30mm; display: inline-block; border-bottom: 1px dotted #888; padding: 0 4px; }
+    .legacy .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2mm 10mm; margin-top: 4mm; text-align: center; }
+    .legacy .sign-line { margin-bottom: 1mm; }
+    .legacy .director-sign { text-align: center; margin-top: 4mm; }
+    .legacy table.pc5 { width: 100%; border-collapse: collapse; font-size: 14pt; margin-top: 3mm; table-layout: fixed; }
+    .legacy table.pc5 th, .legacy table.pc5 td { border: 1px solid #000; padding: 1.2mm 1.5mm; vertical-align: top; word-wrap: break-word; }
+    .legacy table.pc5 th { text-align: center; font-weight: 700; }
+    .legacy table.pc5 td.c { text-align: center; }
+    @media screen { .legacy .editable { background: #fffbe6; } }
+    @media print { .doc-page.legacy { height: auto; } }
   </style>
 </head>
 <body>
@@ -126,7 +77,7 @@
         <button class="btn btn-primary btn-sm flex-fill" onclick="saveForm()" id="saveBtn" disabled title="บันทึกลงระบบ">
           <i class="bi bi-save"></i>
         </button>
-        <button class="btn btn-success btn-sm flex-fill" onclick="window.print()" id="printBtn" disabled>
+        <button class="btn btn-success btn-sm flex-fill" onclick="printDoc()" id="printBtn" disabled>
           <i class="bi bi-printer-fill me-1"></i>พิมพ์
         </button>
       </div>
@@ -230,10 +181,17 @@ function thaiDateLong(iso) {
   const dt = new Date(iso + 'T00:00:00');
   return { d: dt.getDate(), m: THAI_MONTHS_F[dt.getMonth()], y: dt.getFullYear()+543 };
 }
+const THAI_MONTHS_S = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 function pcDateShort(iso){
   if(!iso) return '-';
   const dt = new Date(iso+'T00:00:00');
-  return `${dt.getDate()} ${THAI_MONTHS_F[dt.getMonth()].slice(0,3)} ${dt.getFullYear()+543}`;
+  return `${dt.getDate()} ${THAI_MONTHS_S[dt.getMonth()]} ${dt.getFullYear()+543}`;
+}
+// ช่องวันที่ในตาราง ปค.5 แคบ → ปี 2 หลัก เช่น 12 ก.ย. 69
+function pcDateTiny(iso){
+  if(!iso) return '';
+  const dt = new Date(iso+'T00:00:00');
+  return `${dt.getDate()} ${THAI_MONTHS_S[dt.getMonth()]} ${String(dt.getFullYear()+543).slice(-2)}`;
 }
 function namePrefix(s){
   if (/^(เด็กชาย|เด็กหญิง|นาย|นางสาว|ด\.ช\.|ด\.ญ\.)/.test(s.name||'')) return s.name;
@@ -249,7 +207,116 @@ function el(id){ return document.getElementById(id); }
 function schoolName(){ return theme.school_name || 'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม'; }
 function directorName(){ return theme.director_name || 'นางสาวปัทมา จีนดี'; }
 function directorTitle(){ return theme.director_title || 'ผู้อำนวยการ'; }
-function logoTag(){ return theme.school_logo ? `<img class="logo" src="${theme.school_logo}">` : ''; }
+// ชื่อ ผอ. แบบในต้นฉบับ: เว้น 2 ช่องระหว่างชื่อกับนามสกุล
+function dirName(){ return esc(directorName()).replace(/ +/, '&nbsp; '); }
+
+/* ===== เครื่องมือจัดหน้าให้เหมือน Word =====
+   ตำแหน่งทุกบรรทัดวัดจากไฟล์ต้นฉบับ หน่วย pt
+   y = เส้นฐานตัวอักษร (baseline) วัดจากขอบบนกระดาษ • x วัดจากขอบซ้ายของพื้นที่พิมพ์ */
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const lhOf = fs => Math.round(fs * 13.1) / 10;                  // ระยะบรรทัด single ของ Word (16pt → 21pt)
+const baseOf = (fs, lh) => (lh - 1.301 * fs) / 2 + 0.844 * fs;  // ขอบบนบรรทัด → เส้นฐาน (เมทริกซ์ TH Sarabun New)
+
+// ช่องกรอก (จุดไข่ปลา) — w = กว้างอย่างน้อยกี่ pt, ไม่ใส่ = ยาวถึงสุดบรรทัด, g = กลุ่มที่ข้อความล้นไปต่อบรรทัดถัดไปได้
+function F(val = '', w = null, g = '') {
+  const cls = 'f' + (w == null ? ' x' : '');
+  const st = w == null ? '' : ` style="min-width:${w}pt"`;
+  return `<span class="${cls}"${st}><span class="v" contenteditable="true"${g ? ` data-g="${g}"` : ''}>${esc(val)}</span></span>`;
+}
+// จุดไข่ปลาเฉย ๆ (เช่น ลงชื่อ.........) — w ไม่ใส่ = ยาวถึงสุดบรรทัด
+const D = (w = null) => w == null ? '<span class="d x"></span>' : `<span class="d" style="width:${w}pt"></span>`;
+const S = w => `<span class="sp" style="width:${w}pt"></span>`;                 // เว้นระยะ / ย่อหน้า
+const lab = (t, w) => `<span class="sp" style="width:${w}pt">${t}</span>`;      // หัวข้อกว้างคงที่ เช่น "เรื่อง"
+const E = t => `<span class="e" contenteditable="true">${t}</span>`;           // ข้อความพิมพ์ไว้แล้วแต่แก้ได้
+// ข้อความวางตำแหน่ง x คงที่ในบรรทัด (ทำคอลัมน์ลายเซ็น) — c = จัดกลางในความกว้าง w
+const cell = (x, html, w = null, c = false) =>
+  `<span class="cell${c ? ' c' : ''}" style="left:${x}pt;${w ? `width:${w}pt;` : ''}">${html}</span>`;
+
+// เรียงบรรทัดตามตำแหน่งเส้นฐาน: {y} = จากขอบบนกระดาษ, {dy} = ห่างจากบรรทัดก่อน, {mt} = ห่างจากกล่องก่อน (หลังตาราง)
+function lines(list) {
+  let bottom = 0, base = 0, out = '';
+  for (const l of list) {
+    if (l.raw != null) { out += l.raw; bottom = 0; base = 0; continue; }
+    const fs = l.fs || 16, lh = l.lh || lhOf(fs), b = baseOf(fs, lh);
+    const top = l.y != null ? l.y - b : l.dy != null ? base + l.dy - b : bottom + (l.mt || 0);
+    out += `<div class="ln${l.c ? ' ' + l.c : ''}" style="margin-top:${(top - bottom).toFixed(2)}pt;`
+         + `${fs !== 16 ? `font-size:${fs}pt;` : ''}line-height:${lh}pt;min-height:${lh}pt;${l.st || ''}">${l.h || ''}</div>`;
+    bottom = top + lh; base = top + b;
+  }
+  return out;
+}
+// ข้อความลอย (เช่น "ปค 1" มุมขวาบน) x/right วัดจากขอบกระดาษ
+function absTxt(pos, y, html, fs = 16, st = '') {
+  const lh = lhOf(fs);
+  return `<div class="ln" style="position:absolute;${pos};top:${(y - baseOf(fs, lh)).toFixed(2)}pt;`
+       + `font-size:${fs}pt;line-height:${lh}pt;min-height:${lh}pt;${st}">${html}</div>`;
+}
+// รูปกลางแนว cx (pt จากขอบซ้ายกระดาษ)
+const absImg = (src, top, h, cx) => src
+  ? `<img src="${src}" alt="" style="position:absolute;top:${top}pt;left:${cx}pt;height:${h}pt;transform:translateX(-50%);">` : '';
+// ไฟล์โลโก้โรงเรียนมีขอบใสรอบตรา ~14% → ขยายรูปให้ "ตัวตรา" สูง h pt เท่าต้นฉบับ
+const logoAt = (top, h, cx) => absImg(theme.school_logo, top - h * 0.097, h * 1.164, cx);
+const page = (form, pl, pr, inner, extra = '') =>
+  `<div class="doc-page${extra ? ' ' + extra : ''}" data-form="${form}" style="padding-left:${pl}pt;padding-right:${pr}pt;">${inner}</div>`;
+const A4W = 595.3;
+
+// ข้อความยาวเกินบรรทัด → ย้ายคำท้ายไปช่องถัดไปในกลุ่มเดียวกัน (ตัดคำไทยด้วย Intl.Segmenter)
+function flowFields(root) {
+  if (!root) return;
+  const groups = {};
+  root.querySelectorAll('.v[data-g]').forEach(v => (groups[v.dataset.g] = groups[v.dataset.g] || []).push(v));
+  const seg = (window.Intl && Intl.Segmenter) ? new Intl.Segmenter('th', { granularity: 'word' }) : null;
+  const split = t => seg ? [...seg.segment(t)].map(x => x.segment) : [...t];
+  Object.values(groups).forEach(vs => {
+    for (let i = 0; i < vs.length - 1; i++) {
+      const ln = vs[i].closest('.ln');
+      let guard = 0;
+      while (ln.scrollWidth > ln.clientWidth + 1 && vs[i].textContent && guard++ < 400) {
+        const parts = split(vs[i].textContent);
+        const last = parts.pop();
+        vs[i].textContent = parts.join('');
+        vs[i + 1].textContent = last + vs[i + 1].textContent;
+      }
+      vs[i].textContent = vs[i].textContent.replace(/\s+$/, '');
+      vs[i + 1].textContent = vs[i + 1].textContent.replace(/^\s+/, '');
+    }
+  });
+}
+
+async function printDoc() {
+  if (document.activeElement) document.activeElement.blur();
+  flowFields(el('content').querySelector('.doc-page'));
+  try {
+    await Promise.all(['16pt', 'bold 16pt', 'italic bold 16pt']
+      .map(f => document.fonts.load(`${f} THSarabunDoc`, 'กขค')));
+    await document.fonts.ready;
+  } catch (e) {}
+  window.print();
+}
+
+// คลิกที่จุดไข่ปลา = เริ่มพิมพ์ในช่องนั้น / ออกจากช่อง = จัดข้อความที่ล้นลงบรรทัดถัดไป
+document.addEventListener('mousedown', e => {
+  const f = e.target.closest && e.target.closest('.doc-page .f');
+  if (!f || e.target !== f) return;
+  e.preventDefault();
+  const v = f.querySelector('.v');
+  v.focus();
+  const r = document.createRange(); r.selectNodeContents(v); r.collapse(false);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+});
+document.addEventListener('focusout', e => {
+  if (e.target.matches && e.target.matches('.doc-page .v[data-g]')) flowFields(e.target.closest('.doc-page'));
+});
+// วางข้อความ = วางเป็นตัวอักษรล้วน ไม่เอาสี/ฟอนต์จากที่อื่นมาด้วย
+document.addEventListener('paste', e => {
+  if (!e.target.closest || !e.target.closest('.doc-page [contenteditable]')) return;
+  e.preventDefault();
+  const t = (e.clipboardData || window.clipboardData).getData('text').replace(/\s*\n\s*/g, ' ');
+  document.execCommand('insertText', false, t);
+});
+document.addEventListener('keydown', e => {   // Enter ในช่องกรอกบรรทัดเดียว = ไม่ขึ้นบรรทัดใหม่
+  if (e.key === 'Enter' && e.target.closest && e.target.closest('.doc-page .f, .doc-page .e')) e.preventDefault();
+});
 
 function render() {
   const form = el('selForm').value;
@@ -266,6 +333,7 @@ function render() {
                           : (form === 'pc7') ? renderPC7()
                           : (form === 'leave') ? renderLeave()
                           : renderPC5();
+  flowFields(el('content').querySelector('.doc-page'));
   el('printBtn').disabled = false;
   el('saveBtn').disabled = false;
 }
@@ -325,7 +393,7 @@ async function openSavedList() {
       box.innerHTML = '<div class="text-center text-muted py-4">ยังไม่มีฟอร์มที่บันทึกไว้</div>';
       return;
     }
-    const TYPE_LABEL = { pc1:'ปค.1', pc3:'ปค.3', pc4:'ปค.4', pc5:'ปค.5' };
+    const TYPE_LABEL = { pc1:'ปค.1', pc3:'ปค.3', pc4:'ปค.4', pc5:'ปค.5', pc7:'ปค.7', leave:'ขอออกนอก' };
     box.innerHTML = list.map(f => `
       <div class="d-flex align-items-center gap-2 p-2 border-bottom">
         <span class="badge bg-secondary">${TYPE_LABEL[f.form_type]||f.form_type}</span>
@@ -354,6 +422,9 @@ async function loadSavedForm(fid) {
     try { curData = await apiFetch(`/api/behavior/${f.student_id}`); } catch(e){}
     curFormId = fid;
     el('content').innerHTML = html;
+    // ฟอร์มที่บันทึกก่อนปรับแบบใหม่ ใช้หน้าตาแบบเดิม
+    const dp = el('content').querySelector('.doc-page');
+    if (dp && !dp.querySelector('.ln')) dp.classList.add('legacy');
     el('printBtn').disabled = false;
     el('saveBtn').disabled = false;
     updateFormInfo();
@@ -391,417 +462,230 @@ function showToast(msg) {
   setTimeout(() => t.remove(), 2500);
 }
 
-/* ===== ปค.3 — บันทึกการทำทัณฑ์บนนักเรียน ===== */
+function todayLocalISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const par = (val, w) => `(${F(val, w)})`;   // (............) ใต้ลายเซ็น
+
+/* ===== ปค.3 — บันทึกการทำทัณฑ์บนนักเรียน (ตามไฟล์ตัวอย่าง บันทึกการทำทัณฑ์บนนักเรียน.docx) ===== */
 function renderPC3() {
-  const s = curData.student;
-  const ed  = (w) => `<span class="editable" contenteditable="true" style="min-width:${w};text-align:center;"></span>`;
-  // ช่องที่ pre-fill จากระบบถ้ามี (แก้ได้)
-  const pf  = (val, w) => `<span class="editable" contenteditable="true" style="min-width:${w};">${val||''}</span>`;
-  return `<div class="doc-page" style="position:relative;">
-    <span class="pc-tag" style="top:14mm;right:18mm;">ปค 3</span>
-    <div class="doc-head">
-      ${logoTag()}
-      <h2>บันทึกการทำทัณฑ์บนนักเรียน</h2>
-    </div>
-    <div class="doc-body" style="margin-top:4mm;">
-      <p style="text-align:right;">${schoolName()}</p>
-      <p style="text-align:right;">อำเภอตะกั่วทุ่ง จังหวัดพังงา</p>
-      <p style="text-align:right;">วันที่ ${ed('14mm')} เดือน ${ed('28mm')} พ.ศ. ${ed('16mm')}</p>
-
-      <p style="margin-top:4mm;"><span class="ti"></span>ข้าพเจ้า
-        ${pf(s.parent_name, '70mm')} เป็นผู้ปกครองของ
-        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span></p>
-      <p>นักเรียนชั้น ม.<span class="fill-inline" style="min-width:20mm;">${s.class_level}/${s.room}</span>
-        เลขประจำตัว <span class="fill-inline" style="min-width:24mm;">${s.student_code||''}</span>
-        ปัจจุบันพักอยู่บ้านเลขที่ ${ed('20mm')} หมู่ที่ ${ed('14mm')} ถนน ${ed('24mm')}</p>
-      <p>ตำบล ${ed('30mm')} อำเภอ ${ed('30mm')} จังหวัด ${ed('30mm')}</p>
-      <p>หมายเลขโทรศัพท์(ที่สามารถติดต่อได้) ${pf(s.parent_phone, '34mm')}
-        เกี่ยวข้องกับนักเรียนเป็น ${pf(s.parent_relation, '30mm')}</p>
-      <p>นักเรียนได้กระทำความผิดระเบียบโรงเรียนคือ
-        <span class="editable" contenteditable="true" style="display:inline-block;min-width:70mm;"></span></p>
-      <p><span class="editable" contenteditable="true" style="display:block;min-height:6mm;"></span></p>
-      <p style="margin-top:2mm;"><span class="ti"></span>ได้รับทราบความผิดของนักเรียน จึงลงลายมือชื่อบันทึกการทำทัณฑ์บนไว้เป็นหลักฐาน
-        และจะควบคุมดูแลให้นักเรียนในการปกครองของข้าพเจ้า ปรับเปลี่ยนพฤติกรรม กำชับให้ปฏิบัติตามระเบียบวินัยของโรงเรียนโดยเคร่งครัด
-        หากนักเรียนกระทำผิดระเบียบของโรงเรียนอีกครั้ง จะถือว่าเป็นการฝ่าฝืนทัณฑ์บน ข้าพเจ้ายินยอมให้โรงเรียนพิจารณาดำเนินการตามความเหมาะสม</p>
-    </div>
-
-    <div class="sign-grid" style="margin-top:5mm;">
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>นักเรียน</div>
-      </div>
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>ผู้ปกครอง</div>
-      </div>
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>ครูที่ปรึกษา</div>
-      </div>
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>หัวหน้าระดับชั้น</div>
-      </div>
-    </div>
-    <div class="director-sign" style="margin-top:5mm;">
-      <div class="sign-line">ลงชื่อ ………………………………………</div>
-      <div>(……………………………………)</div>
-      <div>หัวหน้างานกิจการนักเรียน</div>
-    </div>
-
-    <div style="border:1px solid #000; margin-top:3mm; padding:2mm 5mm;">
-      <p style="font-weight:700;">ความเห็นของผู้อำนวยการโรงเรียน
-        <span class="editable" contenteditable="true" style="min-width:70mm;font-weight:400;"></span></p>
-      <p><span class="editable" contenteditable="true" style="display:block;min-height:5mm;"></span></p>
-      <div class="director-sign" style="margin-top:2mm;">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>( ${directorName()} )</div>
-        <div>ผู้อำนวยการ${schoolName()} ……/……/……</div>
-      </div>
-    </div>
-  </div>`;
+  const s = curData.student, nm = s.name || '';
+  const PL = 72, PR = 28;
+  const sig = role => `${S(180)}ลงชื่อ${D(140)}${role}`;
+  return page('pc3', PL, PR, logoAt(30.9, 55.9, PL + (A4W - PL - PR) / 2) + lines([
+    { y: 113, c: 'c b', h: 'บันทึกการทำทัณฑ์บนนักเรียน' },
+    { y: 134, c: 'r', h: esc(schoolName()) },
+    { y: 155, c: 'r', h: 'อำเภอตะกั่วทุ่ง จังหวัดพังงา' },
+    { y: 176, c: 'r', h: `วันที่${F('', 28.5)}เดือน${F('', 78)}พ.ศ${F('', 57)}` },
+    { y: 207, h: `${S(72)}ข้าพเจ้า${F(s.parent_name, 166)}เป็นผู้ปกครองของ${F(nm)}` },
+    { y: 228, h: `นักเรียนชั้น ม.${F(s.class_level, 15.5)}/${F(s.room, 20.7)}เลขประจำตัว${F(s.student_code, 60)}ปัจจุบันพักอยู่บ้านเลขที่${F('', 23)}หมู่ที่${F('', 21)}ถนน${F()}` },
+    { y: 249, h: `ตำบล${F('', 114)}อำเภอ${F('', 127)}จังหวัด${F()}` },
+    { y: 270, h: `หมายเลขโทรศัพท์(ที่สามารถติดต่อได้)${F(s.parent_phone, 104)}เกี่ยวข้องกับนักเรียนเป็น${F(s.parent_relation)}` },
+    { y: 291, h: `ได้รับทราบความผิดของ(ชื่อนักเรียน)${F(nm, 197)}ที่ได้กระทำไปแล้ว` },
+    { y: 312, h: `${S(72)}เป็นการกระทำที่ไม่เหมาะสมกับสภาพความเป็นนักเรียนอย่างยิ่ง&nbsp; จึงยินยอมทำทัณฑ์บนไว้ให้แก่` },
+    { y: 333, h: `(ชื่อนักเรียน)${F(nm)}นักเรียน${esc(schoolName())}ว่า` },
+    { y: 354, h: `ข้าพเจ้าจะควบคุมดูแลและกวดขันให้${F(nm)}&nbsp;ซึ่งเป็นนักเรียนในความปกครอง` },
+    { y: 375, h: 'ของข้าพเจ้าไม่ให้ประพฤติเช่นนี้อีกต่อไป อันจะนำความเสื่อมเสียมาสู่ตนเอง สถาบันฯ และจะเข้มงวดให้' },
+    { y: 396, h: `(ชื่อนักเรียน)${F(nm, 233)}ปฏิบัติตามระเบียบวินัยของโรงเรียนโดยเคร่งครัด` },
+    { y: 417, h: `${S(72)}หากปรากฏว่า (ชื่อนักเรียน)${F(nm)}ประพฤติผิดทำนองนี้อีกหรืออย่าง` },
+    { y: 438, h: 'อื่นอันเป็นการฝ่าฝืนทัณฑ์บนนี้ไม่ว่ากรณีใดๆ ข้าพเจ้ายินยอมให้โรงเรียนพิจารณาสภาพการเป็นนักเรียน&nbsp; โดยดำเนินการ' },
+    { y: 459, h: '<span class="biu">ย้ายสถานศึกษา</span>' },
+    { y: 501, h: sig('ผู้ทำทัณฑ์บน(ผู้ปกครอง)') },
+    { y: 522, h: sig('นักเรียนผู้กระทำความผิด') },
+    { y: 543, h: sig('ครูปรึกษา') },
+    { y: 564, h: sig('หัวหน้าระดับ') },
+    { y: 585, h: sig('หัวหน้ากิจการนักเรียน') },
+    { y: 606, h: '<span class="b u">บันทึกเพิ่มเติม</span>' },
+    { y: 627, h: `${S(72)}${F('', null, 'note')}${S(22)}` },
+    { y: 648, h: `${S(72)}${F('', null, 'note')}${S(22)}` },
+    { y: 669, h: `${S(72)}${F('', null, 'note')}${S(22)}` },
+    { y: 711, h: cell(155, D(137), 260, true) },
+    { y: 732, h: cell(155, `( ${dirName()} )`, 260, true) },
+    { y: 753, h: cell(155, `ตำแหน่ง${esc(directorTitle())}${esc(schoolName())}`, 260, true) },
+  ]));
 }
 
 /* ===== ปค.1 — แบบบันทึกการกระทำผิดของนักเรียน ===== */
 function renderPC1() {
-  const s = curData.student;
-  const ed = (w) => `<span class="editable" contenteditable="true" style="min-width:${w};text-align:center;"></span>`;
-  return `<div class="doc-page" style="position:relative;">
-    <span class="pc-tag" style="top:14mm;right:18mm;">ปค 1</span>
-    <div class="doc-head">
-      ${logoTag()}
-      <h2>แบบบันทึกการกระทำผิดของนักเรียน&nbsp;&nbsp;ครั้งที่ ${ed('16mm')}</h2>
-    </div>
-    <div class="doc-body" style="margin-top:4mm;">
-      <p style="text-align:right;">เขียนที่ ${schoolName()}</p>
-      <p style="text-align:right;">อำเภอตะกั่วทุ่ง จังหวัดพังงา</p>
-      <p style="text-align:right;">วันที่ ${ed('14mm')} เดือน ${ed('28mm')} พ.ศ. ${ed('16mm')}</p>
-
-      <p style="margin-top:4mm;"><span class="ti"></span>ข้าพเจ้า
-        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span>
-        นักเรียนชั้น ม.<span class="fill-inline" style="min-width:24mm;">${s.class_level}/${s.room}</span>
-        ได้กระทำผิดระเบียบของโรงเรียน</p>
-      <p>เรื่อง <span class="editable" contenteditable="true" style="display:inline-block;min-width:120mm;"></span></p>
-      <p><span class="editable" contenteditable="true" style="display:block;min-height:6mm;"></span></p>
-      <p>เหตุเกิดเมื่อ วันที่ ${ed('12mm')} เดือน ${ed('26mm')} พ.ศ. ${ed('14mm')}
-        เวลา ${ed('18mm')} น.</p>
-      <p>สถานที่เกิดเหตุ <span class="editable" contenteditable="true" style="display:inline-block;min-width:110mm;"></span></p>
-      <p style="margin-top:2mm;"><span class="ti"></span>การกระทำของข้าพเจ้าดังกล่าว ข้าพเจ้าทราบว่าเป็นการกระทำที่ไม่ถูกต้อง
-        ผิดระเบียบวินัยของ${schoolName()} หากข้าพเจ้ายังคงกระทำการใด ๆ อันไม่เหมาะสมนี้
-        ข้าพเจ้ายินดีให้ทางโรงเรียนพิจารณาโทษตามระเบียบข้อบังคับของทางโรงเรียนได้ทุกกรณี</p>
-    </div>
-
-    <div class="sign-grid" style="margin-top:5mm;">
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>นักเรียน</div>
-      </div>
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>ครูที่ปรึกษา</div>
-      </div>
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>หัวหน้าระดับชั้น</div>
-      </div>
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>หัวหน้างานกิจการนักเรียน</div>
-      </div>
-    </div>
-
-    <div style="margin-top:5mm;">
-      <p>ความคิดเห็นของผู้อำนวยการ${schoolName()}</p>
-      <p><span class="editable" contenteditable="true" style="display:block;min-height:6mm;"></span></p>
-      <p><span class="editable" contenteditable="true" style="display:block;min-height:6mm;"></span></p>
-    </div>
-    <div class="director-sign">
-      <div class="sign-line">ลงชื่อ ………………………………………</div>
-      <div>( ${directorName()} )</div>
-      <div>ผู้อำนวยการ${schoolName()}</div>
-    </div>
-  </div>`;
+  const s = curData.student, PL = 70.8, PR = 30;
+  const cls = `${s.class_level}/${s.room}`;
+  return page('pc1', PL, PR,
+    absTxt('left:502.8pt', 39, 'ปค 1', 14) + logoAt(34.2, 48, PL + (A4W - PL - PR) / 2) + lines([
+    { y: 112, fs: 18, c: 'c b', h: `แบบบันทึกการกระทำผิดของนักเรียน&nbsp; ครั้งที่&nbsp;${F('', 17.5)}` },
+    { y: 134, c: 'r', h: `เขียนที่ ${esc(schoolName())}` },
+    { y: 155, c: 'r', h: 'อำเภอตะกั่วทุ่ง จังหวัดพังงา' },
+    { y: 178, fs: 18, c: 'r', h: `วันที่${F('', 26)}เดือน${F('', 82)}พ.ศ${F('', 44)}` },
+    { y: 227, h: `${S(35.4)}ข้าพเจ้า${F(s.name, 181)}นักเรียนชั้น ม.&nbsp;${F(cls, 39)}&nbsp;ได้กระทำผิดระเบียบของโรงเรียน` },
+    { y: 248, h: `เรื่อง&nbsp;${F('', null, 'topic')}` },
+    { y: 269, h: F('', null, 'topic') },
+    { y: 289, h: `เหตุเกิดเมื่อ&nbsp; วันที่${F('', 22)}เดือน${F('', 99)}พ.ศ${F('', 45)}เวลา${F('', 61)}น.` },
+    { y: 310, h: `สถานที่เกิดเหตุ${F()}${S(20)}` },
+    { y: 330, h: 'การกระทำของข้าพเจ้าดังกล่าว ข้าพเจ้าทราบว่าเป็นการกระทำที่ไม่ถูกต้อง ผิดระเบียบวินัยของโรงเรียนตะกั่วทุ่งงานทวี' },
+    { y: 350, h: 'วิทยาคม&nbsp; หากข้าพเจ้ายังคงกระทำการใด ๆ อันไม่เหมาะสมนี้ ข้าพเจ้ายินดีให้ทางโรงเรียนพิจารณาโทษตามระเบียบ' },
+    { y: 371, h: 'ข้อบังคับของทางโรงเรียนได้ทุกกรณี' },
+    { y: 412, h: cell(13.8, `ลงชื่อ${D(133)}&nbsp;นักเรียน`) + cell(251.2, `ลงชื่อ${D(129)}ครูที่ปรึกษา`) },
+    { y: 436, h: cell(34.6, par(s.name, 130)) + cell(273.5, par('', 130)) },
+    { y: 468, h: cell(13.8, `ลงชื่อ${D(128)}หัวหน้าระดับชั้น`) + cell(244.8, `ลงชื่อ${D(115)}หัวหน้างานกิจการนักเรียน`) },
+    { y: 492, h: cell(36, par('', 130)) + cell(276.8, par('', 130)) },
+    { y: 534, h: `ความคิดเห็นของผู้อำนวยการ${esc(schoolName())}` },
+    { y: 555, h: `${F('', null, 'dir')}${S(10)}` },
+    { y: 576, h: `${F('', null, 'dir')}${S(10)}` },
+    { y: 611, h: cell(249.7, `ลงชื่อ${D(145)}`) },
+    { y: 635, h: cell(233.2, `(${dirName()})`, 200, true) },
+    { y: 656, h: cell(252, `${esc(directorTitle())}${esc(schoolName())}`) },
+  ]));
 }
 
-/* ===== ปค.4 — แบบฟอร์มตัดคะแนนความประพฤติ ===== */
+/* ===== ปค.4 — แบบฟอร์มตัดคะแนนความประพฤตินักเรียน ===== */
 function renderPC4() {
-  const s = curData.student;
-  const today = thaiDateLong(new Date().toISOString().split('T')[0]);
-  // หา log ที่เลือก
+  const s = curData.student, PL = 72, PR = 35;
+  // รายการที่เลือก (ไม่เลือก = ครั้งล่าสุดที่ถูกหักคะแนน)
   const logId = el('selLog').value;
   let log = null;
   if (logId) log = (curData.logs||[]).find(l => String(l.id) === String(logId));
   else log = (curData.logs||[]).filter(l => l.points < 0)[0] || null;
-
-  const reason = log ? log.reason + (log.note ? ' — '+log.note : '') : '';
-  const points = log ? Math.abs(log.points) : '';
-  const useDate = log ? thaiDateLong(log.date) : today;
-
-  return `<div class="doc-page" style="position:relative;">
-    <span class="pc-tag" style="top:14mm;right:18mm;">ปค 4</span>
-    <div class="doc-head">
-      ${logoTag()}
-      <h2>แบบฟอร์มตัดคะแนนความประพฤตินักเรียน</h2>
-      <div class="sub">${schoolName()}</div>
-    </div>
-    <div class="doc-body" style="margin-top:4mm;">
-      <p style="text-align:right;">วันที่ <span class="fill-inline">${useDate.d}</span>
-        เดือน <span class="fill-inline">${useDate.m}</span>
-        พ.ศ. <span class="fill-inline">${useDate.y}</span></p>
-      <p style="margin-top:4mm;"><span class="ti"></span>เนื่องด้วย นักเรียน (ด.ช./ด.ญ./นาย/นางสาว)
-        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span>
-        &nbsp;ระดับชั้น <span class="fill-inline">ม.${s.class_level}/${s.room}</span></p>
-      <p>ได้ประพฤติผิดระเบียบของ${schoolName()} ดังนี้</p>
-      <p><span class="editable" contenteditable="true" style="display:block;min-height:7mm;">${reason}</span></p>
-      <p><span class="editable" contenteditable="true" style="display:block;min-height:7mm;"></span></p>
-      <p style="margin-top:3mm;">โดยพิจารณาแล้วเห็นสมควรตัดคะแนนความประพฤติ
-        <span class="editable" contenteditable="true" style="min-width:24mm;text-align:center;font-weight:700;">${points}</span> คะแนน
-        <span style="font-size:14pt;color:#666;">(คะแนนคงเหลือ ${curData.score})</span></p>
-    </div>
-
-    <div class="sign-grid">
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>นักเรียน</div>
-      </div>
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>ผู้ปกครองนักเรียน</div>
-      </div>
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>ครูที่ปรึกษา</div>
-      </div>
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>หัวหน้าระดับชั้น</div>
-      </div>
-    </div>
-    <div class="director-sign" style="margin-top:4mm;">
-      <div class="sign-line">ลงชื่อ ………………………………………</div>
-      <div>(……………………………………)</div>
-      <div>หัวหน้างานกิจการนักเรียน</div>
-    </div>
-
-    <div style="margin-top:5mm;">
-      <p>ความคิดเห็นของผู้อำนวยการ${schoolName()}</p>
-      <p><span class="editable" contenteditable="true" style="display:block;min-height:7mm;"></span></p>
-      <p><span class="editable" contenteditable="true" style="display:block;min-height:7mm;"></span></p>
-    </div>
-    <div class="director-sign">
-      <div class="sign-line">ลงชื่อ ………………………………………</div>
-      <div>( ${directorName()} )</div>
-      <div>ผู้อำนวยการ${schoolName()}</div>
-    </div>
-  </div>`;
+  const reason = log ? log.reason + (log.note ? ' — ' + log.note : '') : '';
+  const dt = thaiDateLong(log ? log.date : todayLocalISO());
+  return page('pc4', PL, PR,
+    absTxt('left:517.6pt', 42, 'ปค 4') + logoAt(39.6, 40, PL + (A4W - PL - PR) / 2) + lines([
+    { y: 101, fs: 18, c: 'c b', h: 'แบบฟอร์มตัดคะแนนความประพฤตินักเรียน' },
+    { y: 132, c: 'r', h: `${esc(schoolName())}${S(20)}` },
+    { y: 158, c: 'r', h: `วันที่${F(dt.d, 41.5)}เดือน${F(dt.m, 49)}พ.ศ${F(dt.y, 31)}${S(7)}` },
+    { y: 189, h: `${S(34.6)}เนื่องด้วย นักเรียน (ด.ช./ด.ญ./นาย/นางสาว)${F(studentFullName(s))}ระดับชั้น${F('ม.' + s.class_level + '/' + s.room, 31)}` },
+    { y: 210, h: `ได้ประพฤติผิดระเบียบของ${esc(schoolName())} ดังนี้${F(reason, null, 'why')}` },
+    { y: 231, h: F('', null, 'why') },
+    { y: 255, h: `โดยพิจารณาแล้วเห็นสมควรตัดคะแนนความประพฤติ${F(log ? Math.abs(log.points) : '', 73)}คะแนน` },
+    { y: 290, h: cell(0, `ลงชื่อ${D(133)}&nbsp;นักเรียน`) + cell(232, `ลงชื่อ${D(132)}ผู้ปกครองนักเรียน`) },
+    { y: 314, h: cell(13.8, par(s.name, 131)) + cell(256, par(s.parent_name, 128)) },
+    { y: 345, h: cell(0, `ลงชื่อ${D(130)}ครูที่ปรึกษา`) + cell(229, `ลงชื่อ${D(130)}หัวหน้าระดับชั้น`) },
+    { y: 369, h: cell(13.8, par('', 130)) + cell(256, par('', 130)) },
+    { y: 404, h: cell(228.4, `ลงชื่อ${D(124)}หัวหน้างานกิจการนักเรียน`) },
+    { y: 428, h: cell(249.4, par('', 130)) },
+    { y: 449, h: `ความคิดเห็นของผู้อำนวยการ${esc(schoolName())}` },
+    { y: 470, h: `${F('', null, 'dir')}${S(4)}` },
+    { y: 491, h: `${F('', null, 'dir')}${S(4)}` },
+    { y: 512, h: cell(255, `ลงชื่อ${D(145)}`) },
+    { y: 533, h: cell(233, `(${dirName()})`, 200, true) },
+    { y: 554, h: cell(252, `${esc(directorTitle())}${esc(schoolName())}`) },
+  ]));
 }
 
-/* ===== ปค.5 — แบบบันทึกพฤติกรรมรายบุคคล (ตาราง) ===== */
+/* ===== ปค.5 — แบบบันทึกพฤติกรรมนักเรียน (ตาราง) ===== */
 function renderPC5() {
-  const s = curData.student;
+  const s = curData.student, PL = 72, PR = 72;
   // เฉพาะที่ครูหักเอง (source=manual) — ตัด มาสาย(attendance) + บำเพ็ญประโยชน์(makeup) + เครื่องแต่งกาย(uniform) ออก
   const logs = (curData.logs||[])
     .filter(l => (l.source === 'manual' || !l.source) && l.points < 0)
     .slice().reverse(); // เก่า→ใหม่
   const totalDeduct = logs.reduce((a,l)=>a+Math.abs(l.points),0);
-  const remaining = curData.score;
-
-  let rows = '';
-  logs.forEach(l => {
-    rows += `<tr>
-      <td class="c" style="white-space:normal;">${pcDateShort(l.date)}</td>
-      <td>${l.reason || ''}${l.note ? ' — '+l.note : ''}</td>
-      <td class="c">${Math.abs(l.points)}</td>
-      <td></td><td></td><td></td><td></td>
-    </tr>`;
-  });
-  // เติมแถวว่างให้เต็มหน้า
-  const blanks = Math.max(0, 9 - logs.length);
-  for (let i=0;i<blanks;i++) rows += `<tr><td style="height:7mm;">&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
-
-  return `<div class="doc-page" style="position:relative;">
-    <span class="pc-tag" style="top:14mm;right:18mm;">ปค 5</span>
-    <div class="doc-head">
-      ${logoTag()}
-      <h2>แบบบันทึกพฤติกรรมนักเรียน</h2>
-    </div>
-    <p style="text-align:center; margin:1mm 0;">${schoolName()}
-      ภาคเรียนที่ <span class="editable" contenteditable="true" style="min-width:14mm;text-align:center;"></span>
-      ปีการศึกษา <span class="editable" contenteditable="true" style="min-width:20mm;text-align:center;"></span></p>
-    <p style="text-align:center; margin:1mm 0 3mm;">ชื่อ <span class="fill" style="min-width:65mm;">${studentFullName(s)}</span>
-       เลขที่ <span class="fill-inline" style="min-width:14mm;">${s.number ?? ''}</span>
-       ห้อง <span class="fill-inline" style="min-width:22mm;">ม.${s.class_level}/${s.room}</span></p>
-
-    <table class="pc5">
-      <thead>
-        <tr>
-          <th rowspan="2" style="width:24mm;">วัน/เดือน/ปี</th>
-          <th rowspan="2">พฤติกรรมนักเรียน</th>
-          <th rowspan="2" style="width:20mm;">คะแนนพฤติกรรม<br>ที่ถูกหัก</th>
-          <th colspan="4">ลงชื่อ</th>
-        </tr>
-        <tr>
-          <th style="width:16mm;">นักเรียน</th>
-          <th style="width:18mm;">ครูที่ปรึกษา</th>
-          <th style="width:18mm;">หัวหน้า<br>ระดับชั้น</th>
-          <th style="width:20mm;">หัวหน้า<br>กิจการนักเรียน</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-      <tfoot>
-        <tr>
-          <td colspan="2" class="c" style="font-weight:700;">คะแนนพฤติกรรมที่ถูกหักรวม</td>
-          <td class="c" style="font-weight:700;">${totalDeduct || ''}</td>
-          <td colspan="4"></td>
-        </tr>
-        <tr>
-          <td colspan="2" class="c" style="font-weight:700;">คะแนนพฤติกรรมคงเหลือรวม<br>( ${curData.start_score} คะแนน/ปีการศึกษา )</td>
-          <td class="c" style="font-weight:700;">${remaining}</td>
-          <td colspan="4"></td>
-        </tr>
-      </tfoot>
-    </table>
-
-    <div class="sign-grid" style="margin-top:5mm;">
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>ครูที่ปรึกษา</div>
-      </div>
-      <div class="sign-cell">
-        <div class="sign-line">ลงชื่อ ………………………………………</div>
-        <div>(……………………………………)</div>
-        <div>หัวหน้าระดับชั้น</div>
-      </div>
-    </div>
-    <div class="director-sign" style="margin-top:4mm;">
-      <div class="sign-line">ลงชื่อ ………………………………………</div>
-      <div>(……………………………………)</div>
-      <div>หัวหน้างานกิจการนักเรียน</div>
-    </div>
-    <div class="director-sign" style="margin-top:4mm;">
-      <div class="sign-line">ลงชื่อ ………………………………………</div>
-      <div>( ${directorName()} )</div>
-      <div>ผู้อำนวยการ${schoolName()}</div>
-    </div>
-  </div>`;
+  const cols = [56.8, 162.9, 85, 56.8, 63.6, 56.8, 63.6];   // ความกว้างคอลัมน์เท่าต้นฉบับ (pt)
+  const td4 = '<td></td><td></td><td></td><td></td>';
+  // ต้นฉบับ 11 แถว สูง 21.5pt — ถ้ารายการเกิน 11 ให้แถวเตี้ยลง (ไม่ต่ำกว่า 18.5pt) เพื่อยังพอดี 1 หน้า
+  const rowH = logs.length > 11 ? Math.max(18.5, 300 / logs.length).toFixed(1) : 21.5;
+  const row = (d, b, p) => `<tr style="height:${rowH}pt"><td contenteditable="true">${d}</td>`
+    + `<td class="l" contenteditable="true">${b}</td><td contenteditable="true">${p}</td>${td4}</tr>`;
+  let body = logs.map(l => row(esc(pcDateTiny(l.date)), esc((l.reason || '') + (l.note ? ' — ' + l.note : '')), Math.abs(l.points))).join('');
+  for (let i = logs.length; i < 11; i++) body += row('', '', '');
+  const table = `<table class="grid" style="margin-top:9.3pt;margin-left:-35.4pt;width:545.5pt;">
+    <colgroup>${cols.map(w => `<col style="width:${w}pt">`).join('')}</colgroup>
+    <thead>
+      <tr style="height:19pt"><th rowspan="2">วัน/เดือน/ปี</th><th rowspan="2">พฤติกรรมนักเรียน</th><th rowspan="2">คะแนนพฤติกรรมที่<br>ถูกหัก</th><th colspan="4">ลงชื่อ</th></tr>
+      <tr style="height:55pt"><th>นักเรียน</th><th>ครูที่ปรึกษา</th><th>หัวหน้า<br>ระดับชั้น</th><th>หัวหน้า<br>กิจการ<br>นักเรียน</th></tr>
+    </thead>
+    <tbody>${body}</tbody>
+    <tfoot>
+      <tr style="height:21pt"><td colspan="2" class="b">คะแนนพฤติกรรมที่ถูกหักรวม</td><td contenteditable="true">${totalDeduct || ''}</td>${td4}</tr>
+      <tr style="height:37.5pt"><td colspan="2" class="b">คะแนนพฤติกรรมคงเหลือรวม<br>( ${esc(curData.start_score)} คะแนน/ปีการศึกษา)</td><td contenteditable="true">${esc(curData.score)}</td>${td4}</tr>
+    </tfoot>
+  </table>`;
+  const nameJ = E('(นางจิราภา&nbsp; ศรัณย์บัณฑิต)');
+  return page('pc5', PL, PR,
+    absTxt('left:500.9pt', 49, 'ปค 5') + logoAt(21.3, 47.5, A4W / 2) + lines([
+    { y: 86, c: 'c b', h: 'แบบบันทึกพฤติกรรมนักเรียน' },
+    { y: 108, c: 'c b', h: `${esc(schoolName())} ภาคเรียนที่${F('', 57)}ปีการศึกษา${F('', 60)}` },
+    { y: 131, c: 'c b', h: `ชื่อ${F(s.name, 174)}เลขที่${F(s.number ?? '', 57)}ห้อง${F('ม.' + s.class_level + '/' + s.room, 44)}` },
+    { raw: table },
+    { mt: 19.5, fs: 15, h: cell(0, `ลงชื่อ${D(116)}ครูที่ปรึกษา`) + cell(280.7, `ลงชื่อ${D(101)}หัวหน้าระดับชั้น`) },
+    { dy: 24, fs: 15, h: cell(22.7, par('', 108)) + cell(297, par('', 106)) },
+    { dy: 36, fs: 15, h: cell(0, `ลงชื่อ${D(127)}`) + cell(280.7, `ลงชื่อ${D(126)}`) },
+    { dy: 21, fs: 15, h: cell(22.7, nameJ) + cell(322.8, nameJ) },
+    { dy: 20, fs: 15, h: cell(22.7, 'หัวหน้างานกิจการนักเรียน') + cell(271.4, `รองผู้อำนวยการ${esc(schoolName())}`) },
+    { dy: 40, fs: 15, c: 'c', h: `ลงชื่อ${D(142)}` },
+    { dy: 20, fs: 15, c: 'c', h: `(${dirName()})` },
+    { dy: 20, fs: 15, c: 'c', h: `${esc(directorTitle())}${esc(schoolName())}` },
+  ]), 'grow');
 }
 
 /* ===== ปค.7 — หนังสือเชิญผู้ปกครอง (นักเรียนประพฤติผิดระเบียบ) ===== */
 function renderPC7() {
-  const s = curData.student;
-  const ed = (w) => `<span class="editable" contenteditable="true" style="min-width:${w};text-align:center;"></span>`;
-  const pf = (val, w) => `<span class="editable" contenteditable="true" style="min-width:${w};">${val||''}</span>`;
-  const bl = () => `<span class="editable" contenteditable="true" style="display:block;min-height:5mm;"></span>`;
-  return `<div class="doc-page" style="position:relative;">
-    <span class="pc-tag" style="top:12mm;right:18mm;">ปค 7</span>
-    <div class="doc-body" style="margin-top:2mm;">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-        <div>ที่ ศธ. ${ed('20mm')} / ${ed('16mm')}</div>
-        <div style="text-align:center;">
-          <div>${schoolName()}</div>
-          <div>อำเภอตะกั่วทุ่ง จังหวัดพังงา</div>
-        </div>
-      </div>
-      <p style="text-align:center; margin-top:3mm;">วันที่ ${ed('12mm')} เดือน ${ed('26mm')} พ.ศ. ${ed('14mm')}</p>
-
-      <p style="margin-top:3mm;">เรื่อง&nbsp;&nbsp;&nbsp;&nbsp;นักเรียนประพฤติผิดระเบียบของโรงเรียน</p>
-      <p>เรียน&nbsp;&nbsp;&nbsp;&nbsp;ผู้ปกครอง ${pf(s.parent_name, '85mm')}</p>
-
-      <p style="margin-top:2mm;"><span class="ti"></span>ด้วย
-        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span>
-        นักเรียนชั้น ม.<span class="fill-inline" style="min-width:20mm;">${s.class_level}/${s.room}</span>
-        ในความปกครองของท่าน</p>
-      <p>ได้ประพฤติผิดระเบียบวินัยของโรงเรียน คือ
-        <span class="editable" contenteditable="true" style="display:inline-block;min-width:75mm;"></span></p>
-      <p>${bl()}</p>
-      <p style="margin-top:1mm;"><span class="ti"></span>ทางโรงเรียนจึงขอเชิญท่านมาพบ เพื่อทราบรายละเอียดและให้ความร่วมมือกับทางโรงเรียน
-        เพื่อหาวิธีการปรับปรุงแก้ไขพฤติกรรมนักเรียนให้เป็นไปในทางที่ดี ในวันที่ ${ed('12mm')} เดือน ${ed('24mm')} พ.ศ. ${ed('14mm')}
-        เวลา ${ed('16mm')} น. ณ ห้องประชุม${schoolName()}</p>
-      <p style="margin-top:1mm;"><span class="ti"></span>จึงเรียนมาเพื่อทราบและหวังว่าคงได้รับความร่วมมือจากท่านเป็นอย่างดี</p>
-    </div>
-
-    <div class="director-sign" style="margin-top:5mm;">
-      <div>ขอแสดงความนับถือ</div>
-      <div class="sign-line" style="margin-top:6mm;">ลงชื่อ ………………………………………</div>
-      <div>( ${directorName()} )</div>
-      <div>${directorTitle()}${schoolName()}</div>
-    </div>
-
-    <div style="border-top:1px dashed #000; margin-top:6mm; padding-top:2mm; text-align:center;">✂ ฉีกส่วนนี้ส่งคืนโรงเรียน</div>
-    <div class="doc-body" style="margin-top:1mm;">
-      <p style="text-align:center; font-weight:700;">แบบตอบรับ</p>
-      <p>เรียน&nbsp;&nbsp;&nbsp;&nbsp;${directorTitle()}${schoolName()}</p>
-      <p style="margin-top:1mm;"><span class="ti"></span>ข้าพเจ้า ${pf(s.parent_name, '55mm')} ผู้ปกครองของ
-        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span></p>
-      <p>นักเรียนชั้น ม.<span class="fill-inline" style="min-width:18mm;">${s.class_level}/${s.room}</span>
-        &nbsp;☐ สามารถมาตามวันนัดหมาย คือวันที่ ${ed('10mm')} เดือน ${ed('22mm')} พ.ศ. ${ed('12mm')}</p>
-      <p>&nbsp;&nbsp;&nbsp;&nbsp;☐ ขอเลื่อนเป็นวันที่ ${ed('10mm')} เดือน ${ed('22mm')} พ.ศ. ${ed('12mm')}</p>
-    </div>
-    <div class="director-sign" style="margin-top:4mm;">
-      <div class="sign-line">ลงชื่อ ……………………………………… ผู้ปกครอง</div>
-      <div>(………………………………………)</div>
-    </div>
-  </div>`;
+  const s = curData.student, PL = 70.9, PR = 44;
+  const cls = `${s.class_level}/${s.room}`;
+  return page('pc7', PL, PR,
+    absTxt('left:533.6pt', 39, 'ปค 7', 14) + absImg('/img/garuda.png', 27.9, 75.4, 304) + lines([
+    { y: 80, h: `ที่ ศธ${F('', 52)}/${F('', 47)}` + cell(345.2, esc(schoolName())) },
+    { y: 101, h: cell(345.2, 'อำเภอตะกั่วทุ่ง จังหวัดพังงา') },
+    { y: 143, h: cell(233.2, `วันที่${F('', 29.5)}เดือน${F('', 85)}พ.ศ${F('', 37)}`) },
+    { y: 172, h: `${lab('เรื่อง', 32.2)}นักเรียนประพฤติผิดระเบียบของโรงเรียน` },
+    { y: 193, h: `${lab('เรียน', 32.2)}ผู้ปกครอง${F(s.parent_name, 199)}` },
+    { y: 227, h: `${S(36)}ด้วย${F(s.name, 192)}นักเรียนชั้น&nbsp; ม.&nbsp;${F(cls, 31.5)}ในความปกครองของท่านได้` },
+    { y: 248, h: `ประพฤติผิดระเบียบวินัยของโรงเรียน&nbsp; คือ${F('', null, 'why')}${S(7)}` },
+    { y: 269, h: F('', null, 'why') },
+    { y: 290, h: F('', null, 'why') },
+    { y: 311, h: 'ทางโรงเรียนจึงขอเชิญท่านมาพบ เพื่อทราบรายละเอียดและให้ความร่วมมือกับทางโรงเรียนเพื่อหาวิธีการปรับปรุง' },
+    { y: 332, h: `แก้ไขพฤติกรรมนักเรียนให้เป็นไปในทางที่ดี ในวันที่${F('', 18)}เดือน${F('', 78)}พ.ศ${F('', 42)}เวลา${F('', 38)}น.` },
+    { y: 353, h: `ณ ห้องประชุม${esc(schoolName())}` },
+    { y: 374, h: `${S(72)}จึงเรียนมาเพื่อทราบและหวังว่าคงได้รับความร่วมมือจากท่านเป็นอย่างดี` },
+    { y: 434, h: cell(176.2, 'ขอแสดงความนับถือ') },
+    { y: 482, h: cell(264.6, `ลงชื่อ${D(155)}`) },
+    { y: 503, h: cell(259.1, `(${dirName()} )`, 200, true) },
+    { y: 524, h: cell(266.1, `${esc(directorTitle())}${esc(schoolName())}`) },
+    { y: 552, h: `<span style="display:inline-block;width:455pt;overflow:clip;">${'*'.repeat(160)}</span>` },
+    { y: 571, fs: 14, h: '(ฉีกส่วนนี้ส่งคืนโรงเรียน)' },
+    { y: 591, c: 'c b', h: 'แบบตอบรับ' },
+    { y: 612, h: `${lab('เรียน', 32.2)}${esc(directorTitle())}${esc(schoolName())}` },
+    { y: 633, h: `${S(72)}ข้าพเจ้า${F(s.parent_name, 164)}ผู้ปกครองของ${F(s.name)}${S(3)}` },
+    { y: 654, h: `นักเรียนชั้น ม.&nbsp;${F(cls, 23)}&nbsp;สามารถมาตามวันที่นัดหมายคือวันที่${F('', 17)}เดือน${F('', 59)}พ.ศ${F('', 44)}&nbsp;หรือ ขอเลื่อนเป็น` },
+    { y: 675, h: `วันที่${F('', 18)}เดือน${F('', 64)}พ.ศ${F('', 38)}` },
+    { y: 706, h: `${S(72)}จึงเรียนมาเพื่อทราบ` },
+    { y: 727, h: cell(252.1, `ลงชื่อ${D(155)}ผู้ปกครอง`) },
+    { y: 748, h: cell(276.2, par(s.parent_name, 144)) },
+  ]));
 }
 
 /* ===== ใบขออนุญาตออกนอกบริเวณโรงเรียน ===== */
 function renderLeave() {
-  const s = curData.student;
-  const ed = (w) => `<span class="editable" contenteditable="true" style="min-width:${w};text-align:center;"></span>`;
-  const bl = () => `<span class="editable" contenteditable="true" style="display:block;min-height:5mm;"></span>`;
-  const rsign = (line, role) => `<div style="margin-top:4mm; text-align:center;">
-      <div>${line} ${role}</div>
-      <div>(………………………………………)</div>
-    </div>`;
-  return `<div class="doc-page" style="position:relative;">
-    <div class="doc-head" style="margin-bottom:2mm;">
-      ${logoTag()}
-      <div class="sub" style="color:#777;">ระบบการดูแลช่วยเหลือนักเรียน</div>
-      <h2>ใบขออนุญาตออกนอกบริเวณโรงเรียน</h2>
-    </div>
-    <div class="doc-body" style="margin-top:2mm;">
-      <p style="text-align:right;">สถานที่ ${ed('55mm')}</p>
-      <p style="text-align:right;">วันที่ ${ed('12mm')} เดือน ${ed('26mm')} พ.ศ. ${ed('14mm')}</p>
-      <p style="margin-top:2mm;">เรื่อง&nbsp;&nbsp;&nbsp;&nbsp;ขออนุญาตออกนอกบริเวณโรงเรียน</p>
-      <p>เรียน&nbsp;&nbsp;&nbsp;&nbsp;หัวหน้าฝ่ายกิจการนักเรียน</p>
-
-      <p style="margin-top:2mm;"><span class="ti"></span>ด้วยข้าพเจ้า (ด.ช./ด.ญ./นาย/นางสาว)
-        <span class="fill" style="font-weight:600;">${studentFullName(s)}</span>
-        นักเรียนชั้น ม.<span class="fill-inline" style="min-width:18mm;">${s.class_level}/${s.room}</span></p>
-      <p>พร้อมด้วย <span class="editable" contenteditable="true" style="display:inline-block;min-width:120mm;"></span></p>
-      <p>${bl()}</p>
-      <p>มีความจำเป็นต้องออกนอกโรงเรียนเพื่อ
-        <span class="editable" contenteditable="true" style="display:inline-block;min-width:78mm;"></span></p>
-      <p>${bl()}</p>
-      <p>สถานที่ไป <span class="editable" contenteditable="true" style="display:inline-block;min-width:120mm;"></span></p>
-      <p>หมู่ที่ ${ed('12mm')} ตำบล ${ed('28mm')} อำเภอ ${ed('30mm')} จังหวัด ${ed('30mm')}</p>
-      <p>จึงขออนุญาตออกนอกโรงเรียนในวันที่ ${ed('12mm')} เดือน ${ed('24mm')} พ.ศ. ${ed('14mm')}</p>
-      <p>ตั้งแต่เวลา ${ed('18mm')} น. ถึง เวลา ${ed('18mm')} น.</p>
-      <p style="margin-top:1mm;"><span class="ti"></span>ข้าพเจ้าขอรับรองว่า ข้อความข้างต้นในการขออนุญาตออกนอกโรงเรียนในครั้งนี้ เป็นความจริง
-        ถ้าเกิดอะไรขึ้นเป็นผลเสียหาย จะไม่ถือว่าเป็นความผิดของโรงเรียน</p>
-    </div>
-
-    <div style="width:75mm; margin-left:auto; margin-top:4mm;">
-      <div style="text-align:center;">ขอแสดงความนับถือ</div>
-      ${rsign('ลงชื่อ ……………………………………','นักเรียน')}
-      ${rsign('ลงชื่อ ……………………………………','ผู้ปกครอง')}
-      ${rsign('ลงชื่อ ……………………………………','ครูที่ปรึกษา')}
-      ${rsign('ลงชื่อ ……………………………………','ครูฝ่ายกิจการนักเรียน')}
-    </div>
-  </div>`;
+  const s = curData.student, PL = 72, PR = 36;
+  const sig = (y, role, w, who = '') => [
+    { y, h: cell(216, `ลงชื่อ${D(w)}${role}`) },
+    { y: y + 23, h: cell(222.5, par(who, 110)) },
+  ];
+  return page('leave', PL, PR,
+    absTxt('right:41.3pt', 43, 'ระบบการดูแลช่วยเหลือนักเรียน', 13, 'color:#7f7f7f;')
+    + logoAt(23.3, 38.4, PL + (A4W - PL - PR) / 2) + lines([
+    { y: 79, fs: 18, c: 'c b', h: 'ใบขออนุญาตออกนอกบริเวณโรงเรียน' },
+    { y: 108, c: 'r', h: `สถานที่${F('', 119)}${S(19)}` },
+    { y: 129, c: 'r', h: `วันที่${F('', 28.5)}เดือน${F('', 62)}พ.ศ${F('', 31)}${S(19)}` },
+    { y: 157, h: `${lab('เรื่อง', 28.5)}ขออนุญาตออกนอกบริเวณโรงเรียน` },
+    { y: 178, h: `${lab('เรียน', 28.5)}หัวหน้าฝ่ายกิจการนักเรียน` },
+    // ต้นฉบับ Word ตัดบรรทัดเพี้ยนจนยาว 2 หน้า → จัดใหม่ 1 หน้า เว้นบรรทัดกว้างไว้เขียนด้วยมือ
+    { y: 208, h: `${S(36)}ด้วยข้าพเจ้า&nbsp; (ด.ช./ด.ญ./นาย/นางสาว)${F(studentFullName(s))}` },
+    { y: 235, h: `พร้อมด้วย${F('', null, 'with')}` },
+    { y: 262, h: F('', null, 'with') },
+    { y: 289, h: `มีความจำเป็นต้องออกนอกโรงเรียนเพื่อ${F('', null, 'why')}` },
+    { y: 316, h: F('', null, 'why') },
+    { y: 343, h: `สถานที่ไป${F()}` },
+    { y: 370, h: `หมู่ที่${F('', 36)}ตำบล${F('', 75)}อำเภอ${F('', 88)}จังหวัด${F()}` },
+    { y: 397, h: `จึงขออนุญาตออกนอกโรงเรียนในวันที่${F('', 83)}เดือน${F('', 73)}พ.ศ${F()}` },
+    { y: 424, h: `ตั้งแต่เวลา${F('', 78)}น.&nbsp;&nbsp; ถึง&nbsp;&nbsp; เวลา${F('', 98)}น.` },
+    { y: 457, h: `${S(36)}ข้าพเจ้าขอรับรองว่า ข้อความข้างต้นในการขออนุญาตออกนอกโรงเรียนในครั้งนี้ เป็นความจริง` },
+    { y: 478, h: 'ถ้าเกิดอะไรขึ้นเป็นผลเสียหาย จะไม่ถือว่าเป็นความผิดของโรงเรียน' },
+    { y: 520, h: cell(262.8, 'ขอแสดงความนับถือ') },
+    ...sig(556, 'นักเรียน', 116, s.name),
+    ...sig(614, 'ผู้ปกครอง', 114, s.parent_name),
+    ...sig(672, 'ครูที่ปรึกษา', 111),
+    ...sig(730, 'ครูฝ่ายกิจการนักเรียน', 116),
+  ]));
 }
 </script>
 </body>
