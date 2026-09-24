@@ -32,7 +32,8 @@
       font-weight: 700; line-height: 19pt; white-space: nowrap; }
     .tt-box u { text-decoration: none; border-bottom: 1pt dotted #000; padding: 0 4pt; }
     table.tt-grid { margin: 0 0 0 16.7pt; width: 779pt; border-collapse: collapse; table-layout: fixed; }
-    .tt-page { padding-top: 119pt; }
+    /* เนื้อหาหน้าแนวนอน 297×210 มม. — แยกจากกล่องกระดาษ เพื่อหมุนลงกระดาษแนวตั้งได้ (Safari) */
+    .tt-rot { position: relative; width: 297mm; height: 210mm; padding-top: 119pt; box-sizing: border-box; }
     table.tt-grid td, table.tt-grid th { border: 2.25pt double #000; text-align: center; vertical-align: middle;
       padding: 0 2pt; font-weight: 400; overflow: hidden; }
     table.tt-grid th { font-weight: 700; }
@@ -104,10 +105,20 @@
       nav, .controls, .no-print, footer, .modal { display: none !important; }
       .tt-wrap { padding: 0; overflow: visible; }
       .container, .container-fluid { max-width: none !important; padding: 0 !important; margin: 0 !important; }
-      .tt-page { margin: 0; box-shadow: none; height: 209.5mm; overflow: hidden; break-after: page; page-break-after: always; }
+      /* contain: size = ห้ามตัดหน้าภายในแผ่น — Safari จัดหน้ารอบแรกด้วยกระดาษเล็กกว่าจริง แล้วดันแถวตารางลงจนยืดล้นหน้า */
+      .tt-page { margin: 0; box-shadow: none; height: 209.5mm; overflow: hidden; contain: size; break-after: page; page-break-after: always; }
       .tt-page:last-child { break-after: auto; page-break-after: auto; }
+      .tt-rot { height: 209.5mm; }
       .tt-mobile-only { display: none !important; }
       .tt-desktop-only { display: block !important; }
+      /* กระดาษแนวตั้ง (Safari/iPad ไม่ทำตาม @page แนวนอน) → หมุนตาราง 90° ให้เต็มแผ่น = ได้เหมือนพิมพ์แนวนอน
+         วัดจากความกว้างหน้าพิมพ์จริง (container query) เพราะ media query ของ Safari วัดจากหน้าต่าง ไม่ใช่กระดาษ
+         กระดาษตั้ง ≈ 197 มม. → หมุน · กระดาษนอน ≈ 278 มม. / Chrome 297 มม. → ไม่หมุน */
+      .tt-wrap { container-type: inline-size; }
+      @container (max-width: 240mm) {
+        .tt-page { width: 210mm !important; height: 296.5mm !important; }
+        .tt-rot { transform-origin: 0 0; transform: translateY(296.5mm) rotate(-90deg); }
+      }
     }
   </style>
 </head>
@@ -350,7 +361,7 @@ function pageHTML(mode, key) {
   const dirTitle = (T.school.director_title || 'ผู้อำนวยการ');
   const dirFull = school.startsWith('โรงเรียน') ? dirTitle.replace(/โรงเรียน$/, '') + school : dirTitle + school;
   const sign = (cls, name, role) => `<div class="tt-sign ${cls}">ลงชื่อ.........................................................<br>(${esc(name)})<br>${esc(role)}</div>`;
-  return `<div class="tt-page">
+  return `<div class="tt-page"><div class="tt-rot">
     ${box}
     <div class="tt-title">${title}</div>
     <table class="tt-grid">
@@ -360,7 +371,7 @@ function pageHTML(mode, key) {
       ${rows}
     </table>
     <div class="tt-signs">${signers[0] ? sign('l', signers[0].name, signers[0].title) : ''}${sign('r', T.school.director || '', dirFull)}</div>
-  </div>`;
+  </div></div>`;
 }
 
 function teacherCounts(tid) {
@@ -432,11 +443,12 @@ function fitPages() {
   if (!wrap) return;
   const hidden = getComputedStyle(wrap).display === 'none';
   if (hidden) wrap.setAttribute('style', 'display:block !important; position:absolute; left:-20000px; top:0; visibility:hidden;');
-  wrap.querySelectorAll('.tt-page').forEach(pg => {
+  wrap.querySelectorAll('.tt-rot').forEach(pg => {
     const signs = pg.querySelector('.tt-signs'), title = pg.querySelector('.tt-title'), tb = pg.querySelector('table.tt-grid');
     signs.style.marginTop = ''; pg.style.paddingTop = ''; title.style.top = ''; tb.style.zoom = '';
     // px ที่ล้น: ลงชื่อบรรทัดสุดท้ายต้องเหลือขอบล่าง ≥ 36pt (48px) เหมือนต้นฉบับ
-    const over = () => signs.getBoundingClientRect().bottom - pg.getBoundingClientRect().top + 48 - pg.clientHeight;
+    // (วัดด้วย offset ไม่ใช้ getBoundingClientRect — ตอนพิมพ์บนกระดาษแนวตั้งหน้าถูกหมุน ค่า rect จะเพี้ยน)
+    const over = () => signs.offsetTop + signs.offsetHeight + 48 - pg.clientHeight;
     const px2pt = 0.75;
     let o = over();
     if (o <= 0) return;

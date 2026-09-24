@@ -670,6 +670,25 @@ def apply_attendance_behavior(con, student_id, att_id, date, status, settings, u
 
 # ── STATIC ────────────────────────────────────────────────
 
+@app.get('/sw.js')
+def service_worker():
+    """sw.js + เลขเวอร์ชันจากเวลาแก้ไขไฟล์หน้าเว็บ (js/css/html)
+    → git pull เมื่อไร เบราว์เซอร์ทุกเครื่องล้างแคชเก่าแล้วโหลดหน้าใหม่เอง (ไม่ต้องกดรีเฟรชแรง ๆ)"""
+    pub = os.path.join(BASE, 'public')
+    stamp = 0
+    for sub in ('js', 'css', ''):
+        folder = os.path.join(pub, sub)
+        for name in os.listdir(folder):
+            if sub or name.endswith('.html'):
+                try:
+                    stamp = max(stamp, int(os.path.getmtime(os.path.join(folder, name))))
+                except OSError:
+                    pass
+    with open(os.path.join(pub, 'sw.js'), encoding='utf-8') as fh:
+        lines = fh.read().split('\n')
+    lines = [f"const VERSION = 'v3-{stamp}';" if ln.startswith('const VERSION = ') else ln for ln in lines]
+    return app.response_class('\n'.join(lines), mimetype='text/javascript')
+
 @app.route('/')
 def index():
     if 'user_id' not in session:
