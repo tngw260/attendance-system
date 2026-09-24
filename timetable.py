@@ -399,7 +399,12 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         if not name:
             return jsonify(success=False, message='ใส่ชื่อครู'), 400
         with get_db() as con:
-            if con.execute('SELECT 1 FROM tt_teachers WHERE name=?', (name,)).fetchone():
+            old = con.execute('SELECT * FROM tt_teachers WHERE name=?', (name,)).fetchone()
+            if old and not old['active']:        # เคยย้ายออก/ปิดไว้ → เปิดใช้คนเดิม
+                con.execute('UPDATE tt_teachers SET active=1 WHERE id=?', (old['id'],))
+                t = con.execute('SELECT * FROM tt_teachers WHERE id=?', (old['id'],)).fetchone()
+                return jsonify(success=True, teacher=dict(t, constraints=jl(t['constraints'], {})))
+            if old:
                 return jsonify(success=False, message='มีชื่อนี้แล้ว'), 409
             n = con.execute('SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM tt_teachers').fetchone()['n']
             tid = con.execute('INSERT INTO tt_teachers (name, sort_order) VALUES (?,?)', (name, n)).lastrowid
@@ -432,7 +437,10 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     cons['unavailable'] = [list(x) for x in un]
                 if str(c.get('max_per_day') or '').isdigit() and int(c['max_per_day']) > 0:
                     cons['max_per_day'] = int(c['max_per_day'])
-                con.execute('UPDATE tt_teachers SET constraints=? WHERE id=?', (json.dumps(cons), tid))
+                note = re.sub(r'\s+', ' ', str(c.get('note') or '')).strip()[:100]
+                if note:
+                    cons['note'] = note          # เหตุผลที่ไม่ว่าง เช่น ไปธนาคาร — แสดงในคำเตือน
+                con.execute('UPDATE tt_teachers SET constraints=? WHERE id=?', (json.dumps(cons, ensure_ascii=False), tid))
             if 'user_id' in b:
                 uid = b.get('user_id') or None
                 if uid:
@@ -442,6 +450,50 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 con.execute('UPDATE tt_teachers SET active=? WHERE id=?', (1 if b['active'] else 0, tid))
             t = con.execute('SELECT * FROM tt_teachers WHERE id=?', (tid,)).fetchone()
         return jsonify(success=True, teacher=dict(t, constraints=jl(t['constraints'], {})))
+
+    @app.post('/api/tt/terms/<int:term_id>/transfer-teacher')
+    @admin_required
+    def tt_transfer_teacher(term_id):
+        """ครูย้ายออก / เปลี่ยนผู้สอน: โอนทุกวิชา+กิจกรรมของครูคนหนึ่ง "เฉพาะภาคเรียนนี้" ให้ครูอีกคน
+        {from_id, to_id | new_name, deactivate} — ภาคเรียนอื่นไม่แตะ ตารางเทอมเก่ายังเป็นชื่อครูเดิม
+        ครูที่ยังไม่มา ใช้ชื่อชั่วคราว เช่น "ใหม่ (แทนกันต์กวี)" → มาถึงแล้วแก้ชื่อ + ผูกบัญชีที่ "เงื่อนไขครู" """
+        b = request.get_json() or {}
+        try:
+            src, dst = int(b.get('from_id') or 0), int(b.get('to_id') or 0)
+        except (TypeError, ValueError):
+            return jsonify(success=False, message='ข้อมูลครูไม่ถูกต้อง'), 400
+        with get_db() as con:
+            if not con.execute('SELECT 1 FROM tt_terms WHERE id=?', (term_id,)).fetchone():
+                return jsonify(success=False, message='ไม่พบภาคเรียน'), 404
+            s = con.execute('SELECT * FROM tt_teachers WHERE id=?', (src,)).fetchone()
+            if not s:
+                return jsonify(success=False, message='ไม่พบครู'), 404
+            if dst:
+                if dst == src or not con.execute('SELECT 1 FROM tt_teachers WHERE id=?', (dst,)).fetchone():
+                    return jsonify(success=False, message='เลือกครูที่รับโอนไม่ถูกต้อง'), 400
+                con.execute('UPDATE tt_teachers SET active=1 WHERE id=?', (dst,))
+            else:
+                name = bare_name(b.get('new_name', ''))
+                if not name:
+                    return jsonify(success=False, message='ใส่ชื่อครูใหม่'), 400
+                if con.execute('SELECT 1 FROM tt_teachers WHERE name=?', (name,)).fetchone():
+                    return jsonify(success=False, message=f'มีครูชื่อ "{name}" แล้ว — เลือกจากรายชื่อแทน'), 409
+                dst = con.execute('INSERT INTO tt_teachers (name, sort_order) VALUES (?,?)',   # ลำดับเดียวกับครูเดิม
+                                  (name, s['sort_order'])).lastrowid
+            moved = 0
+            for l in con.execute('SELECT id, teacher_ids FROM tt_lessons WHERE term_id=?', (term_id,)).fetchall():
+                ids = jl(l['teacher_ids'], [])
+                if src in ids:
+                    new = []
+                    for t in ids:
+                        t = dst if t == src else t
+                        if t not in new:
+                            new.append(t)
+                    con.execute('UPDATE tt_lessons SET teacher_ids=? WHERE id=?', (json.dumps(new), l['id']))
+                    moved += 1
+            if b.get('deactivate'):
+                con.execute('UPDATE tt_teachers SET active=0 WHERE id=?', (src,))
+        return jsonify(success=True, moved=moved, to_id=dst)
 
     @app.put('/api/tt/terms/<int:term_id>')
     @admin_required

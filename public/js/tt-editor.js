@@ -14,6 +14,10 @@ const lunchAfter = () => T.term.config.lunch_after || 4;
 const slotHas = (l, d, p) => l.slots.some(s => s[0] === d && s[1] === p);
 const lockedAt = (l, d, p) => l.slots.some(s => s[0] === d && s[1] === p && s[2]);
 
+// ครูตั้งไว้ว่าไม่ว่าง (เช่น ไปธนาคารบ่ายวันศุกร์) — วิชาสอน = ชน / กิจกรรม (ประชุม ชุมนุม) = แค่เตือน
+const isUnavailable = (tid, d, p) => (((IDX.teachers[tid] || {}).constraints || {}).unavailable || []).some(([a, b]) => a === d && b === p);
+const unavReason = tid => ((IDX.teachers[tid] || {}).constraints || {}).note || 'เงื่อนไขครู';
+
 // สองรายการในห้องเดียวกันเรียนพร้อมกันไม่ได้ ถ้ามีฝั่งใดเรียนทั้งห้อง หรือสายซ้อนกัน
 function classOverlap(a, b) {
   const ta = tracksOf(a), tb = tracksOf(b);
@@ -32,9 +36,8 @@ function conflictsAt(l, d, p) {
     if (cc.length && classOverlap(l, x)) out.push({ hard: true, msg: `${cc.map(classShort).join(', ')} เรียน ${lessonName(x)} อยู่แล้ว` });
   });
   l.teacher_ids.forEach(tid => {
-    const t = IDX.teachers[tid];
-    if (t && ((t.constraints || {}).unavailable || []).some(([a, b]) => a === d && b === p))
-      out.push({ hard: true, msg: `${teacherShort(tid)} ไม่ว่างคาบนี้ (เงื่อนไขครู)` });
+    if (isUnavailable(tid, d, p))
+      out.push({ hard: l.kind === 'subject', msg: `${teacherShort(tid)} ไม่ว่างคาบนี้ (${unavReason(tid)})` });
   });
   if (((l.options || {}).avoid || []).includes(p)) out.push({ hard: false, msg: `วิชานี้ตั้งให้เลี่ยงคาบ ${p}` });
   if (!(l.options || {}).allow_same_day && l.kind === 'subject') {
@@ -78,9 +81,10 @@ function allIssues() {
         hard.push({ d, p, type: 'class', key: cc[0], msg: `${cc.map(classShort).join(', ')} ชน ${lessonName(a)} กับ ${lessonName(b)}` });
     }
     ls.forEach(l => l.teacher_ids.forEach(tid => {
-      const t = IDX.teachers[tid];
-      if (t && ((t.constraints || {}).unavailable || []).some(([a, b]) => a === d && b === p))
-        hard.push({ d, p, type: 'teacher', key: tid, msg: `${teacherShort(tid)} ไม่ว่างแต่มี ${lessonName(l)}` });
+      if (!isUnavailable(tid, d, p)) return;
+      const msg = `${teacherShort(tid)} ไม่ว่าง (${unavReason(tid)}) แต่มี ${lessonName(l)} ${classLabel(l)}`.trim();
+      if (l.kind === 'subject') hard.push({ d, p, type: 'teacher', key: tid, lid: l.id, msg });   // lid → ขึ้นในมุมมองห้องด้วย
+      else soft.push({ d, p, type: 'teacher', key: tid, msg });                                    // กิจกรรมรวม: เตือนเฉพาะครูคนนั้น
     }));
   });
   T.lessons.forEach(l => {
@@ -448,28 +452,75 @@ async function openTeacherModal(tid) {
   let users = [];
   try { users = await apiFetch('/api/tt/users'); } catch (e) {}
   const un = new Set((c.unavailable || []).map(([d, p]) => `${d}-${p}`));
-  let grid = '<table class="table table-sm table-bordered text-center mb-1 tc-grid"><tr><th></th>' + P.map(x => `<th>${x.no}</th>`).join('') + '</tr>';
+  const quick = d => [['เช้า', 'am'], ['บ่าย', 'pm'], ['ทั้งวัน', 'all']]
+    .map(([lab, k]) => `<button type="button" class="btn btn-link btn-sm p-0 px-1" onclick="tcToggle(${d},'${k}')">${lab}</button>`).join('');
+  let grid = '<div class="table-responsive"><table class="table table-sm table-bordered text-center mb-1 tc-grid"><tr><th></th>' + P.map(x => `<th>${x.no}</th>`).join('') + '<th class="small fw-normal text-muted">ทั้งช่วง</th></tr>';
   DAYS.forEach((dn, di) => {
-    grid += `<tr><th class="text-start">${dn}</th>` + P.map(x => `<td class="tc ${un.has(`${di + 1}-${x.no}`) ? 'off' : ''}" data-k="${di + 1}-${x.no}"></td>`).join('') + '</tr>';
+    grid += `<tr><th class="text-start">${dn}</th>` + P.map(x => `<td class="tc ${un.has(`${di + 1}-${x.no}`) ? 'off' : ''}" data-k="${di + 1}-${x.no}"></td>`).join('')
+          + `<td class="text-nowrap p-0 align-middle">${quick(di + 1)}</td></tr>`;
   });
-  grid += '</table>';
+  grid += '</table></div>';
+  // ครูย้ายออก → โอนวิชาทั้งภาคเรียนให้ครูคนอื่น / ครูใหม่ที่รอย้ายมา
+  const mine = T.lessons.filter(l => l.teacher_ids.includes(tid)), first = t.name.split(' ')[0];
+  const transfer = !mine.length ? '' : `
+    <hr class="my-2">
+    <div class="small fw-bold"><i class="bi bi-arrow-left-right"></i> ครูย้ายออก / เปลี่ยนผู้สอน</div>
+    <div class="small text-muted mb-1">โอนวิชาและกิจกรรมทั้งหมดของครู${esc(first)} (${mine.length} รายการ ${mine.reduce((s, l) => s + l.per_week, 0)} คาบ/สัปดาห์)
+      เฉพาะภาคเรียน ${esc(T.term.name)} — ตารางภาคเรียนก่อน ๆ ยังเป็นชื่อเดิม</div>
+    <select id="tfTo" class="form-select form-select-sm mb-1" onchange="el('tfNameRow').classList.toggle('d-none', this.value !== 'new')">
+      <option value="new">ให้ ➕ ครูใหม่ (รอย้ายมา)</option>
+      ${T.teachers.filter(x => x.id !== tid).map(x => `<option value="${x.id}">ให้ ครู${esc(x.name)}</option>`).join('')}</select>
+    <div id="tfNameRow" class="mb-1"><input id="tfName" class="form-control form-control-sm" maxlength="60" value="ใหม่ (แทน${esc(first)})">
+      <div class="form-text mt-0">ชื่อชั่วคราว (คำแรกขึ้นในช่องตาราง เช่น "ครูใหม่") — ครูมาถึงแล้วค่อยแก้เป็นชื่อจริง + ผูกบัญชีผู้ใช้</div></div>
+    <div class="form-check small mb-2"><input class="form-check-input" type="checkbox" id="tfOut" checked>
+      <label class="form-check-label" for="tfOut">ครู${esc(first)}ย้ายออกแล้ว (ไม่ต้องแสดงในภาคเรียนถัด ๆ ไป)</label></div>
+    <button type="button" class="btn btn-outline-danger btn-sm" onclick="transferTeacher(${tid})"><i class="bi bi-arrow-left-right"></i> โอนวิชาทั้งหมด</button>`;
   const body = `
     <label class="form-label small mb-0">ชื่อ-นามสกุล</label><input id="tcName" class="form-control form-control-sm mb-2" value="${esc(t.name)}">
     <label class="form-label small mb-0">บัญชีผู้ใช้ในระบบ <span class="text-muted">(ครูล็อกอินแล้วเห็นตารางตัวเองทันที)</span></label>
     <select id="tcUser" class="form-select form-select-sm mb-2"><option value="">— ไม่ผูก —</option>${users.map(u => `<option value="${u.id}" ${u.id === t.user_id ? 'selected' : ''}>${esc(u.full_name)} (${u.role === 'admin' ? 'แอดมิน' : 'ครู'})</option>`).join('')}</select>
-    <label class="form-label small mb-0">คาบที่ <b class="text-danger">ไม่ว่าง</b> (แตะช่องเพื่อสลับ เช่น ไปราชการประจำ / มีงานอื่น)</label>
+    <label class="form-label small mb-0">คาบที่ <b class="text-danger">ไม่ว่าง</b> — จัดอัตโนมัติจะไม่วางสอนช่องนี้ (แตะช่องเพื่อสลับ หรือกด เช้า / บ่าย / ทั้งวัน)</label>
     ${grid}
+    <input id="tcNote" class="form-control form-control-sm mb-2" maxlength="100" value="${esc(c.note || '')}" placeholder="เหตุผลที่ไม่ว่าง เช่น ไปธนาคารบ่ายวันศุกร์ (ขึ้นในคำเตือน)">
     <div class="row g-2 align-items-center"><div class="col-auto small">สอนไม่เกินวันละ</div>
-      <div class="col-3"><input id="tcMax" type="number" min="0" max="7" class="form-control form-control-sm" value="${c.max_per_day || ''}" placeholder="ไม่จำกัด"></div><div class="col-auto small">คาบ</div></div>`;
+      <div class="col-3"><input id="tcMax" type="number" min="0" max="7" class="form-control form-control-sm" value="${c.max_per_day || ''}" placeholder="ไม่จำกัด"></div><div class="col-auto small">คาบ</div></div>
+    ${transfer}`;
   showModal(`เงื่อนไขครู${esc(t.name)}`, body,
     `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button><button class="btn btn-primary btn-sm" onclick="saveTeacher(${tid})"><i class="bi bi-save"></i> บันทึก</button>`);
   document.querySelectorAll('.tc-grid td.tc').forEach(td => td.addEventListener('click', () => td.classList.toggle('off')));
 }
 
+// เลือกทั้งช่วง: เช้า = ก่อนพักกลางวัน / บ่าย = หลังพัก — ถ้าปิดครบอยู่แล้ว กดซ้ำ = เปิดคืน
+function tcToggle(d, part) {
+  const tds = [...document.querySelectorAll(`.tc-grid td.tc[data-k^="${d}-"]`)].filter(td => {
+    const p = +td.dataset.k.split('-')[1];
+    return part === 'all' || (part === 'am' ? p <= lunchAfter() : p > lunchAfter());
+  });
+  const allOff = tds.every(td => td.classList.contains('off'));
+  tds.forEach(td => td.classList.toggle('off', !allOff));
+}
+
+async function transferTeacher(tid) {
+  const isNew = el('tfTo').value === 'new', to = +el('tfTo').value || null;
+  const name = isNew ? el('tfName').value.trim() : '';
+  if (isNew && !name) { alert('ใส่ชื่อครูใหม่ (ชื่อชั่วคราวได้)'); return; }
+  const toLabel = isNew ? 'ครู' + name.replace(/^ครู/, '').trim().split(' ')[0] : teacherShort(to);
+  if (!confirm(`โอนวิชาและกิจกรรมทั้งหมดของ${teacherShort(tid)} ภาคเรียน ${T.term.name} ให้ ${toLabel}?`)) return;
+  try {
+    const r = await apiFetch(`/api/tt/terms/${T.term.id}/transfer-teacher`, { method: 'POST',
+      body: JSON.stringify({ from_id: tid, to_id: to, new_name: name, deactivate: el('tfOut').checked }) });
+    edModal.hide();
+    ED.by = 'teacher'; ED.key = String(r.to_id);
+    await loadTerm(T.term.id);
+    alert(`โอนแล้ว ${r.moved} รายการ → ${toLabel}` +
+          (isNew ? `\n\nเมื่อครูใหม่มาถึง: เลือก${toLabel} → กด "เงื่อนไขครู" → แก้เป็นชื่อจริง + เลือกบัญชีผู้ใช้` : ''));
+  } catch (e) { alert(e.message); }
+}
+
 async function saveTeacher(tid) {
   const unavailable = [...document.querySelectorAll('.tc-grid td.tc.off')].map(td => td.dataset.k.split('-').map(Number));
   const body = { name: el('tcName').value, user_id: +el('tcUser').value || null,
-                 constraints: { unavailable, max_per_day: +el('tcMax').value || 0 } };
+                 constraints: { unavailable, max_per_day: +el('tcMax').value || 0, note: el('tcNote').value.trim() } };
   try {
     const r = await apiFetch(`/api/tt/teachers/${tid}`, { method: 'PUT', body: JSON.stringify(body) });
     T.teachers[T.teachers.findIndex(t => t.id === tid)] = r.teacher;
