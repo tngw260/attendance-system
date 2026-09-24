@@ -68,9 +68,9 @@
         </select>
       </div>
       <div class="col-md-3" id="logPickWrap" style="display:none;">
-        <label class="form-label small fw-600 mb-1">เลือกรายการที่จะออกใบ (ปค.4)</label>
+        <label class="form-label small fw-600 mb-1">ความผิดที่จะใส่ในใบ (จากรายการหักคะแนน)</label>
         <select id="selLog" class="form-select form-select-sm" onchange="render()">
-          <option value="">-- ทั้งหมด/ล่าสุด --</option>
+          <option value="">-- ครั้งล่าสุด --</option>
         </select>
       </div>
       <div class="col-md-2 d-flex gap-1">
@@ -163,18 +163,34 @@ async function loadStudent() {
   if (!sid) { curData = null; render(); return; }
   try {
     curData = await apiFetch(`/api/behavior/${sid}`);
-    // เติม dropdown รายการตัดคะแนน (เฉพาะที่หักคะแนน points<0) สำหรับ ปค.4
-    const selLog = document.getElementById('selLog');
-    selLog.innerHTML = '<option value="">-- ล่าสุด --</option>';
-    (curData.logs||[]).filter(l => l.points < 0).forEach(l => {
-      const o = document.createElement('option');
-      o.value = l.id;
-      o.textContent = `${pcDateShort(l.date)} • ${l.reason} (${l.points})`;
-      selLog.appendChild(o);
-    });
+    fillLogPicker();
     render();
   } catch(e){ alert(e.message); }
 }
+
+// ฟอร์มที่ดึง "ความผิด" จากรายการหักคะแนนมาเติมให้
+const LOG_FORMS = ['pc1', 'pc4', 'pc7'];
+
+// เติม dropdown รายการตัดคะแนน (เฉพาะที่หักคะแนน points<0)
+function fillLogPicker() {
+  const selLog = el('selLog');
+  selLog.innerHTML = '<option value="">-- ครั้งล่าสุด --</option><option value="none">-- เว้นว่าง (เขียนเอง) --</option>';
+  ((curData && curData.logs) || []).filter(l => l.points < 0).forEach(l => {
+    const o = document.createElement('option');
+    o.value = l.id;
+    o.textContent = `${pcDateShort(l.date)} • ${l.reason} (${l.points})`;
+    selLog.appendChild(o);
+  });
+}
+
+// รายการที่เลือกใน dropdown: "" = ครั้งล่าสุด, "none" = เว้นว่าง
+function pickedLog() {
+  const id = el('selLog').value;
+  if (id === 'none') return null;
+  const logs = (curData.logs || []).filter(l => l.points < 0);   // เรียงใหม่→เก่าจาก API แล้ว
+  return id ? logs.find(l => String(l.id) === id) || null : logs[0] || null;
+}
+const logText = l => l ? l.reason + (l.note ? ' — ' + l.note : '') : '';
 
 function thaiDateLong(iso) {
   if (!iso) return { d:'', m:'', y:'' };
@@ -217,9 +233,10 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 const lhOf = fs => Math.round(fs * 13.1) / 10;                  // ระยะบรรทัด single ของ Word (16pt → 21pt)
 const baseOf = (fs, lh) => (lh - 1.301 * fs) / 2 + 0.844 * fs;  // ขอบบนบรรทัด → เส้นฐาน (เมทริกซ์ TH Sarabun New)
 
-// ช่องกรอก (จุดไข่ปลา) — w = กว้างอย่างน้อยกี่ pt, ไม่ใส่ = ยาวถึงสุดบรรทัด, g = กลุ่มที่ข้อความล้นไปต่อบรรทัดถัดไปได้
+// ช่องกรอก (จุดไข่ปลา) — w = กว้างอย่างน้อยกี่ pt, ไม่ใส่ = ยาวถึงสุดบรรทัด
+// g = กลุ่มข้อความยาวหลายบรรทัด (ล้นแล้วต่อบรรทัดถัดไป) → ชิดซ้ายให้อ่านต่อเนื่อง ช่องอื่นอยู่กลางเส้นจุด
 function F(val = '', w = null, g = '') {
-  const cls = 'f' + (w == null ? ' x' : '');
+  const cls = 'f' + (w == null ? ' x' : '') + (g ? ' l' : '');
   const st = w == null ? '' : ` style="min-width:${w}pt"`;
   return `<span class="${cls}"${st}><span class="v" contenteditable="true"${g ? ` data-g="${g}"` : ''}>${esc(val)}</span></span>`;
 }
@@ -320,7 +337,7 @@ document.addEventListener('keydown', e => {   // Enter ในช่องกร�
 
 function render() {
   const form = el('selForm').value;
-  el('logPickWrap').style.display = (form === 'pc4') ? '' : 'none';
+  el('logPickWrap').style.display = LOG_FORMS.includes(form) ? '' : 'none';
   if (!curData) {
     el('content').innerHTML = `<div class="doc-page"><div class="text-center text-muted py-5">
       <i class="bi bi-person-x fs-1 d-block mb-2"></i>กรุณาเลือกนักเรียน</div></div>`;
@@ -417,9 +434,9 @@ async function loadSavedForm(fid) {
     // set dropdowns ให้ตรง (เพื่อ save ทับได้ถูก type/นักเรียน)
     el('selForm').value = f.form_type;
     el('selStudent').value = f.student_id;
-    el('logPickWrap').style.display = (f.form_type === 'pc4') ? '' : 'none';
+    el('logPickWrap').style.display = LOG_FORMS.includes(f.form_type) ? '' : 'none';
     // โหลด curData ของนักเรียน (เพื่อ save ต่อได้)
-    try { curData = await apiFetch(`/api/behavior/${f.student_id}`); } catch(e){}
+    try { curData = await apiFetch(`/api/behavior/${f.student_id}`); fillLogPicker(); } catch(e){}
     curFormId = fid;
     el('content').innerHTML = html;
     // ฟอร์มที่บันทึกก่อนปรับแบบใหม่ ใช้หน้าตาแบบเดิม
@@ -510,6 +527,7 @@ function renderPC3() {
 function renderPC1() {
   const s = curData.student, PL = 70.8, PR = 30;
   const cls = `${s.class_level}/${s.room}`;
+  const log = pickedLog(), ev = thaiDateLong(log ? log.date : '');   // เรื่อง + วันที่เกิดเหตุ จากรายการหักคะแนน
   return page('pc1', PL, PR,
     absTxt('left:502.8pt', 39, 'ปค 1', 14) + logoAt(34.2, 48, PL + (A4W - PL - PR) / 2) + lines([
     { y: 112, fs: 18, c: 'c b', h: `แบบบันทึกการกระทำผิดของนักเรียน&nbsp; ครั้งที่&nbsp;${F('', 17.5)}` },
@@ -517,9 +535,9 @@ function renderPC1() {
     { y: 155, c: 'r', h: 'อำเภอตะกั่วทุ่ง จังหวัดพังงา' },
     { y: 178, fs: 18, c: 'r', h: `วันที่${F('', 26)}เดือน${F('', 82)}พ.ศ${F('', 44)}` },
     { y: 227, h: `${S(35.4)}ข้าพเจ้า${F(s.name, 181)}นักเรียนชั้น ม.&nbsp;${F(cls, 39)}&nbsp;ได้กระทำผิดระเบียบของโรงเรียน` },
-    { y: 248, h: `เรื่อง&nbsp;${F('', null, 'topic')}` },
+    { y: 248, h: `เรื่อง&nbsp;${F(logText(log), null, 'topic')}` },
     { y: 269, h: F('', null, 'topic') },
-    { y: 289, h: `เหตุเกิดเมื่อ&nbsp; วันที่${F('', 22)}เดือน${F('', 99)}พ.ศ${F('', 45)}เวลา${F('', 61)}น.` },
+    { y: 289, h: `เหตุเกิดเมื่อ&nbsp; วันที่${F(ev.d, 22)}เดือน${F(ev.m, 99)}พ.ศ${F(ev.y, 45)}เวลา${F('', 61)}น.` },
     { y: 310, h: `สถานที่เกิดเหตุ${F()}${S(20)}` },
     { y: 330, h: 'การกระทำของข้าพเจ้าดังกล่าว ข้าพเจ้าทราบว่าเป็นการกระทำที่ไม่ถูกต้อง ผิดระเบียบวินัยของโรงเรียนตะกั่วทุ่งงานทวี' },
     { y: 350, h: 'วิทยาคม&nbsp; หากข้าพเจ้ายังคงกระทำการใด ๆ อันไม่เหมาะสมนี้ ข้าพเจ้ายินดีให้ทางโรงเรียนพิจารณาโทษตามระเบียบ' },
@@ -540,12 +558,7 @@ function renderPC1() {
 /* ===== ปค.4 — แบบฟอร์มตัดคะแนนความประพฤตินักเรียน ===== */
 function renderPC4() {
   const s = curData.student, PL = 72, PR = 35;
-  // รายการที่เลือก (ไม่เลือก = ครั้งล่าสุดที่ถูกหักคะแนน)
-  const logId = el('selLog').value;
-  let log = null;
-  if (logId) log = (curData.logs||[]).find(l => String(l.id) === String(logId));
-  else log = (curData.logs||[]).filter(l => l.points < 0)[0] || null;
-  const reason = log ? log.reason + (log.note ? ' — ' + log.note : '') : '';
+  const log = pickedLog(), reason = logText(log);
   const dt = thaiDateLong(log ? log.date : todayLocalISO());
   return page('pc4', PL, PR,
     absTxt('left:517.6pt', 42, 'ปค 4') + logoAt(39.6, 40, PL + (A4W - PL - PR) / 2) + lines([
@@ -621,6 +634,7 @@ function renderPC5() {
 function renderPC7() {
   const s = curData.student, PL = 70.9, PR = 44;
   const cls = `${s.class_level}/${s.room}`;
+  const log = pickedLog();   // ความผิด ("คือ....") จากรายการหักคะแนน
   return page('pc7', PL, PR,
     absTxt('left:533.6pt', 39, 'ปค 7', 14) + absImg('/img/garuda.png', 27.9, 75.4, 304) + lines([
     { y: 80, h: `ที่ ศธ${F('', 52)}/${F('', 47)}` + cell(345.2, esc(schoolName())) },
@@ -629,7 +643,7 @@ function renderPC7() {
     { y: 172, h: `${lab('เรื่อง', 32.2)}นักเรียนประพฤติผิดระเบียบของโรงเรียน` },
     { y: 193, h: `${lab('เรียน', 32.2)}ผู้ปกครอง${F(s.parent_name, 199)}` },
     { y: 227, h: `${S(36)}ด้วย${F(s.name, 192)}นักเรียนชั้น&nbsp; ม.&nbsp;${F(cls, 31.5)}ในความปกครองของท่านได้` },
-    { y: 248, h: `ประพฤติผิดระเบียบวินัยของโรงเรียน&nbsp; คือ${F('', null, 'why')}${S(7)}` },
+    { y: 248, h: `ประพฤติผิดระเบียบวินัยของโรงเรียน&nbsp; คือ${F(logText(log), null, 'why')}${S(7)}` },
     { y: 269, h: F('', null, 'why') },
     { y: 290, h: F('', null, 'why') },
     { y: 311, h: 'ทางโรงเรียนจึงขอเชิญท่านมาพบ เพื่อทราบรายละเอียดและให้ความร่วมมือกับทางโรงเรียนเพื่อหาวิธีการปรับปรุง' },

@@ -70,6 +70,7 @@
 .doc-page .f .v:empty { padding: 0; }
 .doc-page .f .v:empty::before { content: '\200b'; }
 .doc-page .f.l .v { order: -1; padding-left: 0; } /* ข้อความชิดซ้าย จุดตามหลัง */
+.doc-page .f.l .v:not(:empty) { padding-left: 3pt; }
 .doc-page .f.l::before { display: none; }
 
 /* บนจอ: ช่องกรอกได้เป็นสีเหลืองอ่อน / ตอนพิมพ์หายไป */
