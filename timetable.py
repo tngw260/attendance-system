@@ -544,3 +544,147 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     con.execute('UPDATE tt_subjects SET name=? WHERE code=?', (name, code))
         return jsonify(success=True, assigned=assigned, unknown=sorted(set(unknown)),
                        message=f'ตั้งสายการเรียนให้ {assigned} รายการ' + (f' · ไม่พบในโครงสร้างหลักสูตร {len(set(unknown))} รหัส' if unknown else ''))
+
+    # ═════════════ ขั้นที่ 3: ร่างภาคเรียนถัดไป + บันทึกผลจัดอัตโนมัติ ═════════════
+    def next_code(code):
+        """รหัสภาคเรียนถัดไปตามธรรมเนียม: เลขท้ายคี่ +1 (ท21101→ท21102, พ30209→พ30210)"""
+        m = re.fullmatch(r'([ก-ฮI])(\d{5})', code or '')
+        if not m or int(m.group(2)) % 2 == 0:
+            return None
+        return f'{m.group(1)}{int(m.group(2)) + 1:05d}'
+
+    def base_name(n):
+        return re.sub(r'[\s\d()]+$', '', re.sub(r'\s+', '', n or ''))[:6]
+
+    @app.post('/api/tt/terms/<int:term_id>/draft-next')
+    @admin_required
+    def tt_draft_next(term_id):
+        """สร้างภาคเรียนถัดไปจากภาคเรียนนี้: วิชาเลื่อนรหัสตามโครงสร้างหลักสูตร ครู/ชั้น/สาย/เงื่อนไขเดิม
+        กิจกรรมทั้งโรงเรียน (ชุมนุม ลูกเสือ บำเพ็ญฯ ประชุม) คงช่องเดิม + ล็อก / อย่างอื่นรอจัด"""
+        b = request.get_json() or {}
+        name = str(b.get('name') or '').strip()
+        if not re.fullmatch(r'[12]/25\d\d', name):
+            return jsonify(success=False, message='ชื่อภาคเรียนต้องเป็นรูปแบบ 2/2569'), 400
+        cur = load_curriculum() or {'grades': {}}
+        with get_db() as con:
+            src = term_payload(con, term_id)
+            if not src:
+                return jsonify(success=False, message='ไม่พบภาคเรียนต้นทาง'), 404
+            if con.execute('SELECT 1 FROM tt_terms WHERE name=?', (name,)).fetchone():
+                return jsonify(success=False, message=f'มีภาคเรียน {name} อยู่แล้ว (ลบก่อนถ้าจะร่างใหม่)'), 409
+
+            def grade_maps(g):
+                t1, t2 = {}, {}
+                for t in cur['grades'].get(str(g), {}).get('tracks', []):
+                    for s in t.get('term1', []):
+                        t1.setdefault(s['code'], s)
+                        if s.get('next'):
+                            t2.setdefault(s['next'], dict(code=s['next'], name=s.get('next_name'), hours=s.get('next_hours')))
+                    for s in t.get('term2_only', []):
+                        t2.setdefault(s['code'], s)
+                return t1, t2
+
+            teacher_name = {t['id']: t['name'] for t in src['teachers']}
+            rep = dict(check_code=[], changed=[], no_teacher=[], ended=[], uncovered={}, merged=[])
+            out = {}          # key → lesson ใหม่ (รวมรายการซ้ำ)
+            for l in src['lessons']:
+                classes, g = l['classes'], (int(l['classes'][0].split('/')[0]) if l['classes'] else None)
+                who = ', '.join(teacher_name.get(t, '') for t in l['teacher_ids'])
+                cls_txt = ', '.join('ม.' + c.split('/')[0] for c in classes)
+                if l['kind'] != 'subject' or not l['code']:
+                    fixed = bool(re.search(r'ชุมนุม|ลูกเสือ|บำเพ็ญ|ประชุม', l['title'] or ''))
+                    key = ('act', l['id'])
+                    out[key] = dict(src=l, code=l['code'], title=l['title'], kind=l['kind'], classes=classes,
+                                    track=l['track'], teacher_ids=l['teacher_ids'], per_week=l['per_week'],
+                                    options=l['options'], slots=[s[:2] for s in l['slots']] if fixed else [])
+                    continue
+                t1, t2 = grade_maps(g) if g else ({}, {})
+                code, e1 = l['code'], None
+                basic = bool(re.fullmatch(r'[ก-ฮ]\d{2}1\d{2}', code))
+                e1 = t1.get(code)
+                nc, how = None, ''
+                p1 = next_code(code)
+                if not basic and e1 and e1.get('next'):
+                    nc, how = e1['next'], 'row'
+                elif p1 and p1 in t2:
+                    nc, how = p1, 'plus'
+                elif e1:
+                    rep['ended'].append(f"{code} {e1.get('name') or ''} {cls_txt} ({who})".strip())
+                    continue
+                else:
+                    nc, how = (p1 or code), 'guess'
+                info = t2.get(nc, {})
+                new_name = info.get('name') or ''
+                teacher_ids = list(l['teacher_ids'])
+                if nc[0] != code[0]:              # เปลี่ยนกลุ่มสาระ (เช่น ว→ง) = คนละวิชา ไม่ส่งต่อครู
+                    teacher_ids = []
+                    rep['no_teacher'].append(f"{nc} {new_name} {cls_txt} (แทน {code} ของ{who})")
+                elif how == 'row' and e1 and base_name(e1.get('name')) and base_name(new_name) \
+                        and base_name(e1.get('name')) != base_name(new_name):
+                    rep['changed'].append(f"{code} {e1.get('name')} → {nc} {new_name} {cls_txt} ครูเดิม: {who}")
+                if how == 'guess':
+                    rep['check_code'].append(f"{code} → {nc} {cls_txt} ({who}) — ไม่พบในโครงสร้างหลักสูตร")
+                pw = l['per_week']
+                h1, h2 = (e1 or {}).get('hours'), info.get('hours')
+                if h1 and h2 and h2 in (20, 40, 60, 80, 100, 120) and round(h1 / 20) == pw:
+                    pw = int(h2 // 20)
+                key = (nc, tuple(classes), l['track'] or '', tuple(sorted(teacher_ids)) if teacher_ids else ('none', l['id']))
+                if key in out:
+                    out[key]['per_week'] += pw
+                    rep['merged'].append(f"{nc} {cls_txt} ({who}) รวมเป็น {out[key]['per_week']} คาบ")
+                else:
+                    out[key] = dict(src=l, code=nc, title='', kind='subject', classes=classes, track=l['track'],
+                                    teacher_ids=teacher_ids, per_week=pw, options=l['options'], slots=[], name=new_name)
+            # วิชาในหลักสูตรภาคเรียนถัดไปที่ยังไม่มีในร่าง (ไม่นับ หน้าที่พลเมือง/สุจริตศึกษา/ศาสนา ที่สอนรวมในกิจกรรม)
+            made = {(v['classes'][0].split('/')[0] if v['classes'] else '', v['code']) for v in out.values() if v['code']}
+            for g in sorted(cur['grades']):
+                _, t2 = grade_maps(g)
+                miss = []
+                for c, e in t2.items():
+                    if (g, c) in made or re.match(r'(หน้าที่พลเมือง|สุจริตศึกษา|ศาสนา)', e.get('name') or ''):
+                        continue
+                    tr = [t['abbr'] for t in cur['grades'][g]['tracks']
+                          if any(s.get('next') == c or s['code'] == c for s in t.get('term1', []) + t.get('term2_only', []))]
+                    miss.append(dict(code=c, name=e.get('name') or '', hours=e.get('hours'), grade=int(g),
+                                     tracks=tr if len(tr) < len(cur['grades'][g]['tracks']) else []))
+                if miss:
+                    rep['uncovered'][g] = miss
+
+            cfg = dict(src['term']['config'])
+            new_id = con.execute('INSERT INTO tt_terms (name, config, published, note) VALUES (?,?,?,?)',
+                                 (name, json.dumps(cfg, ensure_ascii=False), 0,
+                                  json.dumps(dict(draft_from=src['term']['name'], report=rep), ensure_ascii=False))).lastrowid
+            for v in out.values():
+                if v['code']:
+                    save_subject_name(con, v['code'], v.get('name') or None) if v.get('name') else None
+                    if not con.execute('SELECT 1 FROM tt_subjects WHERE code=?', (v['code'],)).fetchone():
+                        con.execute('INSERT INTO tt_subjects (code, name, area) VALUES (?,?,?)', (v['code'], '', AREAS.get(v['code'][0], '')))
+                note = 'ยังไม่กำหนดครู' if (v['kind'] == 'subject' and not v['teacher_ids']) else ''
+                lid = con.execute("""INSERT INTO tt_lessons (term_id, code, title, kind, classes, track, teacher_ids, per_week, options, note)
+                                     VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                                  (new_id, v['code'], v['title'], v['kind'], json.dumps(v['classes']), v['track'],
+                                   json.dumps(v['teacher_ids']), v['per_week'], json.dumps(v['options'] or {}), note)).lastrowid
+                for d, p in v['slots']:
+                    con.execute('INSERT OR IGNORE INTO tt_slots (lesson_id, day, period, locked) VALUES (?,?,?,1)', (lid, d, p))
+        n_sub = sum(1 for v in out.values() if v['kind'] == 'subject')
+        return jsonify(success=True, term_id=new_id, report=rep,
+                       message=f'สร้างร่างภาคเรียน {name} แล้ว: รายวิชา {n_sub} รายการ + กิจกรรม {len(out) - n_sub} รายการ')
+
+    @app.post('/api/tt/terms/<int:term_id>/slots-bulk')
+    @admin_required
+    def tt_slots_bulk(term_id):
+        """บันทึกผลจัดอัตโนมัติ: {lessons: {lesson_id: [[d,p],...]}} แทนที่ช่องที่ไม่ได้ล็อกของรายการนั้น"""
+        data = (request.get_json() or {}).get('lessons') or {}
+        with get_db() as con:
+            ids = {r['id'] for r in con.execute('SELECT id FROM tt_lessons WHERE term_id=?', (term_id,))}
+            n = 0
+            for lid, slots in data.items():
+                lid = int(lid)
+                if lid not in ids:
+                    continue
+                con.execute('DELETE FROM tt_slots WHERE lesson_id=? AND locked=0', (lid,))
+                for d, p in slots:
+                    if 1 <= int(d) <= 7 and 1 <= int(p) <= 12:
+                        con.execute('INSERT OR IGNORE INTO tt_slots (lesson_id, day, period) VALUES (?,?,?)', (lid, int(d), int(p)))
+                        n += 1
+        return jsonify(success=True, placed=n)

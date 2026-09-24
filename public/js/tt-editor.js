@@ -185,6 +185,9 @@ function renderEditor() {
       <button class="btn btn-sm btn-outline-info" onclick="applyTracks()" title="อ่านจากโครงสร้างหลักสูตร: วิชาไหนเรียนแผนการเรียนไหน"><i class="bi bi-magic"></i> ตั้งสายจากหลักสูตร</button>
       <button class="btn btn-sm btn-outline-info" onclick="applySuggestedTracks()" title="วิชาที่เรียนพร้อมกับวิชาของสาย A = นักเรียนสายอื่น"><i class="bi bi-lightbulb"></i> แนะนำสายจากตาราง</button>
       <button class="btn btn-sm btn-outline-dark" onclick="edUndo()" ${ED.undo.length ? '' : 'disabled'}><i class="bi bi-arrow-counterclockwise"></i> ย้อนกลับ</button>
+      <button class="btn btn-sm btn-primary" onclick="openSolveModal()"><i class="bi bi-cpu"></i> จัดอัตโนมัติ</button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="openTermModal()"><i class="bi bi-gear"></i> ภาคเรียน ${esc(T.term.name)}${T.term.published ? '' : ' <span class="badge bg-warning text-dark">ร่าง</span>'}</button>
+      ${draftReport() ? '<button class="btn btn-sm btn-outline-warning" onclick="showDraftReport(draftReport())"><i class="bi bi-clipboard-check"></i> รายงานการร่าง</button>' : ''}
       <span class="ms-auto small">
         <span class="badge ${issues.hard.length ? 'bg-danger' : 'bg-success'}" title="ชนทั้งภาคเรียน">ชน ${issues.hard.length}</span>
         <span class="badge ${issues.soft.length ? 'bg-warning text-dark' : 'bg-success'}" title="ผิดเงื่อนไข/วางไม่ครบ ทั้งภาคเรียน">เตือน ${issues.soft.length}</span>
@@ -352,9 +355,10 @@ function showModal(title, bodyHTML, footHTML) {
   edModal.show();
 }
 
-function openLessonModal(id) {
-  const l = id ? lessonById(id) : { code: '', title: '', kind: 'subject', classes: ED.by === 'class' ? [ED.key] : [],
-    track: '', teacher_ids: ED.by === 'teacher' ? [+ED.key] : [], per_week: 1, options: {}, note: '' };
+function openLessonModal(id, prefill) {
+  const l = id ? lessonById(id) : Object.assign({ code: '', title: '', kind: 'subject', classes: ED.by === 'class' ? [ED.key] : [],
+    track: '', teacher_ids: ED.by === 'teacher' ? [+ED.key] : [], per_week: 1, options: {}, note: '' }, prefill || {});
+  if (prefill && prefill.name && prefill.code) T.subjects[prefill.code] = Object.assign(T.subjects[prefill.code] || { code: prefill.code }, { name: prefill.name });
   const o = l.options || {}, P = T.term.config.periods;
   const trackNames = [...new Set(IDX.classes.flatMap(c => (T.term.config.tracks || {})[c] || []))];
   const body = `
@@ -547,4 +551,78 @@ async function applySuggestedTracks() {
     buildIndex(); renderEditor();
     alert(`บันทึกแล้ว — การชน: ${before} → ${allIssues().hard.length} จุด`);
   } catch (e) { alert('บันทึกไม่สำเร็จ: ' + e.message); }
+}
+
+/* ═════════════ ภาคเรียน: ร่างภาคเรียนถัดไป / เผยแพร่ / ลบ ═════════════ */
+function nextTermName(n) {
+  const m = /^([12])\/(\d{4})$/.exec(n || '');
+  if (!m) return '';
+  return m[1] === '1' ? `2/${m[2]}` : `1/${+m[2] + 1}`;
+}
+function draftReport() {
+  try { const n = JSON.parse(T.term.note || '{}'); return n.report ? Object.assign({ from: n.draft_from }, n.report) : null; } catch (e) { return null; }
+}
+function openTermModal() {
+  const nx = nextTermName(T.term.name);
+  const body = `
+    <div class="mb-3"><b>ภาคเรียน ${esc(T.term.name)}</b> — ${T.term.published ? '<span class="badge bg-success">เผยแพร่แล้ว ครูทุกคนเห็น</span>' : '<span class="badge bg-warning text-dark">ร่าง — เห็นเฉพาะแอดมิน</span>'}</div>
+    <div class="d-grid gap-2">
+      <button class="btn btn-${T.term.published ? 'outline-secondary' : 'success'}" onclick="setPublished(${T.term.published ? 0 : 1})">
+        <i class="bi bi-${T.term.published ? 'eye-slash' : 'megaphone'}"></i> ${T.term.published ? 'ซ่อน (กลับเป็นร่าง)' : 'เผยแพร่ให้ครูเห็น'}</button>
+      ${nx ? `<button class="btn btn-outline-primary" onclick="draftNext('${nx}')"><i class="bi bi-copy"></i> สร้างร่างภาคเรียน ${nx} จากภาคเรียนนี้</button>` : ''}
+      <button class="btn btn-outline-danger" onclick="deleteTerm()"><i class="bi bi-trash"></i> ลบภาคเรียนนี้ทั้งหมด</button>
+    </div>
+    <div class="small text-muted mt-3">สร้างร่าง = วิชาเลื่อนรหัสตามโครงสร้างหลักสูตร ครู/ชั้น/สาย/เงื่อนไขเดิม · กิจกรรมทั้งโรงเรียนคงช่องเดิม (ล็อก) · แล้วกด "จัดอัตโนมัติ"</div>`;
+  showModal('<i class="bi bi-gear"></i> ตั้งค่าภาคเรียน', body, '<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ปิด</button>');
+}
+async function setPublished(v) {
+  try {
+    await apiFetch(`/api/tt/terms/${T.term.id}`, { method: 'PUT', body: JSON.stringify({ published: v }) });
+    T.term.published = v; edModal.hide(); renderEditor();
+    toastEd(v ? 'เผยแพร่แล้ว — ครูเปิดดูได้' : 'ซ่อนแล้ว (ร่าง)');
+    const opt = el('selTerm').querySelector(`option[value="${T.term.id}"]`);
+    if (opt) opt.textContent = T.term.name + (v ? '' : ' (ร่าง)');
+  } catch (e) { alert(e.message); }
+}
+async function deleteTerm() {
+  if (!confirm(`ลบภาคเรียน ${T.term.name} ทั้งหมด (รายการสอน ${T.lessons.length} รายการ และตาราง) — ย้อนกลับไม่ได้`)) return;
+  if (prompt('พิมพ์ชื่อภาคเรียนเพื่อยืนยันการลบ') !== T.term.name) return;
+  try { await apiFetch(`/api/tt/terms/${T.term.id}`, { method: 'DELETE' }); location.reload(); } catch (e) { alert(e.message); }
+}
+async function draftNext(name) {
+  if (!confirm(`สร้างร่างภาคเรียน ${name} จาก ${T.term.name}?\n• วิชาเลื่อนรหัสตามโครงสร้างหลักสูตร (ครู/ชั้น/สายเดิม)\n• กิจกรรมทั้งโรงเรียนคงช่องเดิม\n• ยังไม่เผยแพร่จนกว่าจะกดเผยแพร่`)) return;
+  try {
+    const r = await apiFetch(`/api/tt/terms/${T.term.id}/draft-next`, { method: 'POST', body: JSON.stringify({ name }) });
+    if (edModal) edModal.hide();
+    const sel = el('selTerm');
+    sel.insertAdjacentHTML('afterbegin', `<option value="${r.term_id}">${esc(name)} (ร่าง)</option>`);
+    await loadTerm(r.term_id);
+    showDraftReport(Object.assign({ from: T.term.name, message: r.message }, r.report));
+  } catch (e) { alert(e.message); }
+}
+function showDraftReport(rep) {
+  const sec = (title, arr, cls) => arr && arr.length ? `<details class="mb-2" ${cls === 'warn' ? 'open' : ''}><summary class="fw-bold">${title} (${arr.length})</summary>
+    <ul class="small mb-0">${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>` : '';
+  let unc = '';
+  Object.entries(rep.uncovered || {}).forEach(([g, list]) => {
+    unc += `<div class="small fw-bold mt-1">ม.${g}</div>` + list.map((x, i) => `<div class="small d-flex align-items-center gap-2 border-bottom py-1">
+      <span class="flex-grow-1">${esc(x.code)} ${esc(x.name)} · ${x.hours ? Math.round(x.hours / 20) + ' คาบ' : '?'}${x.tracks.length ? ' · ' + esc(x.tracks.join(',')) : ''}</span>
+      <button class="btn btn-sm btn-outline-success py-0" onclick='addUncovered(${JSON.stringify(x).replace(/'/g, "&#39;")})'>+ เพิ่ม</button></div>`).join('');
+  });
+  const body = `
+    ${rep.message ? `<div class="alert alert-success py-2">${esc(rep.message)}</div>` : ''}
+    <div class="small text-muted mb-2">ร่างจากภาคเรียน ${esc(rep.from || '')} + เอกสารโครงสร้างหลักสูตร — ตรวจรายการด้านล่าง แล้วแก้ในหน้าจัดตาราง (ปุ่มดินสอ) ก่อนกด "จัดอัตโนมัติ"</div>
+    ${sec('⚠ ต้องตรวจรหัสวิชา (ไม่พบในโครงสร้างหลักสูตร ระบบเดา +1)', rep.check_code, 'warn')}
+    ${sec('⚠ ยังไม่กำหนดครู (วิชาเปลี่ยนกลุ่มสาระ)', rep.no_teacher, 'warn')}
+    ${sec('ℹ วิชาเปลี่ยน — ตรวจว่าครูเดิมยังสอนไหม', rep.changed)}
+    ${sec('ℹ รวมรายการซ้ำ', rep.merged)}
+    ${sec('ℹ วิชาที่จบในภาคเรียนก่อน (ไม่ได้สร้าง)', rep.ended)}
+    ${unc ? `<details open><summary class="fw-bold">➕ วิชาในหลักสูตรภาคเรียนนี้ที่ยังไม่มีในร่าง</summary><div class="small text-muted">บางวิชาอาจสอนอยู่แล้วภายใต้รหัสอื่น — ถ้าใช่ให้แก้รหัสรายการเดิมแทนการเพิ่ม</div>${unc}</details>` : ''}`;
+  showModal('<i class="bi bi-clipboard-check"></i> รายงานการร่างภาคเรียน ' + esc(T.term.name), body, '<button class="btn btn-primary btn-sm" data-bs-dismiss="modal">ไปจัดตาราง</button>');
+}
+function addUncovered(x) {
+  const cls = IDX.classes.find(c => c.split('/')[0] === String(x.grade));
+  edModal.hide();
+  setTimeout(() => openLessonModal(null, { code: x.code, name: x.name, classes: cls ? [cls] : [], track: (x.tracks || []).join(','),
+    per_week: x.hours ? Math.max(1, Math.round(x.hours / 20)) : 1, teacher_ids: [] }), 350);
 }
