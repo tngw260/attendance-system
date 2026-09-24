@@ -96,8 +96,15 @@
   .doc-page table.grid td[contenteditable]:focus, .doc-page .e:focus { background: #ffe98a; }
 }
 
+/* ขอบกระดาษ — ต้องอยู่ "นอก" @media print เพราะ Safari/iPad ไม่อ่าน @page ที่ซ้อนใน @media
+   (ถ้าซ้อน Safari จะใช้ขอบของเครื่องพิมพ์แทน แล้วดันเนื้อหาทั้งหน้าขึ้น → โลโก้ล้นขอบบน · ทดสอบแล้ว 24 ก.ย. 69)
+   @page มีผลเฉพาะตอนพิมพ์อยู่แล้ว ไม่กระทบหน้าจอ
+   หน้าแรก: ขอบบน/ซ้าย/ขวา 0 → ตำแหน่งทุกอย่างวัดจากขอบกระดาษเหมือน Word, เว้นขอบล่าง 10 มม. กันเครื่องพิมพ์ตัด
+   หน้าถัดไป (ปค.5 รายการยาวเกินหน้า): เว้นบน-ล่าง 12 มม. (Safari ใช้ขอบของหน้าแรกทุกหน้า) */
+@page { size: A4; margin: 12mm 0; }
+@page :first { margin: 0 0 10mm 0; }
+
 @media print {
-  @page { size: A4; margin: 0; }
   html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
   body { padding-bottom: 0 !important; }                 /* common.js ใส่ 70px ไว้เผื่อแถบท้าย */
   nav, .controls, .no-print, .modal, .modal-backdrop, footer { display: none !important; }
@@ -105,7 +112,7 @@
   .doc-page {
     margin: 0 !important;
     box-shadow: none !important;
-    height: 296.5mm;          /* บังคับ 1 หน้าพอดี A4 */
+    height: 286.5mm;          /* บังคับ 1 หน้าพอดี A4 (297 − ขอบล่าง 10 มม. − กันปัดเศษ 0.5) */
     min-height: 0;
     overflow: hidden;
     break-after: avoid;

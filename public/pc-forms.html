@@ -8,7 +8,8 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="/css/style.css" rel="stylesheet">
   <!-- ฟอนต์ TH Sarabun ฝังในเว็บ + ระบบจัดบรรทัดแบบ Word -->
-  <link href="/css/docforms.css" rel="stylesheet">
+  <!-- ?v= เปลี่ยนทุกครั้งที่แก้ docforms.css (เซิร์ฟเวอร์ให้เบราว์เซอร์เก็บ CSS ไว้ 1 วัน) -->
+  <link href="/css/docforms.css?v=20260924b" rel="stylesheet">
   <link rel="preload" href="/fonts/THSarabunNew-Regular.woff" as="font" type="font/woff" crossorigin>
   <link rel="preload" href="/fonts/THSarabunNew-Bold.woff" as="font" type="font/woff" crossorigin>
   <style>
@@ -223,6 +224,11 @@ function el(id){ return document.getElementById(id); }
 function schoolName(){ return theme.school_name || 'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม'; }
 function directorName(){ return theme.director_name || 'นางสาวปัทมา จีนดี'; }
 function directorTitle(){ return theme.director_title || 'ผู้อำนวยการ'; }
+// "ผู้อำนวยการ" + ชื่อโรงเรียน — ในตั้งค่าเว็บจริงตำแหน่งคือ "ผู้อำนวยการโรงเรียน" → ตัดคำซ้ำ ไม่ให้เป็น "โรงเรียนโรงเรียน"
+function dirTitleFull(){
+  const t = directorTitle(), n = schoolName();
+  return esc(n.startsWith('โรงเรียน') ? t.replace(/โรงเรียน$/, '') + n : t + n);
+}
 // ชื่อ ผอ. แบบในต้นฉบับ: เว้น 2 ช่องระหว่างชื่อกับนามสกุล
 function dirName(){ return esc(directorName()).replace(/ +/, '&nbsp; '); }
 
@@ -302,12 +308,14 @@ function flowFields(root) {
 
 async function printDoc() {
   if (document.activeElement) document.activeElement.blur();
-  flowFields(el('content').querySelector('.doc-page'));
+  const dp = el('content').querySelector('.doc-page');
+  flowFields(dp);
   try {
     await Promise.all(['16pt', 'bold 16pt', 'italic bold 16pt']
       .map(f => document.fonts.load(`${f} THSarabunDoc`, 'กขค')));
     await document.fonts.ready;
   } catch (e) {}
+  if (dp && dp.dataset.form === 'pc5') shrinkRows(dp);   // เผื่อพิมพ์ข้อความเพิ่มในตารางจนยาวขึ้น
   window.print();
 }
 
@@ -350,9 +358,26 @@ function render() {
                           : (form === 'pc7') ? renderPC7()
                           : (form === 'leave') ? renderLeave()
                           : renderPC5();
-  flowFields(el('content').querySelector('.doc-page'));
+  const dp = el('content').querySelector('.doc-page');
+  flowFields(dp);
+  // ปค.5 วัดหลังฟอนต์โหลดเสร็จ (ความสูงแถวที่ตัดบรรทัดขึ้นกับฟอนต์)
+  if (form === 'pc5') document.fonts.ready.then(() => { if (dp.isConnected) fitPC5(); });
   el('printBtn').disabled = false;
   el('saveBtn').disabled = false;
+}
+
+// ปค.5 รายการเยอะจนเกินหน้า → บีบช่องไฟส่วนลงชื่อ แล้วค่อย ๆ ลดความสูงแถว (ไม่ต่ำกว่า 18.5pt)
+// ให้จบก่อน 805pt จากขอบบน (หน้าแรกพิมพ์ได้ถึง 287 มม. = 813pt) — ถ้ายังไม่พอ ส่วนที่เหลือขึ้นหน้า 2
+const PC5_LIMIT = 805;
+const docBottomPt = dp => (dp.lastElementChild.getBoundingClientRect().bottom - dp.getBoundingClientRect().top) * 0.75;
+function fitPC5() {
+  if (docBottomPt(el('content').querySelector('.doc-page')) <= PC5_LIMIT) return;
+  el('content').innerHTML = renderPC5(true);
+  shrinkRows(el('content').querySelector('.doc-page'));
+}
+function shrinkRows(dp) {   // ไม่สร้างฟอร์มใหม่ → ข้อความที่พิมพ์แก้ไว้ยังอยู่
+  const rows = [...dp.querySelectorAll('table.grid tbody tr')];
+  for (let h = 21; h >= 18.5 && docBottomPt(dp) > PC5_LIMIT; h -= 0.5) rows.forEach(r => { r.style.height = h + 'pt'; });
 }
 
 function updateFormInfo() {
@@ -519,7 +544,7 @@ function renderPC3() {
     { y: 669, h: `${S(72)}${F('', null, 'note')}${S(22)}` },
     { y: 711, h: cell(155, D(137), 260, true) },
     { y: 732, h: cell(155, `( ${dirName()} )`, 260, true) },
-    { y: 753, h: cell(155, `ตำแหน่ง${esc(directorTitle())}${esc(schoolName())}`, 260, true) },
+    { y: 753, h: cell(155, `ตำแหน่ง${dirTitleFull()}`, 260, true) },
   ]));
 }
 
@@ -551,7 +576,7 @@ function renderPC1() {
     { y: 576, h: `${F('', null, 'dir')}${S(10)}` },
     { y: 611, h: cell(249.7, `ลงชื่อ${D(145)}`) },
     { y: 635, h: cell(233.2, `(${dirName()})`, 200, true) },
-    { y: 656, h: cell(252, `${esc(directorTitle())}${esc(schoolName())}`) },
+    { y: 656, h: cell(252, `${dirTitleFull()}`) },
   ]));
 }
 
@@ -580,12 +605,12 @@ function renderPC4() {
     { y: 491, h: `${F('', null, 'dir')}${S(4)}` },
     { y: 512, h: cell(255, `ลงชื่อ${D(145)}`) },
     { y: 533, h: cell(233, `(${dirName()})`, 200, true) },
-    { y: 554, h: cell(252, `${esc(directorTitle())}${esc(schoolName())}`) },
+    { y: 554, h: cell(252, `${dirTitleFull()}`) },
   ]));
 }
 
 /* ===== ปค.5 — แบบบันทึกพฤติกรรมนักเรียน (ตาราง) ===== */
-function renderPC5() {
+function renderPC5(compact = false) {   // compact = บีบช่องไฟส่วนลงชื่อ (ใช้ตอนรายการเยอะ ดู fitPC5)
   const s = curData.student, PL = 72, PR = 72;
   // เฉพาะที่ครูหักเอง (source=manual) — ตัด มาสาย(attendance) + บำเพ็ญประโยชน์(makeup) + เครื่องแต่งกาย(uniform) ออก
   const logs = (curData.logs||[])
@@ -594,9 +619,8 @@ function renderPC5() {
   const totalDeduct = logs.reduce((a,l)=>a+Math.abs(l.points),0);
   const cols = [56.8, 162.9, 85, 56.8, 63.6, 56.8, 63.6];   // ความกว้างคอลัมน์เท่าต้นฉบับ (pt)
   const td4 = '<td></td><td></td><td></td><td></td>';
-  // ต้นฉบับ 11 แถว สูง 21.5pt — ถ้ารายการเกิน 11 ให้แถวเตี้ยลง (ไม่ต่ำกว่า 18.5pt) เพื่อยังพอดี 1 หน้า
-  const rowH = logs.length > 11 ? Math.max(18.5, 300 / logs.length).toFixed(1) : 21.5;
-  const row = (d, b, p) => `<tr style="height:${rowH}pt"><td contenteditable="true">${d}</td>`
+  // ต้นฉบับ 11 แถว สูง 21.5pt (รายการเกินหน้า fitPC5 จะลดความสูงให้)
+  const row = (d, b, p) => `<tr style="height:21.5pt"><td contenteditable="true">${d}</td>`
     + `<td class="l" contenteditable="true">${b}</td><td contenteditable="true">${p}</td>${td4}</tr>`;
   let body = logs.map(l => row(esc(pcDateTiny(l.date)), esc((l.reason || '') + (l.note ? ' — ' + l.note : '')), Math.abs(l.points))).join('');
   for (let i = logs.length; i < 11; i++) body += row('', '', '');
@@ -619,14 +643,14 @@ function renderPC5() {
     { y: 108, c: 'c b', h: `${esc(schoolName())} ภาคเรียนที่${F('', 57)}ปีการศึกษา${F('', 60)}` },
     { y: 131, c: 'c b', h: `ชื่อ${F(s.name, 174)}เลขที่${F(s.number ?? '', 57)}ห้อง${F('ม.' + s.class_level + '/' + s.room, 44)}` },
     { raw: table },
-    { mt: 19.5, fs: 15, h: cell(0, `ลงชื่อ${D(116)}ครูที่ปรึกษา`) + cell(280.7, `ลงชื่อ${D(101)}หัวหน้าระดับชั้น`) },
+    { mt: compact ? 10 : 19.5, fs: 15, h: cell(0, `ลงชื่อ${D(116)}ครูที่ปรึกษา`) + cell(280.7, `ลงชื่อ${D(101)}หัวหน้าระดับชั้น`) },
     { dy: 24, fs: 15, h: cell(22.7, par('', 108)) + cell(297, par('', 106)) },
-    { dy: 36, fs: 15, h: cell(0, `ลงชื่อ${D(127)}`) + cell(280.7, `ลงชื่อ${D(126)}`) },
+    { dy: compact ? 28 : 36, fs: 15, h: cell(0, `ลงชื่อ${D(127)}`) + cell(280.7, `ลงชื่อ${D(126)}`) },
     { dy: 21, fs: 15, h: cell(22.7, nameJ) + cell(322.8, nameJ) },
     { dy: 20, fs: 15, h: cell(22.7, 'หัวหน้างานกิจการนักเรียน') + cell(271.4, `รองผู้อำนวยการ${esc(schoolName())}`) },
-    { dy: 40, fs: 15, c: 'c', h: `ลงชื่อ${D(142)}` },
+    { dy: compact ? 28 : 40, fs: 15, c: 'c', h: `ลงชื่อ${D(142)}` },
     { dy: 20, fs: 15, c: 'c', h: `(${dirName()})` },
-    { dy: 20, fs: 15, c: 'c', h: `${esc(directorTitle())}${esc(schoolName())}` },
+    { dy: 20, fs: 15, c: 'c', h: `${dirTitleFull()}` },
   ]), 'grow');
 }
 
@@ -653,11 +677,11 @@ function renderPC7() {
     { y: 434, h: cell(176.2, 'ขอแสดงความนับถือ') },
     { y: 482, h: cell(264.6, `ลงชื่อ${D(155)}`) },
     { y: 503, h: cell(259.1, `(${dirName()} )`, 200, true) },
-    { y: 524, h: cell(266.1, `${esc(directorTitle())}${esc(schoolName())}`) },
+    { y: 524, h: cell(266.1, `${dirTitleFull()}`) },
     { y: 552, h: `<span style="display:inline-block;width:455pt;overflow:clip;">${'*'.repeat(160)}</span>` },
     { y: 571, fs: 14, h: '(ฉีกส่วนนี้ส่งคืนโรงเรียน)' },
     { y: 591, c: 'c b', h: 'แบบตอบรับ' },
-    { y: 612, h: `${lab('เรียน', 32.2)}${esc(directorTitle())}${esc(schoolName())}` },
+    { y: 612, h: `${lab('เรียน', 32.2)}${dirTitleFull()}` },
     { y: 633, h: `${S(72)}ข้าพเจ้า${F(s.parent_name, 164)}ผู้ปกครองของ${F(s.name)}${S(3)}` },
     { y: 654, h: `นักเรียนชั้น ม.&nbsp;${F(cls, 23)}&nbsp;สามารถมาตามวันที่นัดหมายคือวันที่${F('', 17)}เดือน${F('', 59)}พ.ศ${F('', 44)}&nbsp;หรือ ขอเลื่อนเป็น` },
     { y: 675, h: `วันที่${F('', 18)}เดือน${F('', 64)}พ.ศ${F('', 38)}` },
