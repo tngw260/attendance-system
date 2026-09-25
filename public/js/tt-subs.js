@@ -39,8 +39,10 @@ const periodLabel = ps => {
   return 'คาบ ' + ps.join(', ');
 };
 const spanLabel = a => shortDate(a.date_from) + (a.date_to === a.date_from ? '' : a.date_to === OPEN_END ? ' เป็นต้นไป (ยังไม่มีกำหนด)' : ' – ' + shortDate(a.date_to));
-const tName = id => { const t = IDX.teachers[id]; return t ? 'ครู' + t.name : `ครู (รหัส ${id})`; };
-const tShort = id => teacherShort(id) || `ครู (รหัส ${id})`;
+// ครูที่ย้ายออกแล้วไม่อยู่ในตารางเทอมนี้ → ใช้ชื่อจากเซิร์ฟเวอร์ (teacher_names)
+const tFull = id => IDX.teachers[id]?.name || SUB.data?.teacher_names?.[id] || '';
+const tName = id => tFull(id) ? 'ครู' + tFull(id) : `ครู (รหัส ${id})`;
+const tShort = id => tFull(id) ? 'ครู' + tFull(id).split(' ')[0] : `ครู (รหัส ${id})`;
 
 /* ── ข้อมูลของวัน ── */
 const absencesOn = date => (SUB.data?.absences || []).filter(a => a.date_from <= date && a.date_to >= date);
@@ -312,7 +314,8 @@ function openAbsenceModal(id) {
   const body = `
     <label class="form-label small mb-0">ครู</label>
     <select id="abT" class="form-select form-select-sm mb-2"><option value="">— เลือกครู —</option>
-      ${list.map(t => `<option value="${t.id}" ${t.id === a.teacher_id ? 'selected' : ''}>ครู${esc(t.name)}</option>`).join('')}</select>
+      ${list.map(t => `<option value="${t.id}" ${t.id === a.teacher_id ? 'selected' : ''}>ครู${esc(t.name)}</option>`).join('')}
+      ${a.teacher_id && !list.some(t => t.id === a.teacher_id) ? `<option value="${a.teacher_id}" selected>${esc(tName(a.teacher_id))}</option>` : ''}</select>
     <div class="row g-2 mb-2">
       <div class="col-6"><label class="form-label small mb-0">สาเหตุ</label>
         <select id="abR" class="form-select form-select-sm">${[...new Set([...SUB_REASONS, a.reason].filter(Boolean))].map(r => `<option ${r === a.reason ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></div>
@@ -447,6 +450,6 @@ async function mySubsBanner() {
   box.innerHTML = `<div class="alert alert-warning py-2 mb-0"><b><i class="bi bi-arrow-left-right me-1"></i>คาบสอนแทนของคุณ</b>
     ${mine.map(s => `<div>${s.date === from ? '<span class="badge bg-danger">วันนี้</span> ' : ''}${esc(formatThaiDateFull(s.date).replace(/ พ\.ศ\. \d+/, ''))}
       คาบ ${s.period}${P[s.period] ? ` (${esc(P[s.period].start)}-${esc(P[s.period].end)})` : ''} · <b>${esc(s.class_label)} ${esc(s.subject)}</b>
-      แทน${esc(tShort(s.absent_id))}${s.note ? ` · ${esc(s.note)}` : ''}</div>`).join('')}</div>`;
+      แทนครู${esc((IDX.teachers[s.absent_id]?.name || data.teacher_names?.[s.absent_id] || '').split(' ')[0])}${s.note ? ` · ${esc(s.note)}` : ''}</div>`).join('')}</div>`;
   el('content').prepend(box);
 }

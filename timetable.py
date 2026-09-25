@@ -419,32 +419,35 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.post('/api/tt/slots')
     @admin_required
     def tt_slots_update():
-        """วาง/ย้าย/เอาออก/ล็อก ช่องของรายการเดียว: {lesson_id, remove:[[d,p]], add:[[d,p]], lock:[[d,p,0|1]]}"""
-        b = request.get_json() or {}
+        """วาง/ย้าย/เอาออก/ล็อก ช่องของรายการเดียว: {lesson_id, remove:[[d,p]], add:[[d,p]], lock:[[d,p,0|1]]}
+        ตรวจทุกช่องก่อนเขียน — ย้ายไปช่องที่ผิดต้องไม่ทำให้ช่องเดิมหาย"""
+        b = request.get_json(silent=True) or {}
         try:
             lid = int(b.get('lesson_id') or 0)
+            remove = [(int(d), int(p)) for d, p in (b.get('remove') or [])]
+            add = [(int(d), int(p)) for d, p in (b.get('add') or [])]
+            lock = [(int(d), int(p), 1 if lk else 0) for d, p, lk in (b.get('lock') or [])]
         except (TypeError, ValueError):
-            lid = 0
+            return jsonify(success=False, message='ข้อมูลช่องไม่ถูกต้อง'), 400
         with get_db() as con:
             term = term_of_lesson(con, lid)
             if not term:
                 return jsonify(success=False, message='ไม่พบรายการ'), 404
             nd = len(term['config'].get('days') or [1, 2, 3, 4, 5])
             np_ = len(term['config'].get('periods') or [1] * 7)
-
-            def ok(d, p):
-                return isinstance(d, int) and isinstance(p, int) and 1 <= d <= nd and 1 <= p <= np_
-
-            for d, p in (b.get('remove') or []):
+            if any(not (1 <= d <= nd and 1 <= p <= np_) for d, p in add):
+                return jsonify(success=False, message='ช่องไม่ถูกต้อง'), 400
+            for d, p in remove:
                 con.execute('DELETE FROM tt_slots WHERE lesson_id=? AND day=? AND period=?', (lid, d, p))
-            for d, p in (b.get('add') or []):
-                if not ok(d, p):
-                    return jsonify(success=False, message='ช่องไม่ถูกต้อง'), 400
+            for d, p in add:
                 con.execute('INSERT OR IGNORE INTO tt_slots (lesson_id, day, period) VALUES (?,?,?)', (lid, d, p))
-            for d, p, lk in (b.get('lock') or []):
-                con.execute('UPDATE tt_slots SET locked=? WHERE lesson_id=? AND day=? AND period=?',
-                            (1 if lk else 0, lid, d, p))
+            for d, p, lk in lock:
+                con.execute('UPDATE tt_slots SET locked=? WHERE lesson_id=? AND day=? AND period=?', (lk, lid, d, p))
             return jsonify(success=True, lesson=lesson_dict(con, lid))
+
+    def known_teachers(con, ids):
+        """ตัดรหัสครูที่ไม่มีในระบบทิ้ง (กันรายการผูกกับครูที่ไม่มีอยู่จริง)"""
+        return [t for t in ids if con.execute('SELECT 1 FROM tt_teachers WHERE id=?', (t,)).fetchone()]
 
     @app.post('/api/tt/lessons')
     @admin_required
@@ -458,6 +461,9 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         with get_db() as con:
             if not con.execute('SELECT 1 FROM tt_terms WHERE id=?', (term_id,)).fetchone():
                 return jsonify(success=False, message='ไม่พบภาคเรียน'), 404
+            v['teacher_ids'] = known_teachers(con, v['teacher_ids'])
+            if not v['teacher_ids'] and not v['classes']:
+                return jsonify(success=False, message='เลือกครูผู้สอน หรือชั้นเรียนอย่างน้อย 1 อย่าง'), 400
             lid = con.execute("""INSERT INTO tt_lessons (term_id, code, title, kind, classes, track, teacher_ids, per_week, options, note)
                                  VALUES (?,?,?,?,?,?,?,?,?,?)""",
                               (term_id, v['code'], v['title'], v['kind'], json.dumps(v['classes']), v['track'],
@@ -476,6 +482,9 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         with get_db() as con:
             if not con.execute('SELECT 1 FROM tt_lessons WHERE id=?', (lid,)).fetchone():
                 return jsonify(success=False, message='ไม่พบรายการ'), 404
+            v['teacher_ids'] = known_teachers(con, v['teacher_ids'])
+            if not v['teacher_ids'] and not v['classes']:
+                return jsonify(success=False, message='เลือกครูผู้สอน หรือชั้นเรียนอย่างน้อย 1 อย่าง'), 400
             con.execute("""UPDATE tt_lessons SET code=?, title=?, kind=?, classes=?, track=?, teacher_ids=?,
                            per_week=?, options=?, note=? WHERE id=?""",
                         (v['code'], v['title'], v['kind'], json.dumps(v['classes']), v['track'],
@@ -524,8 +533,24 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.put('/api/tt/teachers/<int:tid>')
     @admin_required
     def tt_teacher_update(tid):
-        """แก้ชื่อ / เงื่อนไข {unavailable:[[d,p]], max_per_day:n} / ผูกบัญชีผู้ใช้"""
-        b = request.get_json() or {}
+        """แก้ชื่อ / เงื่อนไข {unavailable:[[d,p]], max_per_day:n, note} / ผูกบัญชีผู้ใช้"""
+        b = request.get_json(silent=True) or {}
+        cons = None
+        if 'constraints' in b:                   # ตรวจก่อนเขียนอะไรลงฐานข้อมูล
+            c = b.get('constraints') or {}
+            cons = {}
+            try:
+                un = sorted({(int(d), int(p)) for d, p in (c.get('unavailable') or [])
+                             if str(d).isdigit() and str(p).isdigit()})
+            except (TypeError, ValueError):
+                return jsonify(success=False, message='ข้อมูลคาบไม่ว่างไม่ถูกต้อง'), 400
+            if un:
+                cons['unavailable'] = [list(x) for x in un]
+            if str(c.get('max_per_day') or '').isdigit() and int(c['max_per_day']) > 0:
+                cons['max_per_day'] = int(c['max_per_day'])
+            note = re.sub(r'\s+', ' ', str(c.get('note') or '')).strip()[:100]
+            if note:
+                cons['note'] = note              # เหตุผลที่ไม่ว่าง เช่น ไปธนาคาร — แสดงในคำเตือน
         with get_db() as con:
             t = con.execute('SELECT * FROM tt_teachers WHERE id=?', (tid,)).fetchone()
             if not t:
@@ -537,18 +562,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 if con.execute('SELECT 1 FROM tt_teachers WHERE name=? AND id<>?', (name, tid)).fetchone():
                     return jsonify(success=False, message='มีชื่อนี้แล้ว'), 409
                 con.execute('UPDATE tt_teachers SET name=? WHERE id=?', (name, tid))
-            if 'constraints' in b:
-                c = b.get('constraints') or {}
-                cons = {}
-                un = sorted({(int(d), int(p)) for d, p in (c.get('unavailable') or [])
-                             if str(d).isdigit() and str(p).isdigit()})
-                if un:
-                    cons['unavailable'] = [list(x) for x in un]
-                if str(c.get('max_per_day') or '').isdigit() and int(c['max_per_day']) > 0:
-                    cons['max_per_day'] = int(c['max_per_day'])
-                note = re.sub(r'\s+', ' ', str(c.get('note') or '')).strip()[:100]
-                if note:
-                    cons['note'] = note          # เหตุผลที่ไม่ว่าง เช่น ไปธนาคาร — แสดงในคำเตือน
+            if cons is not None:
                 con.execute('UPDATE tt_teachers SET constraints=? WHERE id=?', (json.dumps(cons, ensure_ascii=False), tid))
             if 'user_id' in b:
                 uid = b.get('user_id') or None
@@ -835,18 +849,21 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @admin_required
     def tt_slots_bulk(term_id):
         """บันทึกผลจัดอัตโนมัติ: {lessons: {lesson_id: [[d,p],...]}} แทนที่ช่องที่ไม่ได้ล็อกของรายการนั้น"""
-        data = (request.get_json() or {}).get('lessons') or {}
+        data = (request.get_json(silent=True) or {}).get('lessons') or {}
+        try:
+            data = {int(lid): [(int(d), int(p)) for d, p in slots] for lid, slots in data.items()}
+        except (TypeError, ValueError, AttributeError):
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
         with get_db() as con:
             ids = {r['id'] for r in con.execute('SELECT id FROM tt_lessons WHERE term_id=?', (term_id,))}
             n = 0
             for lid, slots in data.items():
-                lid = int(lid)
                 if lid not in ids:
                     continue
                 con.execute('DELETE FROM tt_slots WHERE lesson_id=? AND locked=0', (lid,))
                 for d, p in slots:
-                    if 1 <= int(d) <= 7 and 1 <= int(p) <= 12:
-                        con.execute('INSERT OR IGNORE INTO tt_slots (lesson_id, day, period) VALUES (?,?,?)', (lid, int(d), int(p)))
+                    if 1 <= d <= 7 and 1 <= p <= 12:
+                        con.execute('INSERT OR IGNORE INTO tt_slots (lesson_id, day, period) VALUES (?,?,?)', (lid, d, p))
                         n += 1
         return jsonify(success=True, placed=n)
 
@@ -896,7 +913,9 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 'SELECT * FROM tt_subs WHERE date BETWEEN ? AND ? ORDER BY date, period', (f, t))]
             holidays = [dict(r) for r in con.execute(
                 'SELECT date, name, type FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date', (f, t))]
-        return jsonify(absences=absences, subs=subs, holidays=holidays)
+            # ชื่อครูทุกคน — ครูที่ย้ายออกแล้วไม่อยู่ในตารางเทอมนี้ แต่ยังมีบันทึกไม่มา/สอนแทนเก่า
+            names = {r['id']: r['name'] for r in con.execute('SELECT id, name FROM tt_teachers')}
+        return jsonify(absences=absences, subs=subs, holidays=holidays, teacher_names=names)
 
     @app.get('/api/tt/today')
     @login_required

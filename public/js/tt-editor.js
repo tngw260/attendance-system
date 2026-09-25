@@ -3,7 +3,14 @@
    ช่องเขียว = วางได้ / เหลือง = ผิดเงื่อนไขอ่อน / แดง = ชน (ครูสอนซ้อน ห้องซ้อน ครูไม่ว่าง)
    สาย/กลุ่มผู้เรียน (ม.4-6): วิชาต่างสายวางช่องเดียวกันได้ ไม่นับว่าชน */
 
-const ED = { by: 'class', key: '', picked: null, undo: [] };
+const ED = { by: 'class', key: '', picked: null, undo: [], preview: false };
+
+// ระหว่างดูผลจัดอัตโนมัติ (ยังไม่บันทึก) ห้ามแก้ — ไม่งั้นข้อมูลในเครื่องกับเซิร์ฟเวอร์ไม่ตรงกัน
+function previewGuard() {
+  if (!ED.preview) return false;
+  toastEd('กำลังดูผลจัดอัตโนมัติ — กด "บันทึกผลนี้" หรือ "ยกเลิก" ก่อนแก้ไข');
+  return true;
+}
 const AREA_COLOR = { 'ท': '#f9d9dc', 'ค': '#d3e3ff', 'ว': '#d4ecdd', 'ส': '#ffe3bd', 'พ': '#cdf1ec',
                      'ศ': '#eadcf8', 'ง': '#f0e3d0', 'อ': '#dde3ff', 'จ': '#ffd8e8', 'I': '#e4e5e7' };
 const colorOf = l => l.kind === 'activity' ? '#ececec' : (AREA_COLOR[(l.code || '')[0]] || '#f1f3f5');
@@ -176,31 +183,43 @@ function renderEditor() {
       <td class="small">${[(l.options || {}).double ? 'คาบคู่' : '', (l.options || {}).avoid ? 'เลี่ยงคาบ ' + l.options.avoid.join(',') : '', (l.options || {}).allow_same_day ? 'ซ้ำวันได้' : ''].filter(Boolean).join(' · ')}</td>
       <td class="text-end"><button class="btn btn-sm btn-outline-primary py-0" onclick="openLessonModal(${l.id})"><i class="bi bi-pencil"></i></button></td></tr>`).join('');
 
+  const act = (fn, icon, label) => `<li><a class="dropdown-item" href="#" onclick="${fn}; return false;"><i class="bi bi-${icon} me-1"></i>${label}</a></li>`;
   el('content').innerHTML = `<div class="container-fluid ed-wrap">
+    ${ED.preview ? `<div class="alert alert-info d-flex flex-wrap align-items-center gap-2 py-2 mb-2 sv-banner">
+      <i class="bi bi-eye fs-5"></i><div class="me-auto">กำลังดู <b>ผลจัดอัตโนมัติ (ยังไม่บันทึก)</b> — เลือกดูห้อง/ครูอื่นได้ แต่ยังแก้ไม่ได้จนกว่าจะบันทึกหรือยกเลิก</div>
+      <button class="btn btn-sm btn-outline-secondary" onclick="discardSolved()">ยกเลิก</button>
+      <button class="btn btn-sm btn-success" onclick="saveSolved()"><i class="bi bi-save"></i> บันทึกผลนี้</button></div>` : ''}
     <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
       <div class="btn-group btn-group-sm">
         <button class="btn ${ED.by === 'class' ? 'btn-primary' : 'btn-outline-primary'}" onclick="edBy('class')"><i class="bi bi-people"></i> รายห้อง</button>
         <button class="btn ${ED.by === 'teacher' ? 'btn-primary' : 'btn-outline-primary'}" onclick="edBy('teacher')"><i class="bi bi-person-badge"></i> รายครู</button>
       </div>
-      <select class="form-select form-select-sm w-auto" onchange="ED.key=this.value; renderEditor()">${opts}</select>
+      <select class="form-select form-select-sm w-auto" onchange="ED.key=this.value; clearPick(); renderEditor()">${opts}</select>
       ${ED.by === 'class' ? `<button class="btn btn-sm btn-outline-secondary" onclick="openTracksModal('${ED.key}')"><i class="bi bi-diagram-3"></i> สายการเรียน ${(T.term.config.tracks || {})[ED.key]?.length ? '(' + T.term.config.tracks[ED.key].length + ')' : ''}</button>`
                            : `<button class="btn btn-sm btn-outline-secondary" onclick="openTeacherModal(${ED.key})"><i class="bi bi-person-gear"></i> เงื่อนไขครู</button>`}
       <button class="btn btn-sm btn-outline-success" onclick="openLessonModal(null)"><i class="bi bi-plus-lg"></i> เพิ่มรายการสอน</button>
-      <button class="btn btn-sm btn-outline-info" onclick="applyTracks()" title="อ่านจากโครงสร้างหลักสูตร: วิชาไหนเรียนแผนการเรียนไหน"><i class="bi bi-magic"></i> ตั้งสายจากหลักสูตร</button>
-      <button class="btn btn-sm btn-outline-info" onclick="applySuggestedTracks()" title="วิชาที่เรียนพร้อมกับวิชาของสาย A = นักเรียนสายอื่น"><i class="bi bi-lightbulb"></i> แนะนำสายจากตาราง</button>
-      <button class="btn btn-sm btn-outline-dark" onclick="edUndo()" ${ED.undo.length ? '' : 'disabled'}><i class="bi bi-arrow-counterclockwise"></i> ย้อนกลับ</button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="edUndo()" ${ED.undo.length ? '' : 'disabled'} title="ย้อนการวาง/ย้าย/เอาออกครั้งล่าสุด"><i class="bi bi-arrow-counterclockwise"></i> ย้อนกลับ</button>
       <button class="btn btn-sm btn-primary" onclick="openSolveModal()"><i class="bi bi-cpu"></i> จัดอัตโนมัติ</button>
-      <button class="btn btn-sm btn-outline-secondary" onclick="openTermModal()"><i class="bi bi-gear"></i> ภาคเรียน ${esc(T.term.name)}${T.term.published ? '' : ' <span class="badge bg-warning text-dark">ร่าง</span>'}</button>
-      ${draftReport() ? '<button class="btn btn-sm btn-outline-warning" onclick="showDraftReport(draftReport())"><i class="bi bi-clipboard-check"></i> รายงานการร่าง</button>' : ''}
-      <span class="ms-auto small">
-        <span class="badge ${issues.hard.length ? 'bg-danger' : 'bg-success'}" title="ชนทั้งภาคเรียน">ชน ${issues.hard.length}</span>
-        <span class="badge ${issues.soft.length ? 'bg-warning text-dark' : 'bg-success'}" title="ผิดเงื่อนไข/วางไม่ครบ ทั้งภาคเรียน">เตือน ${issues.soft.length}</span>
+      <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-tools"></i> เครื่องมือ</button>
+        <ul class="dropdown-menu">
+          ${act('applyTracks()', 'magic', 'ตั้งสายการเรียนจากโครงสร้างหลักสูตร')}
+          ${act('applySuggestedTracks()', 'lightbulb', 'แนะนำสายจากตารางปัจจุบัน')}
+          ${draftReport() ? act('showDraftReport(draftReport())', 'clipboard-check', 'รายงานการร่างภาคเรียน') : ''}
+        </ul>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary" onclick="openTermModal()" title="ตั้งค่า / เผยแพร่ภาคเรียน"><i class="bi bi-calendar-week"></i> ${esc(T.term.name)}${T.term.published ? ' <span class="badge bg-success">เผยแพร่แล้ว</span>' : ' <span class="badge bg-warning text-dark">ร่าง</span>'}</button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="openEditorHelp()"><i class="bi bi-question-circle"></i> วิธีใช้</button>
+      <span class="ms-auto">
+        <button class="btn btn-sm py-0 ${issues.hard.length ? 'btn-danger' : 'btn-success'}" onclick="openIssuesModal('hard')" title="ครูสอนซ้อน / ห้องชน / ครูไม่ว่าง — กดดูทั้งหมด">ชน ${issues.hard.length}</button>
+        <button class="btn btn-sm py-0 ${issues.soft.length ? 'btn-warning' : 'btn-success'}" onclick="openIssuesModal('soft')" title="ผิดเงื่อนไข / วางไม่ครบ — กดดูทั้งหมด">เตือน ${issues.soft.length}</button>
       </span>
     </div>
     <div class="row g-2">
       <div class="col-xl-9">
         <div class="table-responsive"><table class="ed-grid"><thead>${head}</thead><tbody>${body}</tbody></table></div>
-        <div class="small text-muted mt-1"><i class="bi bi-hand-index"></i> ลากวิชาไปวาง หรือแตะวิชาแล้วแตะช่อง • ลากออกไปที่ "ยังไม่ได้วาง" หรือกด × = เอาออก • กดค้าง/ดับเบิลคลิก = ล็อก 🔒</div>
+        <div class="small text-muted mt-1"><i class="bi bi-hand-index"></i> ลากวิชาไปวาง หรือแตะวิชาแล้วแตะช่อง • × หรือลากไปที่ "ยังไม่ได้วาง" = เอาออก • 🔓 = ล็อกช่อง (จัดอัตโนมัติจะไม่ย้าย)
+          <span class="ms-2 text-nowrap">สีช่องตอนเลือกวิชา: <span class="ed-swatch" style="background:#4caf50"></span>วางได้ <span class="ed-swatch" style="background:#e0a800"></span>ผิดเงื่อนไข <span class="ed-swatch" style="background:#dc3545"></span>ชน</span></div>
       </div>
       <div class="col-xl-3">
         <div class="ed-panel" id="edPending">
@@ -229,7 +248,8 @@ function chipHTML(l, d, p) {
   return `<div class="ed-chip${picked ? ' picked' : ''}${lk ? ' locked' : ''}" draggable="${lk ? 'false' : 'true'}" data-lid="${l.id}" data-d="${d}" data-p="${p}"
             style="background:${colorOf(l)}" title="${esc(lessonName(l) + ' ' + classLabel(l) + ' — ' + l.teacher_ids.map(teacherShort).join(', '))}">
       <b>${esc(lessonName(l))}</b>${tracksOf(l).length ? ` <small class="text-muted">${esc(l.track)}</small>` : ''}<br><small>${esc(sub)}</small>
-      ${lk ? '<span class="lk">🔒</span>' : '<span class="x" title="เอาออก">×</span>'}
+      ${lk ? '' : '<span class="x" title="เอาออก">×</span>'}
+      <span class="lk${lk ? ' on' : ''}" title="${lk ? 'ล็อกอยู่ — กดเพื่อปลดล็อก' : 'ล็อกช่องนี้ (จัดอัตโนมัติจะไม่ย้าย)'}">${lk ? '🔒' : '🔓'}</span>
     </div>`;
 }
 
@@ -244,11 +264,12 @@ function bindEditor() {
     c.addEventListener('dragend', () => { if (ED.picked && ED.picked.drag) clearPick(); });
     c.addEventListener('click', e => {
       if (e.target.classList.contains('x')) { e.stopPropagation(); removeChip(+c.dataset.lid, +c.dataset.d, +c.dataset.p); return; }
+      if (e.target.classList.contains('lk')) { e.stopPropagation(); toggleLock(+c.dataset.lid, +c.dataset.d, +c.dataset.p); return; }
       e.stopPropagation();
       const from = c.dataset.d ? [+c.dataset.d, +c.dataset.p] : null;
       if (ED.picked && ED.picked.lid === +c.dataset.lid && String(ED.picked.from) === String(from)) { clearPick(); return; }
       if (ED.picked && c.dataset.d) { doPlace(+c.dataset.d, +c.dataset.p); return; }   // แตะวิชาอื่นในช่อง = วางลงช่องนั้น
-      if (c.classList.contains('locked')) { toastEd('ช่องนี้ล็อกไว้ — ดับเบิลคลิกเพื่อปลดล็อก'); return; }
+      if (c.classList.contains('locked')) { toastEd('ช่องนี้ล็อกไว้ — กด 🔒 เพื่อปลดล็อกก่อนย้าย'); return; }
       pick(+c.dataset.lid, from, true);
     });
     if (c.dataset.d) c.addEventListener('dblclick', e => { e.stopPropagation(); toggleLock(+c.dataset.lid, +c.dataset.d, +c.dataset.p); });
@@ -270,6 +291,7 @@ function bindEditor() {
 }
 
 function pick(lid, from, byClick) {
+  if (previewGuard()) return;
   ED.picked = { lid, from, drag: !byClick };
   document.querySelectorAll('.ed-chip.picked, .ed-card.picked').forEach(x => x.classList.remove('picked'));
   const sel = from ? `.ed-chip[data-lid="${lid}"][data-d="${from[0]}"][data-p="${from[1]}"]` : `.ed-card[data-lid="${lid}"]`;
@@ -315,7 +337,7 @@ async function doPlace(d, p) {
 
 async function removeChip(lid, d, p) {
   const l = lessonById(lid);
-  if (lockedAt(l, d, p)) { toastEd('ช่องนี้ล็อกไว้ — ดับเบิลคลิกเพื่อปลดล็อกก่อน'); return; }
+  if (lockedAt(l, d, p)) { toastEd('ช่องนี้ล็อกไว้ — กด 🔒 เพื่อปลดล็อกก่อน'); return; }
   clearPick();
   await applySlots({ lesson_id: lid, add: [], remove: [[d, p]] }, true);
 }
@@ -327,6 +349,7 @@ async function toggleLock(lid, d, p) {
 }
 
 async function applySlots(body, pushUndo) {
+  if (previewGuard()) return;
   try {
     const r = await apiFetch('/api/tt/slots', { method: 'POST', body: JSON.stringify(body) });
     const i = T.lessons.findIndex(l => l.id === body.lesson_id);
@@ -341,6 +364,51 @@ async function edUndo() {
   await applySlots(u, false);
 }
 function edBy(by) { ED.by = by; ED.key = ''; clearPick(); renderEditor(); }
+
+/* ── ชน / เตือน ทั้งภาคเรียน: กดรายการ → ไปที่ห้อง/ครูนั้น แล้วกะพริบช่อง ── */
+function issueWhere(x) {
+  if (x.type === 'class') return { by: 'class', key: String(x.key), label: classShort(x.key) };
+  return { by: 'teacher', key: String(x.key), label: teacherShort(+x.key) };
+}
+function openIssuesModal(kind) {
+  const list = allIssues()[kind];
+  const body = list.length ? `<div class="small text-muted mb-2">กดรายการเพื่อไปที่ตารางนั้น</div>
+    <div class="list-group">${list.map((x, i) => `<button type="button" class="list-group-item list-group-item-action d-flex gap-2 align-items-start" onclick="gotoIssue('${kind}', ${i})">
+      <span class="badge ${kind === 'hard' ? 'bg-danger' : 'bg-warning text-dark'} mt-1">${esc(issueWhere(x).label)}</span>
+      <span class="small">${x.d ? `<b>${DAYS[x.d - 1]} คาบ ${x.p}</b> ` : ''}${esc(x.msg)}</span></button>`).join('')}</div>`
+    : `<div class="text-center text-success py-3"><i class="bi bi-check-circle fs-2 d-block"></i>ไม่มี${kind === 'hard' ? 'จุดที่ชน' : 'คำเตือน'}</div>`;
+  showModal(kind === 'hard' ? `<i class="bi bi-x-octagon text-danger"></i> จุดที่ชนทั้งภาคเรียน (${list.length})`
+                            : `<i class="bi bi-exclamation-triangle text-warning"></i> คำเตือนทั้งภาคเรียน (${list.length})`, body,
+    '<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ปิด</button>');
+}
+function gotoIssue(kind, i) {
+  const x = allIssues()[kind][i];
+  if (!x) return;
+  const w = issueWhere(x);
+  edModal.hide(); clearPick();
+  ED.by = w.by; ED.key = w.key; renderEditor();
+  const td = x.d && document.querySelector(`.ed-cell[data-d="${x.d}"][data-p="${x.p}"]`);
+  const card = !td && x.lid && document.querySelector(`.ed-card[data-lid="${x.lid}"]`);   // วางไม่ครบ → กล่อง "ยังไม่ได้วาง"
+  const target = td || card;
+  if (target) { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); target.classList.add('flash'); setTimeout(() => target.classList.remove('flash'), 1400); }
+}
+
+/* ── วิธีใช้ (เปิดเองครั้งแรกที่เข้าหน้าจัดตาราง) ── */
+function openEditorHelp() {
+  const step = (n, t, d) => `<div class="d-flex gap-2 mb-2"><span class="badge rounded-pill bg-primary align-self-start mt-1">${n}</span><div><b>${t}</b><div class="small text-muted">${d}</div></div></div>`;
+  showModal('<i class="bi bi-question-circle"></i> วิธีจัดตารางสอน', `
+    ${step(1, 'ตรวจรายการสอน', 'เลือก "รายห้อง" หรือ "รายครู" ด้านบน → ตารางด้านล่างคือวิชาที่ต้องสอน กด ✏️ เพื่อแก้ครู คาบ/สัปดาห์ หรือติ๊ก "คาบคู่" · ขาดวิชาไหนกด "+ เพิ่มรายการสอน"')}
+    ${step(2, 'ตั้งเงื่อนไข', 'ครูไม่ว่างบางช่วง (เช่น ไปธนาคารบ่ายวันศุกร์): รายครู → "เงื่อนไขครู" · ม.4-6 ที่แยกสาย: รายห้อง → "สายการเรียน"')}
+    ${step(3, 'ล็อกช่องที่ห้ามย้าย', 'กด 🔓 บนวิชาที่ต้องอยู่ช่องเดิม (เช่น ชุมนุม ลูกเสือ ประชุม) → กลายเป็น 🔒')}
+    ${step(4, 'จัดอัตโนมัติ', 'กด "จัดอัตโนมัติ" → "ดูผลในตาราง" (ยังไม่บันทึก เลือกดูห้องอื่นได้) → พอใจแล้วกด "บันทึกผลนี้"')}
+    ${step(5, 'ปรับเอง', 'ลากวิชาไปช่องใหม่ หรือแตะวิชาแล้วแตะช่อง (ใช้บนแท็บเล็ตได้) · ระหว่างเลือก ช่องจะเป็น <span class="text-success fw-bold">เขียว</span>=วางได้ <span class="text-warning fw-bold">เหลือง</span>=ผิดเงื่อนไข <span class="text-danger fw-bold">แดง</span>=ชน · พลาดกด "ย้อนกลับ"')}
+    ${step(6, 'ตรวจแล้วเผยแพร่', 'ปุ่ม "ชน" และ "เตือน" มุมขวาต้องเป็น 0 (กดดูได้ว่าอยู่ตรงไหน) → กดปุ่มภาคเรียน → "เผยแพร่ให้ครูเห็น"')}`,
+    '<button class="btn btn-primary btn-sm" data-bs-dismiss="modal">เข้าใจแล้ว</button>');
+}
+function maybeShowEditorHelp() {
+  try { if (localStorage.getItem('ttEditorHelpSeen')) return; localStorage.setItem('ttEditorHelpSeen', '1'); } catch (e) { return; }
+  openEditorHelp();
+}
 
 function toastEd(msg) {
   const t = document.createElement('div');
@@ -403,6 +471,7 @@ function openLessonModal(id, prefill) {
 }
 
 async function saveLesson(id) {
+  if (previewGuard()) return;
   const q = s => [...document.querySelectorAll(s)];
   const kind = document.querySelector('input[name=lfKind]:checked').value;
   const code = el('lfCode').value.trim(), name = el('lfName').value.trim();
@@ -425,6 +494,7 @@ async function saveLesson(id) {
 }
 
 async function deleteLesson(id) {
+  if (previewGuard()) return;
   const l = lessonById(id);
   if (!confirm(`ลบ ${lessonName(l)} ${classLabel(l)} ออกจากภาระงานสอน (รวม ${l.slots.length} คาบที่วางไว้)?`)) return;
   try {
@@ -439,8 +509,11 @@ async function addTeacherInline() {
   if (!name) return;
   try {
     const r = await apiFetch('/api/tt/teachers', { method: 'POST', body: JSON.stringify({ name }) });
-    T.teachers.push(r.teacher); buildIndex();
     const box = document.querySelector('.lf-teachers');
+    const had = box.querySelector(`.lfT[value="${r.teacher.id}"]`);        // ชื่อเดิมที่เคยปิดไว้ → เซิร์ฟเวอร์เปิดคนเดิมกลับมา
+    if (had) { had.checked = true; return; }
+    if (!T.teachers.some(t => t.id === r.teacher.id)) T.teachers.push(r.teacher);
+    buildIndex();
     box.insertAdjacentHTML('afterbegin', `<label class="me-3"><input type="checkbox" class="lfT" value="${r.teacher.id}" checked> ${esc(r.teacher.name.split(' ')[0])}</label>`);
   } catch (e) { alert(e.message); }
 }
@@ -501,6 +574,7 @@ function tcToggle(d, part) {
 }
 
 async function transferTeacher(tid) {
+  if (previewGuard()) return;
   const isNew = el('tfTo').value === 'new', to = +el('tfTo').value || null;
   const name = isNew ? el('tfName').value.trim() : '';
   if (isNew && !name) { alert('ใส่ชื่อครูใหม่ (ชื่อชั่วคราวได้)'); return; }
@@ -549,6 +623,7 @@ async function saveTracks(cls) {
 
 /* ═════════════ ตั้งสายการเรียนจากโครงสร้างหลักสูตร ═════════════ */
 async function applyTracks() {
+  if (previewGuard()) return;
   if (!confirm('ตั้งสายการเรียนให้ทุกวิชาตามเอกสาร "โครงสร้างหลักสูตร" ของโรงเรียน?\n(วิชาที่ตั้งกลุ่มไว้แล้ว เช่น กลุ่ม 1 จะไม่ถูกเปลี่ยน)')) return;
   try {
     const r = await apiFetch(`/api/tt/terms/${T.term.id}/apply-tracks`, { method: 'POST' });
@@ -586,6 +661,7 @@ function suggestTracks() {
 }
 
 async function applySuggestedTracks() {
+  if (previewGuard()) return;
   const props = suggestTracks();
   if (!props.length) { alert('ไม่มีข้อเสนอเพิ่ม — วิชาที่ยังชนต้องตรวจสอบเอง (เปิดแก้ไขวิชาแล้วเลือกสาย)'); return; }
   const list = props.map(x => `• ${lessonName(x.L)} ${classShort(x.L.classes[0])} → ${x.track}`).join('\n');
@@ -633,6 +709,7 @@ async function setPublished(v) {
   try {
     await apiFetch(`/api/tt/terms/${T.term.id}`, { method: 'PUT', body: JSON.stringify({ published: v }) });
     T.term.published = v; edModal.hide(); renderEditor();
+    const tt = TERMS.find(t => t.id === T.term.id); if (tt) tt.published = v;   // ให้การเลือกเทอมตามวันที่รู้ทันที
     toastEd(v ? 'เผยแพร่แล้ว — ครูเปิดดูได้' : 'ซ่อนแล้ว (ร่าง)');
     const opt = el('selTerm').querySelector(`option[value="${T.term.id}"]`);
     if (opt) opt.textContent = T.term.name + (v ? '' : ' (ร่าง)');

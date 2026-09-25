@@ -73,16 +73,20 @@
     .ed-cell.ok { background: #e3f7e8; border-color: #4caf50; }
     .ed-cell.soft { background: #fff5d6; border-color: #e0a800; }
     .ed-cell.bad { background: #fde3e5; border-color: #dc3545; }
-    .ed-cell.flash { animation: edflash 1.4s; }
+    .ed-cell.flash, .ed-card.flash { animation: edflash 1.4s; }
     @keyframes edflash { 0%,60% { box-shadow: inset 0 0 0 3px #0d6efd; } 100% { box-shadow: none; } }
-    .ed-lunch { width: 22px; background: #f1f3f5; border-radius: 6px; }
+    .ed-lunch { width: 22px; background: var(--surface-2, #f1f3f5); border-radius: 6px; }
     .ed-lunch div { writing-mode: vertical-rl; transform: rotate(180deg); font-size: .75rem; color: #6c757d; margin: auto; }
     .ed-chip { position: relative; border-radius: 6px; padding: 2px 16px 2px 6px; margin-bottom: 3px; font-size: .78rem; line-height: 1.15;
       cursor: grab; border: 1px solid rgba(0,0,0,.08); color: #212529; }
     .ed-chip.picked, .ed-card.picked { outline: 3px solid #0d6efd; }
     .ed-chip.locked { cursor: default; border-style: solid; border-color: #6c757d; }
-    .ed-chip .x, .ed-chip .lk { position: absolute; right: 3px; top: 0; font-size: .9rem; color: #6c757d; }
+    .ed-chip .x { position: absolute; right: 3px; top: 0; font-size: .9rem; color: #6c757d; cursor: pointer; }
     .ed-chip .x:hover { color: #dc3545; }
+    /* ปุ่มล็อก: ปลดอยู่ = 🔓 จาง ๆ มุมล่าง · ล็อกแล้ว = 🔒 ชัด มุมบน (กดได้ทั้งเมาส์และนิ้ว) */
+    .ed-chip .lk { position: absolute; right: 2px; bottom: 1px; font-size: .7rem; line-height: 1; cursor: pointer; opacity: .35; }
+    .ed-chip .lk:hover { opacity: 1; }
+    .ed-chip .lk.on { top: 2px; bottom: auto; font-size: .8rem; opacity: 1; }
     .ed-panel { background: var(--surface,#fff); border: 1px solid var(--border,#dee2e6); border-radius: 10px; padding: 6px; max-height: 60vh; overflow: auto; }
     .ed-panel-h { font-weight: 700; font-size: .9rem; margin: 2px 4px 6px; }
     .ed-card { border-radius: 8px; padding: 5px 8px; margin-bottom: 5px; font-size: .82rem; cursor: grab; border: 1px solid rgba(0,0,0,.08); color: #212529; }
@@ -273,6 +277,8 @@ async function importSeed(file, name) {
 }
 
 async function loadTerm(id) {
+  // เปลี่ยน/โหลดเทอมใหม่: ล้างสิ่งที่ผูกกับข้อมูลชุดเก่า (ย้อนกลับข้ามเทอม = ไปแก้วิชาของอีกเทอม)
+  ED.undo = []; ED.picked = null; ED.preview = false; SOLVED = null;
   el('selTerm').value = id;
   el('content').innerHTML = '<div class="text-center text-muted py-5"><div class="spinner-border"></div></div>';
   T = await apiFetch(`/api/tt/terms/${id}`);
@@ -319,6 +325,10 @@ function fillPicker() {
 }
 
 function setMode(m) {
+  if (ED.preview && m !== 'edit') {                   // ออกจากหน้าจัดตารางระหว่างดูผลจัดอัตโนมัติที่ยังไม่บันทึก
+    if (!confirm('ยังไม่ได้บันทึกผลจัดอัตโนมัติ — ออกจากหน้านี้แล้วผลนี้จะหายไป\nออกเลยหรือไม่?')) { el('mEdit').checked = true; return; }
+    discardSolved();
+  }
   if (m === 'edit' && view.mode === 'class' && view.key) { ED.by = 'class'; ED.key = view.key; }
   if (m === 'edit' && view.mode === 'teacher' && view.key) { ED.by = 'teacher'; ED.key = view.key; }
   view.mode = m;
@@ -331,6 +341,7 @@ function setMode(m) {
     if (want && want.id !== T.term.id) { loadTerm(want.id); return; }
   }
   fillPicker(); render();
+  if (m === 'edit') maybeShowEditorHelp();              // ครั้งแรกที่เข้าหน้าจัดตาราง → เปิดวิธีใช้ให้เอง
 }
 
 /* ===== ป้ายชื่อ ===== */
@@ -540,8 +551,8 @@ async function printDoc(all) {
   if (all) setTimeout(render, 500);
 }
 </script>
-<script src="/js/tt-editor.js?v=8"></script>
-<script src="/js/tt-solver.js?v=1"></script>
-<script src="/js/tt-subs.js?v=2"></script>
+<script src="/js/tt-editor.js?v=9"></script>
+<script src="/js/tt-solver.js?v=2"></script>
+<script src="/js/tt-subs.js?v=3"></script>
 </body>
 </html>

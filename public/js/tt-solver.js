@@ -167,6 +167,7 @@ function ttSolve(opts) {
       let best = null;
       const base = sessions.map(s => ({ s, k: s.len * 3 + s.l.classes.length * 2 + s.l.teacher_ids.length + (tracksOf(s.l).length ? 4 : 0)
         + s.l.teacher_ids.reduce((a, t) => a + unav[t].size / 5, 0) + avoidOf(s.l).length }));
+      let lastYield = performance.now();
       for (let r = 0; r < restarts; r++) {
         const st = newState();
         base.map(x => ({ s: x.s, k: x.k + Math.random() * 3 })).sort((a, b) => b.k - a.k).forEach(x => placeBest(st, x.s));
@@ -174,7 +175,7 @@ function ttSolve(opts) {
         const ev = evaluate(st);
         if (!best || ev.score > best.ev.score) best = { ev, pos: new Map(st.pos), st };
         if (onProgress) onProgress(r + 1, restarts, best.ev);
-        await new Promise(res => setTimeout(res, 0));
+        if (performance.now() - lastYield > 30) { await yieldUI(); lastYield = performance.now(); }
         if (best.ev.unplaced === 0 && best.ev.misaligned === 0) break;
       }
       // ช่วงที่ยังเหลือ: ลองวางแบบผ่อนกฎที่ตั้งได้ (ไม่ผ่อนครูซ้อน/ห้องชน/ครูไม่ว่าง)
@@ -186,9 +187,13 @@ function ttSolve(opts) {
   };
 }
 
+// พักให้หน้าจอวาดแถบความคืบหน้า — ใช้ MessageChannel แทน setTimeout (แท็บเบื้องหลังถูกหน่วง setTimeout เป็นรอบละ 1 วินาที)
+const yieldUI = () => new Promise(res => { const ch = new MessageChannel(); ch.port1.onmessage = () => res(); ch.port2.postMessage(0); });
+
 /* ═════════════ หน้าต่างจัดอัตโนมัติ ═════════════ */
 let SOLVED = null;     // ผลที่ยังไม่บันทึก
 function openSolveModal() {
+  if (previewGuard()) return;
   const nLocked = T.lessons.reduce((a, l) => a + l.slots.filter(s => s[2]).length, 0);
   const body = `
     <div class="mb-2"><b>ภาคเรียน ${esc(T.term.name)}</b> · ${T.lessons.length} รายการ · ล็อกไว้ ${nLocked} ช่อง</div>
@@ -205,8 +210,10 @@ function openSolveModal() {
 
 async function runSolve() {
   const mode = document.querySelector('input[name=svMode]:checked').value, rounds = +el('svRounds').value;
-  el('svGo').disabled = true; el('svProg').style.display = '';
+  el('edModalFoot').querySelectorAll('button').forEach(b => { b.disabled = true; });   // กันกดซ้ำ (รวม "จัดใหม่อีกรอบ")
+  el('svProg').style.display = '';
   const bar = el('svProg').firstElementChild;
+  bar.classList.add('progress-bar-animated');
   const solver = ttSolve({ mode });
   const need = solver.sessions.reduce((a, s) => a + s.len, 0);
   const t0 = performance.now();
@@ -230,19 +237,20 @@ async function runSolve() {
     <button class="btn btn-success btn-sm" onclick="saveSolved()"><i class="bi bi-save"></i> บันทึกผลนี้</button>`;
 }
 
+// ดูผลในตาราง (ยังไม่บันทึก) — แถบ "บันทึก/ยกเลิก" วาดใน renderEditor ทุกครั้ง (เปลี่ยนห้อง/ครูก็ยังอยู่)
+// ระหว่างนี้ห้ามแก้ตาราง (previewGuard) ไม่งั้นข้อมูลในเครื่องกับเซิร์ฟเวอร์ไม่ตรงกัน
 function previewSolved() {
   if (!SOLVED) return;
   T.lessons.forEach(l => { l._orig = l._orig || l.slots; l.slots = SOLVED.newSlots.get(l.id); });
+  ED.preview = true; ED.picked = null;
   buildIndex(); edModal.hide(); renderEditor();
-  el('content').insertAdjacentHTML('afterbegin', `<div class="alert alert-info d-flex align-items-center gap-2 m-2 sv-banner">
-    <i class="bi bi-eye"></i><div class="me-auto">กำลังดู <b>ผลจัดอัตโนมัติ (ยังไม่บันทึก)</b></div>
-    <button class="btn btn-sm btn-outline-secondary" onclick="discardSolved()">ยกเลิก</button>
-    <button class="btn btn-sm btn-success" onclick="saveSolved()"><i class="bi bi-save"></i> บันทึกผลนี้</button></div>`);
 }
-async function discardSolved() {
+function discardSolved() {
   T.lessons.forEach(l => { if (l._orig) { l.slots = l._orig; delete l._orig; } });
-  SOLVED = null; buildIndex(); renderEditor();
+  SOLVED = null; ED.preview = false; buildIndex();
+  if (view.mode === 'edit') renderEditor();
 }
+window.addEventListener('beforeunload', e => { if (ED.preview) { e.preventDefault(); e.returnValue = ''; } });
 async function saveSolved() {
   if (!SOLVED) return;
   if (!confirm('บันทึกผลจัดอัตโนมัติลงตาราง? (ช่องที่ไม่ได้ล็อกเดิมจะถูกแทนที่)')) return;
@@ -250,8 +258,8 @@ async function saveSolved() {
   SOLVED.newSlots.forEach((slots, lid) => { lessons[lid] = slots.filter(s => !s[2]).map(s => [s[0], s[1]]); });
   try {
     const r = await apiFetch(`/api/tt/terms/${T.term.id}/slots-bulk`, { method: 'POST', body: JSON.stringify({ lessons }) });
-    SOLVED = null; if (edModal) edModal.hide();
-    await loadTerm(T.term.id);
+    SOLVED = null; ED.preview = false; if (edModal) edModal.hide();
+    await loadTerm(T.term.id);                                  // loadTerm ล้างประวัติ "ย้อนกลับ" ด้วย
     toastEd(`บันทึกแล้ว ${r.placed} ช่อง`);
   } catch (e) { alert('บันทึกไม่สำเร็จ: ' + e.message); }
 }
