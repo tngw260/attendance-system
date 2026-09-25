@@ -105,6 +105,7 @@
 @page :first { margin: 0 0 10mm 0; }
 
 @media print {
+  html { color-scheme: light !important; }   /* โหมดมืด: Bootstrap ใส่ color-scheme: dark → Chrome ระบายขอบกระดาษเป็นสีดำ */
   html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
   body { padding-bottom: 0 !important; }                 /* common.js ใส่ 70px ไว้เผื่อแถบท้าย */
   nav, .controls, .no-print, .modal, .modal-backdrop, footer { display: none !important; }

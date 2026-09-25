@@ -13,9 +13,6 @@
     @font-face { font-family: 'THSarabunDoc'; font-weight: 400; font-display: block; src: url('/fonts/THSarabunNew-Regular.woff') format('woff'); }
     @font-face { font-family: 'THSarabunDoc'; font-weight: 700; font-display: block; src: url('/fonts/THSarabunNew-Bold.woff') format('woff'); }
 
-    /* ต้องอยู่นอก @media print (Safari ไม่อ่าน @page ที่ซ้อนใน @media) */
-    @page { size: A4 landscape; margin: 0; }
-
     .controls { background: #f0f4fb; padding: 12px 0; border-bottom: 2px solid var(--primary); }
     .tt-wrap { overflow-x: auto; padding: 12px 0 20px; }
 
@@ -99,9 +96,33 @@
     .load-table td, .load-table th { vertical-align: middle; }
     @media (max-width: 767px) { .tt-desktop-only { display: none !important; } }
     @media (min-width: 768px) { .tt-mobile-only { display: none !important; } }
+    @media (max-width: 575px) { #modeGroup .btn { padding-left: .3rem; padding-right: .3rem; font-size: .8rem; } }
+
+    /* ===== สอนแทน ===== */
+    .sub-abs { border-top: 1px solid var(--border,#eee); padding: 6px 0; }
+    .sub-abs:first-of-type { border-top: 0; }
+    .sub-table td, .sub-table th { font-size: .88rem; }
+    .sub-print { display: none; }
+    /* ใบบันทึกการสอนแทน A4 แนวตั้ง (ขอบบน-ล่างจาก @page ขอบซ้าย-ขวาจาก padding) */
+    .sub-sheet { width: 210mm; box-sizing: border-box; padding: 0 12mm 0 20mm; background: #fff; color: #000;
+      font-family: 'THSarabunDoc', 'TH Sarabun New', 'TH SarabunPSK', sans-serif; font-size: 16pt; line-height: 1.3; }
+    .sub-sheet .ss-c { text-align: center; }
+    .sub-sheet .ss-b { font-weight: 700; }
+    .sub-sheet .ss-big { font-size: 20pt; }
+    .sub-sheet .ss-abs { margin: 8pt 0 6pt; }
+    .ss-table { width: 100%; border-collapse: collapse; }
+    .ss-table th, .ss-table td { border: .75pt solid #000; padding: 1pt 4pt; font-size: 15pt; vertical-align: top; }
+    .ss-table th { font-weight: 700; text-align: center; }
+    .ss-table td.c { text-align: center; }
+    .ss-table td.nw { white-space: nowrap; }
+    .ss-table td.sm { font-size: 13pt; }
+    .ss-table tr { break-inside: avoid; }
+    .ss-signs { display: flex; justify-content: space-between; margin-top: 28pt; text-align: center; break-inside: avoid; }
 
     @media print {
-      body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
+      /* โหมดมืด: Bootstrap ใส่ color-scheme: dark → Chrome ระบายขอบกระดาษ (@page margin) เป็นสีดำ */
+      html { color-scheme: light !important; }
+      html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
       nav, .controls, .no-print, footer, .modal { display: none !important; }
       .tt-wrap { padding: 0; overflow: visible; }
       .container, .container-fluid { max-width: none !important; padding: 0 !important; margin: 0 !important; }
@@ -111,6 +132,8 @@
       .tt-rot { height: 209.5mm; }
       .tt-mobile-only { display: none !important; }
       .tt-desktop-only { display: block !important; }
+      .sub-screen { display: none !important; }
+      .sub-print { display: block !important; }
       /* กระดาษแนวตั้ง (Safari/iPad ไม่ทำตาม @page แนวนอน) → หมุนตาราง 90° ให้เต็มแผ่น = ได้เหมือนพิมพ์แนวนอน
          วัดจากความกว้างหน้าพิมพ์จริง (container query) เพราะ media query ของ Safari วัดจากหน้าต่าง ไม่ใช่กระดาษ
          กระดาษตั้ง ≈ 197 มม. → หมุน · กระดาษนอน ≈ 278 มม. / Chrome 297 มม. → ไม่หมุน */
@@ -121,6 +144,8 @@
       }
     }
   </style>
+  <!-- ขนาดกระดาษ: ต้องอยู่นอก @media print (Safari ไม่อ่าน @page ที่ซ้อนใน @media) · setMode() สลับเป็นแนวตั้งตอนพิมพ์ใบสอนแทน -->
+  <style id="pageRule">@page { size: A4 landscape; margin: 0; }</style>
 </head>
 <body>
 
@@ -134,30 +159,32 @@
 <div class="controls no-print">
   <div class="container">
     <div class="row g-2 align-items-end">
-      <div class="col-4 col-md-2">
+      <div class="col-5 col-md-2 order-0">
         <label class="form-label small fw-600 mb-1">ภาคเรียน</label>
         <select id="selTerm" class="form-select form-select-sm" onchange="loadTerm(this.value)"></select>
       </div>
-      <div class="col-8 col-md-3">
+      <div class="col-12 col-md-5 order-2 order-md-1">
         <label class="form-label small fw-600 mb-1">ดูตาราง</label>
-        <div class="btn-group btn-group-sm w-100" role="group">
+        <div class="btn-group btn-group-sm w-100" role="group" id="modeGroup">
           <input type="radio" class="btn-check" name="mode" id="mTeacher" value="teacher" checked onchange="setMode('teacher')">
           <label class="btn btn-outline-primary text-nowrap" for="mTeacher"><i class="bi bi-person-badge d-none d-sm-inline"></i> รายครู</label>
           <input type="radio" class="btn-check" name="mode" id="mClass" value="class" onchange="setMode('class')">
           <label class="btn btn-outline-primary text-nowrap" for="mClass"><i class="bi bi-people d-none d-sm-inline"></i> รายห้อง</label>
           <input type="radio" class="btn-check" name="mode" id="mLoad" value="load" onchange="setMode('load')">
           <label class="btn btn-outline-primary text-nowrap" for="mLoad"><i class="bi bi-list-ol d-none d-sm-inline"></i> ภาระงาน</label>
+          <input type="radio" class="btn-check" name="mode" id="mSub" value="sub" onchange="setMode('sub')">
+          <label class="btn btn-outline-primary text-nowrap" for="mSub"><i class="bi bi-arrow-left-right d-none d-sm-inline"></i> สอนแทน</label>
           <input type="radio" class="btn-check" name="mode" id="mEdit" value="edit" onchange="setMode('edit')">
           <label class="btn btn-outline-danger text-nowrap" for="mEdit" id="mEditLbl" style="display:none;"><i class="bi bi-grid-3x3-gap d-none d-sm-inline"></i> จัดตาราง</label>
         </div>
       </div>
-      <div class="col-12 col-md-3" id="pickWrap">
+      <div class="col-7 col-md-3 order-1 order-md-2" id="pickWrap">
         <label class="form-label small fw-600 mb-1" id="pickLabel">ครู</label>
         <select id="selPick" class="form-select form-select-sm" onchange="view.key=this.value; render()"></select>
       </div>
-      <div class="col-12 col-md-4 d-flex gap-1">
-        <button class="btn btn-success btn-sm flex-fill" onclick="printDoc(false)" id="btnPrint"><i class="bi bi-printer-fill me-1"></i>พิมพ์</button>
-        <button class="btn btn-outline-success btn-sm flex-fill" onclick="printDoc(true)" id="btnPrintAll"><i class="bi bi-printer me-1"></i>พิมพ์ทุก<span id="allLabel">คน</span></button>
+      <div class="col-12 col-md-2 d-flex gap-1 order-3">
+        <button class="btn btn-success btn-sm flex-fill text-nowrap" onclick="printDoc(false)" id="btnPrint"><i class="bi bi-printer-fill me-1"></i>พิมพ์</button>
+        <button class="btn btn-outline-success btn-sm flex-fill text-nowrap" onclick="printDoc(true)" id="btnPrintAll"><i class="bi bi-printer me-1"></i>ทุก<span id="allLabel">คน</span></button>
       </div>
     </div>
     <div id="adminBar" class="mt-2 small" style="display:none;"></div>
@@ -187,6 +214,7 @@ let T = null;                 // ข้อมูลภาคเรียนท�
 let IDX = null;               // ดัชนีค้นเร็ว
 let view = { mode: 'teacher', key: '' };
 let myTeacherId = null;
+let TERMS = [];               // รายการภาคเรียน (ใหม่สุดก่อน)
 const DAYS = ['จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์'];
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const el = id => document.getElementById(id);
@@ -197,6 +225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try { terms = await apiFetch('/api/tt/terms'); } catch (e) { el('content').innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; return; }
   try { const my = await apiFetch('/api/tt/my'); myTeacherId = my.teacher ? my.teacher.id : null; } catch (e) {}
   showAdminBar(terms);
+  TERMS = terms.terms;
   const sel = el('selTerm');
   sel.innerHTML = terms.terms.map(t => `<option value="${t.id}">${esc(t.name)}${t.published ? '' : ' (ร่าง)'}</option>`).join('');
   if (!terms.terms.length) {
@@ -263,8 +292,9 @@ function fillPicker() {
     if (!IDX.classes.includes(view.key)) view.key = IDX.classes[0] || '';
   }
   sel.value = view.key;
-  el('pickWrap').style.visibility = (view.mode === 'load' || view.mode === 'edit') ? 'hidden' : '';
-  el('btnPrintAll').style.display = (view.mode === 'load' || view.mode === 'edit') ? 'none' : '';
+  const noPick = ['load', 'edit', 'sub'].includes(view.mode);
+  el('pickWrap').style.visibility = noPick ? 'hidden' : '';
+  el('btnPrintAll').style.display = noPick ? 'none' : '';
   el('btnPrint').style.display = view.mode === 'edit' ? 'none' : '';
   el('mEditLbl').style.display = T.can_edit ? '' : 'none';
 }
@@ -273,8 +303,14 @@ function setMode(m) {
   if (m === 'edit' && view.mode === 'class' && view.key) { ED.by = 'class'; ED.key = view.key; }
   if (m === 'edit' && view.mode === 'teacher' && view.key) { ED.by = 'teacher'; ED.key = view.key; }
   view.mode = m;
+  el('pageRule').textContent = m === 'sub' ? '@page { size: A4 portrait; margin: 12mm 0 12mm 0; }'   // ใบสอนแทน
+                                           : '@page { size: A4 landscape; margin: 0; }';
   if (m === 'teacher') view.key = String(T.me || myTeacherId || '');
   else if (m === 'class') view.key = '';
+  if (m === 'sub' && !T.term.published) {             // สอนแทนต้องใช้ตารางที่ใช้จริง (เผยแพร่แล้ว) ไม่ใช่ร่างเทอมหน้า
+    const pub = TERMS.find(t => t.published);
+    if (pub) { loadTerm(pub.id); return; }
+  }
   fillPicker(); render();
 }
 
@@ -429,11 +465,13 @@ function render() {
   if (!T) return;
   if (view.mode === 'load') { el('content').innerHTML = loadHTML(); return; }
   if (view.mode === 'edit') { renderEditor(); return; }
+  if (view.mode === 'sub') { renderSubs(); return; }
   if (!view.key) { el('content').innerHTML = '<div class="text-center text-muted py-5">ไม่มีข้อมูล</div>'; return; }
   if (el('selPick').value !== view.key) el('selPick').value = view.key;
   el('content').innerHTML = `<div class="tt-desktop-only">${pageHTML(view.mode, view.key)}</div>
     <div class="tt-mobile-only container">${mobileHTML(view.mode, view.key)}</div>`;
   fitPages();
+  if (view.mode === 'teacher') mySubsBanner();     // ครูเปิดตารางตัวเอง → เห็นคาบสอนแทนที่ถูกจัดไว้
 }
 
 // ตารางสูงเกินกระดาษ (ห้องที่มีหลายสายเรียนพร้อมกัน) → ลดช่องว่างก่อนลงชื่อ → เลื่อนหัวขึ้น → ย่อตาราง
@@ -468,6 +506,10 @@ window.addEventListener('beforeprint', fitPages);   // กดพิมพ์จ�
 
 async function printDoc(all) {
   if (view.mode === 'load') { window.print(); return; }
+  if (view.mode === 'sub') {                                   // ใบบันทึกการสอนแทนของวันที่เลือก
+    try { await document.fonts.load('16pt THSarabunDoc', 'กขค'); await document.fonts.load('bold 16pt THSarabunDoc', 'กขค'); } catch (e) {}
+    window.print(); return;
+  }
   if (all) {
     const keys = view.mode === 'teacher' ? T.teachers.filter(t => IDX.byTeacher[t.id]).map(t => String(t.id)) : IDX.classes;
     el('content').innerHTML = `<div class="tt-desktop-only">${keys.map(k => pageHTML(view.mode, k)).join('')}</div>`;
@@ -481,5 +523,6 @@ async function printDoc(all) {
 </script>
 <script src="/js/tt-editor.js?v=7"></script>
 <script src="/js/tt-solver.js?v=1"></script>
+<script src="/js/tt-subs.js?v=1"></script>
 </body>
 </html>

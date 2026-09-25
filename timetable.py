@@ -6,6 +6,8 @@
   tt_teachers  ครูผู้สอน (ผูกกับบัญชีผู้ใช้ได้ → ครูเปิดดูตารางตัวเอง)
   tt_lessons   ภาระงานสอน 1 รายการ = วิชา/กิจกรรม + ครู + ชั้น (+ สาย/กลุ่ม) + คาบต่อสัปดาห์
   tt_slots     ช่องในตาราง (วัน 1-5, คาบ 1-7) ที่วางรายการนั้นไว้
+  tt_absences  ครูไม่มา (ลา / ไปราชการ / ย้ายออก) ช่วงวันที่ + คาบ (ว่าง = ทั้งวัน)
+  tt_subs      การจัดครูสอนแทน รายวัน-คาบ-รายการ (เก็บรหัสวิชา/ชั้นไว้ด้วย ประวัติไม่หายเมื่อแก้ตาราง)
 
 สิทธิ์: แอดมินแก้ไขได้ / ครูทุกคนดูได้
 """
@@ -60,7 +62,39 @@ CREATE TABLE IF NOT EXISTS tt_slots (
 );
 CREATE INDEX IF NOT EXISTS idx_ttlesson_term ON tt_lessons(term_id);
 CREATE INDEX IF NOT EXISTS idx_ttslot_lesson ON tt_slots(lesson_id);
+CREATE TABLE IF NOT EXISTS tt_absences (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    teacher_id  INTEGER NOT NULL REFERENCES tt_teachers(id) ON DELETE CASCADE,
+    date_from   TEXT NOT NULL,
+    date_to     TEXT NOT NULL,
+    periods     TEXT,
+    reason      TEXT DEFAULT '',
+    note        TEXT DEFAULT '',
+    created_at  TEXT DEFAULT (datetime('now','localtime'))
+);
+CREATE TABLE IF NOT EXISTS tt_subs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    date        TEXT NOT NULL,
+    period      INTEGER NOT NULL,
+    lesson_id   INTEGER NOT NULL,
+    absent_id   INTEGER NOT NULL,
+    sub_id      INTEGER,
+    subject     TEXT DEFAULT '',
+    class_label TEXT DEFAULT '',
+    note        TEXT DEFAULT '',
+    updated_at  TEXT DEFAULT (datetime('now','localtime')),
+    UNIQUE(date, period, lesson_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ttabs_to ON tt_absences(date_to);
+CREATE INDEX IF NOT EXISTS idx_ttsub_date ON tt_subs(date);
 """
+
+DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}$')
+OPEN_END = '9999-12-31'          # ไม่มา "ยังไม่มีกำหนด" (เช่น ย้ายออก รอครูใหม่)
+
+
+def squeeze(s, n):
+    return re.sub(r'\s+', ' ', str(s or '')).strip()[:n]
 
 # ชื่อกลุ่มสาระจากอักษรนำรหัสวิชา
 AREAS = {
@@ -740,3 +774,137 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                         con.execute('INSERT OR IGNORE INTO tt_slots (lesson_id, day, period) VALUES (?,?,?)', (lid, int(d), int(p)))
                         n += 1
         return jsonify(success=True, placed=n)
+
+    # ── สอนแทน ─────────────────────────────────────────────
+    # คาบที่ต้องหาครูแทน คำนวณในเบราว์เซอร์จาก "ครูไม่มา" + ตารางที่เผยแพร่ · เซิร์ฟเวอร์เก็บแค่บันทึกไม่มา + ผลการจัด
+    def absence_dict(r):
+        return dict(r, periods=jl(r['periods'], []))
+
+    def clean_absence(b):
+        """→ (ค่า, None) หรือ (None, ข้อความผิดพลาด)"""
+        try:
+            tid = int(b.get('teacher_id') or 0)
+        except (TypeError, ValueError):
+            tid = 0
+        f, t = str(b.get('date_from') or ''), str(b.get('date_to') or '') or OPEN_END
+        if not tid:
+            return None, 'เลือกครู'
+        if not DATE_RE.match(f) or not DATE_RE.match(t) or f > t:
+            return None, 'ช่วงวันที่ไม่ถูกต้อง'
+        periods = sorted({int(p) for p in (b.get('periods') or []) if str(p).isdigit() and 1 <= int(p) <= 12})
+        return dict(teacher_id=tid, date_from=f, date_to=t, periods=json.dumps(periods),
+                    reason=squeeze(b.get('reason'), 40), note=squeeze(b.get('note'), 200)), None
+
+    def drop_orphan_subs(con, tid, f, t):
+        """หลังแก้/ลบบันทึกไม่มา: ลบการจัดครูแทนของครูคนนี้ในช่วงนั้นที่ไม่มีบันทึกไม่มารองรับแล้ว"""
+        spans = [(r['date_from'], r['date_to'], jl(r['periods'], [])) for r in con.execute(
+            'SELECT * FROM tt_absences WHERE teacher_id=? AND date_from<=? AND date_to>=?', (tid, t, f))]
+        n = 0
+        for s in con.execute('SELECT id, date, period FROM tt_subs WHERE absent_id=? AND date BETWEEN ? AND ?',
+                             (tid, f, t)).fetchall():
+            if not any(a <= s['date'] <= b and (not ps or s['period'] in ps) for a, b, ps in spans):
+                con.execute('DELETE FROM tt_subs WHERE id=?', (s['id'],))
+                n += 1
+        return n
+
+    @app.get('/api/tt/subs')
+    @login_required
+    def tt_subs_list():
+        """ช่วงวันที่ from..to: ครูที่ไม่มา (ที่ทับช่วงนี้) + การจัดครูแทน + วันหยุด — ครูทุกคนดูได้"""
+        f, t = request.args.get('from', ''), request.args.get('to', '')
+        if not (DATE_RE.match(f) and DATE_RE.match(t)) or f > t:
+            return jsonify(success=False, message='ช่วงวันที่ไม่ถูกต้อง'), 400
+        with get_db() as con:
+            absences = [absence_dict(r) for r in con.execute(
+                'SELECT * FROM tt_absences WHERE date_from<=? AND date_to>=? ORDER BY date_from, id', (t, f))]
+            subs = [dict(r) for r in con.execute(
+                'SELECT * FROM tt_subs WHERE date BETWEEN ? AND ? ORDER BY date, period', (f, t))]
+            holidays = [dict(r) for r in con.execute(
+                'SELECT date, name, type FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date', (f, t))]
+        return jsonify(absences=absences, subs=subs, holidays=holidays)
+
+    @app.post('/api/tt/absences')
+    @admin_required
+    def tt_absence_create():
+        a, err = clean_absence(request.get_json() or {})
+        if err:
+            return jsonify(success=False, message=err), 400
+        with get_db() as con:
+            if not con.execute('SELECT 1 FROM tt_teachers WHERE id=?', (a['teacher_id'],)).fetchone():
+                return jsonify(success=False, message='ไม่พบครู'), 404
+            aid = con.execute("""INSERT INTO tt_absences (teacher_id, date_from, date_to, periods, reason, note)
+                                 VALUES (:teacher_id, :date_from, :date_to, :periods, :reason, :note)""", a).lastrowid
+            r = con.execute('SELECT * FROM tt_absences WHERE id=?', (aid,)).fetchone()
+        return jsonify(success=True, absence=absence_dict(r))
+
+    @app.put('/api/tt/absences/<int:aid>')
+    @admin_required
+    def tt_absence_update(aid):
+        a, err = clean_absence(request.get_json() or {})
+        if err:
+            return jsonify(success=False, message=err), 400
+        with get_db() as con:
+            old = con.execute('SELECT * FROM tt_absences WHERE id=?', (aid,)).fetchone()
+            if not old:
+                return jsonify(success=False, message='ไม่พบบันทึก'), 404
+            if not con.execute('SELECT 1 FROM tt_teachers WHERE id=?', (a['teacher_id'],)).fetchone():
+                return jsonify(success=False, message='ไม่พบครู'), 404
+            con.execute("""UPDATE tt_absences SET teacher_id=:teacher_id, date_from=:date_from, date_to=:date_to,
+                           periods=:periods, reason=:reason, note=:note WHERE id=:id""", dict(a, id=aid))
+            removed = drop_orphan_subs(con, old['teacher_id'], old['date_from'], old['date_to'])
+            r = con.execute('SELECT * FROM tt_absences WHERE id=?', (aid,)).fetchone()
+        return jsonify(success=True, absence=absence_dict(r), removed_subs=removed)
+
+    @app.delete('/api/tt/absences/<int:aid>')
+    @admin_required
+    def tt_absence_delete(aid):
+        with get_db() as con:
+            old = con.execute('SELECT * FROM tt_absences WHERE id=?', (aid,)).fetchone()
+            if not old:
+                return jsonify(success=False, message='ไม่พบบันทึก'), 404
+            con.execute('DELETE FROM tt_absences WHERE id=?', (aid,))
+            removed = drop_orphan_subs(con, old['teacher_id'], old['date_from'], old['date_to'])
+        return jsonify(success=True, removed_subs=removed)
+
+    @app.post('/api/tt/subs')
+    @admin_required
+    def tt_subs_save():
+        """บันทึกการจัดครูแทนของ 1 วัน
+        {date, items: [{period, lesson_id, absent_id, sub_id | null, subject, class_label, note}], clear: [{period, lesson_id}]}
+        sub_id ว่าง = ตัดสินใจไม่ใช้ครูแทน (note เช่น มอบงาน / รวมห้อง) · ครูคนเดียวสอนแทน 2 ห้องคาบเดียวกันไม่ได้"""
+        b = request.get_json() or {}
+        d = str(b.get('date') or '')
+        if not DATE_RE.match(d):
+            return jsonify(success=False, message='วันที่ไม่ถูกต้อง'), 400
+        try:
+            clear = {(int(c['period']), int(c['lesson_id'])) for c in (b.get('clear') or [])}
+            items = [dict(period=int(i['period']), lesson_id=int(i['lesson_id']), absent_id=int(i['absent_id']),
+                          sub_id=int(i.get('sub_id') or 0) or None, subject=squeeze(i.get('subject'), 30),
+                          class_label=squeeze(i.get('class_label'), 40), note=squeeze(i.get('note'), 100))
+                     for i in (b.get('items') or [])]
+        except (TypeError, ValueError, KeyError):
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        with get_db() as con:
+            # ตรวจก่อนเขียน (return กลางคันใน with = commit ครึ่ง ๆ)
+            final = {(r['period'], r['lesson_id']): r['sub_id'] for r in con.execute(
+                'SELECT period, lesson_id, sub_id FROM tt_subs WHERE date=?', (d,))}
+            for k in clear:
+                final.pop(k, None)
+            for i in items:
+                final[(i['period'], i['lesson_id'])] = i['sub_id']
+            seen = set()
+            for (p, _), sid in final.items():
+                if sid and (p, sid) in seen:
+                    name = (con.execute('SELECT name FROM tt_teachers WHERE id=?', (sid,)).fetchone() or {'name': ''})['name']
+                    return jsonify(success=False, message=f'ครู{name.split(" ")[0]} ถูกจัดสอนแทน 2 ห้องในคาบ {p}'), 409
+                seen.add((p, sid))
+            for p, lid in clear:
+                con.execute('DELETE FROM tt_subs WHERE date=? AND period=? AND lesson_id=?', (d, p, lid))
+            for i in items:
+                con.execute("""INSERT INTO tt_subs (date, period, lesson_id, absent_id, sub_id, subject, class_label, note, updated_at)
+                               VALUES (:date, :period, :lesson_id, :absent_id, :sub_id, :subject, :class_label, :note, datetime('now','localtime'))
+                               ON CONFLICT(date, period, lesson_id) DO UPDATE SET absent_id=excluded.absent_id,
+                                 sub_id=excluded.sub_id, subject=excluded.subject, class_label=excluded.class_label,
+                                 note=excluded.note, updated_at=excluded.updated_at""", dict(i, date=d))
+            subs = [dict(r) for r in con.execute('SELECT * FROM tt_subs WHERE date=? ORDER BY period', (d,))]
+        return jsonify(success=True, subs=subs)
