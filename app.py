@@ -2793,7 +2793,16 @@ def api_director():
             ORDER BY absent_count DESC LIMIT 10
         """, (month_start, alert_threshold)).fetchall()
 
+        # ครูไม่มา + การจัดครูสอนแทนของวันนั้น (ระบบตารางสอน) — พังก็ไม่ให้หน้า ผอ. ล่ม
+        try:
+            import timetable
+            teachers_today = timetable.day_summary(con, today, settings)
+        except Exception:
+            app.logger.exception('day_summary failed')
+            teachers_today = None
+
     return jsonify(
+        teachersToday=teachers_today,
         schoolName=settings.get('school_name', ''),
         schoolLogo=settings.get('school_logo', ''),
         themeColor=settings.get('theme_color', '#1a5276'),

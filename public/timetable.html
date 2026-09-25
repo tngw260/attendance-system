@@ -233,8 +233,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   if (myTeacherId) view.key = String(myTeacherId);
-  await loadTerm(terms.terms[0].id);
+  // เปิดเทอมที่ใช้สอน "วันนี้" (ช่วงวันที่จากหน้าตั้งค่า) ไม่ใช่เทอมใหม่สุด — เผยแพร่เทอมหน้าก่อนเปิดเทอมได้ไม่สับสน
+  // ?tab=sub&date=YYYY-MM-DD = เปิดแท็บสอนแทนของวันนั้น (ลิงก์จากหน้าแรก / ข้อความ LINE)
+  const Q0 = new URLSearchParams(location.search);
+  const d0 = /^\d{4}-\d{2}-\d{2}$/.test(Q0.get('date') || '') ? Q0.get('date') : todayLocal();
+  await loadTerm(termForDate(d0).id);
+  if (Q0.get('tab') === 'sub') { SUB.date = d0; el('mSub').checked = true; setMode('sub'); }
 });
+
+// ภาคเรียนที่ครอบวันที่ d (เผยแพร่แล้วก่อน แอดมินอาจได้ร่าง) — ไม่มี = ช่วงปิดเทอม
+function termAt(d) {
+  const inside = t => t.start_date && t.start_date <= d && d <= t.end_date;
+  return TERMS.find(t => t.published && inside(t)) || TERMS.find(inside) || null;
+}
+// เทอมที่ควรเปิดให้ดูในวันที่ d: เทอมที่ครอบ → ปิดเทอม: เทอมที่กำลังจะเปิด → เทอมล่าสุดที่ผ่านมา → ใหม่สุด
+function termForDate(d) {
+  const pub = TERMS.filter(t => t.published && t.start_date);
+  return termAt(d)
+    || pub.filter(t => t.start_date > d).sort((a, b) => a.start_date.localeCompare(b.start_date))[0]
+    || pub.filter(t => t.end_date < d).sort((a, b) => b.end_date.localeCompare(a.end_date))[0]
+    || TERMS.find(t => t.published) || TERMS[0];
+}
 
 function showAdminBar(terms) {
   if (currentUser?.role !== 'admin') return;
@@ -307,9 +326,9 @@ function setMode(m) {
                                            : '@page { size: A4 landscape; margin: 0; }';
   if (m === 'teacher') view.key = String(T.me || myTeacherId || '');
   else if (m === 'class') view.key = '';
-  if (m === 'sub' && !T.term.published) {             // สอนแทนต้องใช้ตารางที่ใช้จริง (เผยแพร่แล้ว) ไม่ใช่ร่างเทอมหน้า
-    const pub = TERMS.find(t => t.published);
-    if (pub) { loadTerm(pub.id); return; }
+  if (m === 'sub') {                                   // สอนแทนใช้ตารางของเทอมที่ครอบวันที่เลือก (ไม่ใช่ร่างเทอมหน้า)
+    const want = termAt(SUB.date || todayLocal());
+    if (want && want.id !== T.term.id) { loadTerm(want.id); return; }
   }
   fillPicker(); render();
 }
@@ -521,8 +540,8 @@ async function printDoc(all) {
   if (all) setTimeout(render, 500);
 }
 </script>
-<script src="/js/tt-editor.js?v=7"></script>
+<script src="/js/tt-editor.js?v=8"></script>
 <script src="/js/tt-solver.js?v=1"></script>
-<script src="/js/tt-subs.js?v=1"></script>
+<script src="/js/tt-subs.js?v=2"></script>
 </body>
 </html>

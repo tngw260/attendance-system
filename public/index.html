@@ -59,6 +59,9 @@
 
 <div class="container pb-5">
 
+  <!-- ===== สอนแทนวันนี้ (ระบบตารางสอน) — เติมโดยสคริปต์ท้ายหน้า ===== -->
+  <div id="subsToday"></div>
+
   <!-- ===== TODAY OVERVIEW ===== -->
   <div class="dash-section">
     <div class="dash-section-head">
@@ -314,5 +317,38 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
 <script src="/js/common.js"></script>
 <script src="/js/dashboard.js"></script>
+<script>
+/* สอนแทน: ครูเห็นคาบสอนแทนของตัวเอง (วันนี้ + วันเรียนถัดไป) · แอดมินเห็นว่าวันนี้ครูไม่มากี่คน จัดครูแทนครบหรือยัง */
+document.addEventListener('DOMContentLoaded', async () => {
+  const pad = n => String(n).padStart(2, '0'), now = new Date();
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;   // วันที่ตามเครื่อง (ไม่ใช่ UTC)
+  let r;
+  try { r = await apiFetch('/api/tt/today?date=' + today); } catch (e) { return; }
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const first = n => 'ครู' + String(n || '').split(' ')[0];
+  const dayLabel = d => d === r.date ? '<span class="badge bg-danger">วันนี้</span>'
+    : `<span class="badge bg-secondary">${(new Date(d + 'T00:00:00') - new Date(r.date + 'T00:00:00')) === 864e5 ? 'พรุ่งนี้' : 'วัน' + THAI_DAYS[new Date(d + 'T00:00:00').getDay()]}</span>`;
+  let html = '';
+  if (r.mine && r.mine.length) {
+    html += `<div class="alert alert-warning d-flex gap-2 align-items-start mb-3">
+      <i class="bi bi-arrow-left-right fs-4"></i>
+      <div class="flex-fill"><div class="fw-bold mb-1">คาบสอนแทนของคุณ</div>
+        ${r.mine.map(s => `<div>${dayLabel(s.date)} คาบ ${s.period}${s.time ? ` (${esc(s.time)})` : ''} · <b>${esc(s.class_label)} ${esc(s.subject)}</b>
+          แทน${esc(first(s.absent))}${s.note ? ` · ${esc(s.note)}` : ''}</div>`).join('')}</div>
+      <a href="/timetable.html" class="btn btn-sm btn-warning text-nowrap">ตารางสอน</a></div>`;
+  }
+  const sm = r.summary;
+  if (sm && sm.absences.length) {
+    const need = sm.needs.length, done = sm.needs.filter(n => n.decided).length, left = need - done;
+    html += `<div class="alert ${left ? 'alert-danger' : 'alert-success'} d-flex gap-2 align-items-start mb-3">
+      <i class="bi bi-person-dash fs-4"></i>
+      <div class="flex-fill"><div class="fw-bold mb-1">ครูไม่มาวันนี้ ${sm.absences.length} คน
+        ${need ? `· ต้องจัดครูสอนแทน ${need} คาบ ${left ? `<span class="badge bg-danger">ยังไม่จัด ${left}</span>` : '<span class="badge bg-success">จัดครบแล้ว</span>'}` : '· ไม่มีคาบที่ต้องจัดครูแทน'}</div>
+        <div class="small">${sm.absences.map(a => `${esc(first(a.name))} (${esc(a.reason || 'ไม่มา')})`).join(', ')}</div></div>
+      ${need ? `<a href="/timetable.html?tab=sub&date=${r.date}" class="btn btn-sm ${left ? 'btn-danger' : 'btn-outline-success'} text-nowrap">${left ? 'จัดครูแทน' : 'ดู/ส่ง LINE'}</a>` : ''}</div>`;
+  }
+  document.getElementById('subsToday').innerHTML = html;
+});
+</script>
 </body>
 </html>

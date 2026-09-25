@@ -616,7 +616,10 @@ function draftReport() {
 function openTermModal() {
   const nx = nextTermName(T.term.name);
   const body = `
-    <div class="mb-3"><b>ภาคเรียน ${esc(T.term.name)}</b> — ${T.term.published ? '<span class="badge bg-success">เผยแพร่แล้ว ครูทุกคนเห็น</span>' : '<span class="badge bg-warning text-dark">ร่าง — เห็นเฉพาะแอดมิน</span>'}</div>
+    <div class="mb-2"><b>ภาคเรียน ${esc(T.term.name)}</b> — ${T.term.published ? '<span class="badge bg-success">เผยแพร่แล้ว ครูทุกคนเห็น</span>' : '<span class="badge bg-warning text-dark">ร่าง — เห็นเฉพาะแอดมิน</span>'}</div>
+    <div class="small mb-3"><i class="bi bi-calendar-range"></i> เปิดสอน ${T.term.start_date ? `${formatThaiDateShort(T.term.start_date)} – ${formatThaiDateShort(T.term.end_date)}` : '(ไม่ทราบ)'}
+      · <a href="/settings.html">แก้วันเปิด-ปิดภาคเรียน</a>
+      <div class="text-muted">ระบบเปิดตารางของเทอมที่ตรงกับวันนี้ให้ครูเอง — เผยแพร่เทอมหน้าล่วงหน้าได้ ครูยังเห็นตารางเทอมปัจจุบันจนกว่าจะเปิดเทอมใหม่</div></div>
     <div class="d-grid gap-2">
       <button class="btn btn-${T.term.published ? 'outline-secondary' : 'success'}" onclick="setPublished(${T.term.published ? 0 : 1})">
         <i class="bi bi-${T.term.published ? 'eye-slash' : 'megaphone'}"></i> ${T.term.published ? 'ซ่อน (กลับเป็นร่าง)' : 'เผยแพร่ให้ครูเห็น'}</button>

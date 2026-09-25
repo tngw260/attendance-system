@@ -4,7 +4,7 @@
    3) แนะนำครู: ว่างคาบนั้น → สอนแทนมาน้อยสุดในภาคเรียน (กระจายให้เท่ากัน) → สาระเดียวกัน → สอนห้องนั้นอยู่ → วันนั้นมีคาบน้อย
    4) พิมพ์ใบบันทึกการสอนแทนรายวัน · ครูเปิดตารางตัวเองเห็นคาบสอนแทน 7 วันข้างหน้า */
 
-const SUB = { date: '', data: null, from: '' };
+const SUB = { date: '', data: null, from: '', to: '' };
 const SUB_REASONS = ['ลาป่วย', 'ลากิจ', 'ไปราชการ', 'อบรม/ประชุม', 'ลาคลอด', 'ย้ายออก/รอครูใหม่', 'อื่น ๆ'];
 const OPEN_END = '9999-12-31';
 const MON_ABBR = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -18,7 +18,10 @@ const todayLocal = () => isoOf(new Date());                  // todayISO() ใ�
 const shortDate = s => { const d = dateOf(s); return `${d.getDate()} ${MON_ABBR[d.getMonth()]} ${String(d.getFullYear() + 543).slice(2)}`; };
 const nextSchoolDay = (s, step) => { let d = s; do { d = addDays(d, step); } while (wdOf(d) === 0 || wdOf(d) === 6); return d; };
 
-// ต้นภาคเรียนโดยประมาณ (16 พ.ค. / 1 พ.ย.) — ใช้นับว่าใครสอนแทนไปแล้วกี่คาบ
+// อยู่ในช่วงภาคเรียนของตารางที่เปิดอยู่ไหม (ช่วงวันที่จากหน้าตั้งค่า · ไม่มีข้อมูล = ถือว่าอยู่)
+const inTerm = date => !T.term.start_date || (T.term.start_date <= date && date <= T.term.end_date);
+
+// ต้นภาคเรียนโดยประมาณ (16 พ.ค. / 1 พ.ย.) — สำรองไว้เมื่อภาคเรียนไม่มีช่วงวันที่
 function termStart(s) {
   const d = dateOf(s), y = d.getFullYear(), m = d.getMonth() + 1;
   if (m >= 11) return `${y}-11-01`;
@@ -47,7 +50,7 @@ const savedOn = date => (SUB.data?.subs || []).filter(s => s.date === date);
 
 function needsOn(date) {
   const wd = wdOf(date);
-  if (wd < 1 || wd > DAYS.length || holidayOn(date)?.type === 'holiday') return [];
+  if (wd < 1 || wd > DAYS.length || holidayOn(date)?.type === 'holiday' || !inTerm(date)) return [];
   const out = [];
   periodsOf().forEach(({ no: p }) => {
     (IDX.bySlot[`${wd}-${p}`] || []).forEach(l => {
@@ -102,9 +105,10 @@ const itemOf = (n, sid, note) => ({ period: n.p, lesson_id: n.l.id, absent_id: n
 
 /* ── โหลด / บันทึก ── */
 async function loadSubs() {
-  SUB.from = termStart(SUB.date);
-  const to = addDays(SUB.date, 14);
-  SUB.data = await apiFetch(`/api/tt/subs?from=${SUB.from}&to=${to}`);
+  // นับความถี่การสอนแทนตั้งแต่ต้นภาคเรียนนี้ (ทำให้กระจายงานเท่ากันทั้งเทอม)
+  SUB.from = T.term.start_date && T.term.start_date <= SUB.date ? T.term.start_date : termStart(SUB.date);
+  SUB.to = addDays(SUB.date, 14);
+  SUB.data = await apiFetch(`/api/tt/subs?from=${SUB.from}&to=${SUB.to}`);
 }
 
 async function saveSubs(body) {
@@ -187,9 +191,10 @@ async function renderSubs() {
 
 async function gotoDate(d) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return;
-  const reload = termStart(d) !== SUB.from || d > addDays(SUB.date, 14) || d < SUB.from;
   SUB.date = d;
-  if (reload) { await renderSubs(); return; }
+  const want = termAt(d);                                    // ข้ามไปวันของอีกเทอม → ใช้ตารางเทอมนั้น
+  if (want && want.id !== T.term.id) { await loadTerm(want.id); return; }
+  if (d < SUB.from || d > SUB.to) { await renderSubs(); return; }
   renderSubsBody();
 }
 
@@ -215,6 +220,7 @@ function renderSubsBody() {
     <span class="badge text-bg-light border">ตารางภาคเรียน ${esc(T.term.name)}${T.term.published ? '' : ' (ร่าง)'}</span>
     ${hol ? `<span class="badge ${hol.type === 'holiday' ? 'bg-danger' : 'bg-info'}">${hol.type === 'holiday' ? 'วันหยุด' : hol.type === 'exam' ? 'สอบ' : 'กิจกรรม'}: ${esc(hol.name)}</span>` : ''}
     ${wd === 0 || wd === 6 ? '<span class="badge bg-secondary">วันเสาร์-อาทิตย์</span>' : ''}
+    ${!inTerm(date) ? `<span class="badge bg-secondary">ปิดภาคเรียน (ภาคเรียน ${esc(T.term.name)} ${shortDate(T.term.start_date)} – ${shortDate(T.term.end_date)})</span>` : ''}
   </div></div><div class="row g-2">`;
 
   // ซ้าย: ครูไม่มา + สรุป
@@ -266,12 +272,13 @@ function renderSubsBody() {
         <span class="badge ${done < todo.length ? 'bg-danger' : 'bg-success'}">จัดแล้ว ${done}/${todo.length}</span></div>
       ${admin && todo.length ? `<button class="btn btn-sm btn-primary" onclick="autoAssign()"><i class="bi bi-magic"></i> จัดอัตโนมัติ</button>
         <button class="btn btn-sm btn-outline-secondary" onclick="clearDay()">ล้าง</button>` : ''}
+      ${todo.length ? `<button class="btn btn-sm btn-success" onclick="openLineModal()"><i class="bi bi-line"></i> ส่ง LINE</button>` : ''}
     </div>
     ${needs.length ? `<div class="table-responsive"><table class="table table-sm align-middle mb-1 sub-table">
       <thead class="table-light"><tr><th class="text-center">คาบ</th><th>ชั้น</th><th>วิชา</th><th class="d-none d-md-table-cell">ครูที่ไม่มา</th><th>สอนแทนโดย</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
       ${admin ? '<div class="small text-muted">รายชื่อเรียง: สอนแทนมาน้อยก่อน (นับตั้งแต่ ' + shortDate(SUB.from) + ') · สาระเดียวกัน · สอนห้องนี้อยู่ · วันนั้นมีคาบน้อย</div>' : ''}`
-      : `<div class="text-center text-muted py-4">${hol?.type === 'holiday' || wd === 0 || wd === 6 ? 'ไม่มีการเรียนการสอน' : abs.length ? 'ครูที่ไม่มาไม่มีคาบสอนวันนี้' : 'ไม่มีครูไม่มา — ไม่ต้องจัดครูแทน'}</div>`}
+      : `<div class="text-center text-muted py-4">${hol?.type === 'holiday' || wd === 0 || wd === 6 || !inTerm(date) ? 'ไม่มีการเรียนการสอน' : abs.length ? 'ครูที่ไม่มาไม่มีคาบสอนวันนี้' : 'ไม่มีครูไม่มา — ไม่ต้องจัดครูแทน'}</div>`}
     ${stale.length ? `<div class="alert alert-warning py-1 px-2 small mt-2 mb-0">มีบันทึกที่ไม่ตรงตาราง/บันทึกไม่มาแล้ว ${stale.length} รายการ
       (${stale.map(s => `คาบ ${s.period} ${esc(s.class_label)} ${esc(s.subject)}`).join(', ')})
       ${admin ? `<button class="btn btn-sm btn-link p-0 ms-1" onclick="saveSubs({date: SUB.date, clear: ${esc(JSON.stringify(stale.map(s => ({ period: s.period, lesson_id: s.lesson_id }))))}})">ลบทิ้ง</button>` : ''}</div>` : ''}
@@ -356,6 +363,47 @@ async function deleteAbsence(id) {
     await apiFetch(`/api/tt/absences/${id}`, { method: 'DELETE' });
     edModal.hide(); await loadSubs(); renderSubsBody();
   } catch (e) { alert(e.message); }
+}
+
+/* ── ส่ง LINE (แบบเดียวกับหน้าแจ้งไลน์ครูเวร: ก๊อปข้อความ → เปิดไลน์ → วางในกลุ่มครู) ── */
+function lineText() {
+  const date = SUB.date, P = Object.fromEntries(periodsOf().map(x => [x.no, x]));
+  const saved = new Map(savedOn(date).map(s => [`${s.period}-${s.lesson_id}`, s]));
+  const out = [`📋 สอนแทน ${formatThaiDateFull(date).replace('พ.ศ. ', '')}`];
+  const abs = absencesOn(date);
+  if (abs.length) out.push('ครูไม่มา: ' + abs.map(a => `${tShort(a.teacher_id)} (${a.reason || 'ไม่มา'}${a.periods.length ? ' ' + periodLabel(a.periods) : ''})`).join(', '));
+  const rows = [];                                   // คาบติดกัน วิชาเดียวกัน ครูแทนคนเดียวกัน → รวมเป็น "คาบ 3-4"
+  needsOn(date).filter(n => !n.skip).forEach(n => {
+    const s = saved.get(n.key);
+    const who = !s ? '❗ยังไม่จัด' : s.sub_id ? tShort(s.sub_id) : 'ไม่มีครูแทน';
+    const last = rows[rows.length - 1];
+    if (last && last.l.id === n.l.id && last.p2 === n.p - 1 && last.who === who) { last.p2 = n.p; return; }
+    rows.push({ l: n.l, p1: n.p, p2: n.p, who, gone: n.gone, note: s?.note || '' });
+  });
+  out.push('');
+  rows.forEach(r => out.push(`คาบ ${r.p1 === r.p2 ? r.p1 : r.p1 + '-' + r.p2} (${P[r.p1]?.start || ''}) ${classLabel(r.l)} ${lessonName(r.l)}` +
+    ` (${r.gone.map(tShort).join(', ')}) → ${r.who}${r.note ? ' · ' + r.note : ''}`));
+  out.push('', 'ดูทั้งหมด: ' + location.origin + '/timetable.html?tab=sub&date=' + date);
+  return out.join('\n');
+}
+
+function openLineModal() {
+  const left = needsOn(SUB.date).filter(n => !n.skip && !savedOn(SUB.date).some(s => `${s.period}-${s.lesson_id}` === n.key)).length;
+  showModal('<i class="bi bi-line"></i> ส่งรายการสอนแทนเข้า LINE', `
+    ${left ? `<div class="alert alert-warning py-1 px-2 small">ยังไม่ได้จัด ${left} คาบ — ในข้อความจะขึ้นว่า "❗ยังไม่จัด"</div>` : ''}
+    <textarea id="lineMsg" class="form-control" rows="12" style="font-size:.9rem">${esc(lineText())}</textarea>
+    <div class="small text-muted mt-1">แก้ข้อความได้ก่อนก๊อป · กด "ก๊อปข้อความ" แล้ววางในกลุ่มไลน์ครู</div>`,
+    `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ปิด</button>
+     <a class="btn btn-outline-success btn-sm d-none" id="lineOpen" href="https://line.me/R/" target="_blank" rel="noopener"><i class="bi bi-line"></i> เปิดไลน์</a>
+     <button class="btn btn-success btn-sm" onclick="copyLine()"><i class="bi bi-clipboard-check"></i> ก๊อปข้อความ</button>`);
+}
+
+async function copyLine() {
+  const ta = el('lineMsg');
+  try { await navigator.clipboard.writeText(ta.value); }
+  catch (e) { ta.select(); document.execCommand('copy'); }          // เบราว์เซอร์ในแอป LINE บางรุ่นไม่ให้ใช้ clipboard API
+  el('lineOpen').classList.remove('d-none');
+  toastEd('ก๊อปแล้ว — วางในกลุ่มไลน์ได้เลย');
 }
 
 /* ── ใบบันทึกการสอนแทน (A4 แนวตั้ง) ── */

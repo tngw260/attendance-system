@@ -614,6 +614,16 @@
     </div>
   </div>
 
+  <!-- ===== ครูไม่มา + สอนแทน (ระบบตารางสอน) ===== -->
+  <div class="dir-section" id="teacherSection" style="display:none;">
+    <div class="dir-section-title">
+      <i class="bi bi-person-badge-fill me-2"></i>ครูที่ไม่มาและการจัดครูสอนแทน
+    </div>
+    <div class="info-card">
+      <div id="teacherToday"></div>
+    </div>
+  </div>
+
   <!-- ===== FREQUENT ABSENT ===== -->
   <div class="dir-section" id="absentSection" style="display:none;">
     <div class="dir-section-title">
@@ -837,8 +847,43 @@ function render(d) {
       </div>`).join('');
   }
 
+  renderTeachers(d.teachersToday);
+
   // Trend chart
   drawTrend(d.trend || []);
+}
+
+// ครูไม่มา + คาบที่จัดครูสอนแทนแล้ว/ยังไม่จัด ของวันที่เลือก
+function renderTeachers(t) {
+  const sec = document.getElementById('teacherSection');
+  if (!t || !t.absences || !t.absences.length) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const need = t.needs.length, done = t.needs.filter(n => n.decided).length;
+  const when = a => (a.periods && a.periods.length ? 'คาบ ' + a.periods.join(', ') : 'ทั้งวัน')
+    + (a.date_to === '9999-12-31' ? ' · ยังไม่มีกำหนดกลับ' : a.date_from !== a.date_to ? ` · ถึง ${formatThaiDate(a.date_to)}` : '');
+  document.getElementById('teacherToday').innerHTML =
+    t.absences.map((a, i) => `
+      <div class="stu-list-item">
+        <div class="num-circle" style="background:#6f42c1;">${i + 1}</div>
+        <div class="flex-grow-1">
+          <div class="stu-name">ครู${esc(a.name)}</div>
+          <div class="stu-meta">${esc(when(a))}${a.note ? ' • ' + esc(a.note) : ''}</div>
+        </div>
+        <div class="stu-badge" style="background:#6f42c1;color:white;">${esc(a.reason || 'ไม่มา')}</div>
+      </div>`).join('') +
+    (need ? `
+      <div class="fw-bold mt-3 mb-1">จัดครูสอนแทนแล้ว ${done}/${need} คาบ
+        <span class="badge ${done < need ? 'bg-danger' : 'bg-success'}">${done < need ? 'ยังไม่ครบ' : 'ครบ'}</span></div>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead><tr><th>คาบ</th><th>ชั้น</th><th>วิชา</th><th>ครูผู้สอน</th><th>ครูสอนแทน</th></tr></thead>
+        <tbody>${t.needs.map(n => `<tr>
+          <td class="text-nowrap">${n.period}${n.time ? ` <span class="text-muted small">${esc(n.time)}</span>` : ''}</td>
+          <td class="text-nowrap">${esc(n.class_label)}</td><td>${esc(n.subject)}</td>
+          <td class="text-nowrap">${n.absent.map(x => 'ครู' + esc(String(x).split(' ')[0])).join(', ')}</td>
+          <td>${n.decided ? (n.sub ? 'ครู' + esc(n.sub.split(' ')[0]) : 'ไม่มีครูแทน') + (n.note ? ` <span class="text-muted small">(${esc(n.note)})</span>` : '')
+                          : '<span class="text-danger fw-bold">ยังไม่จัด</span>'}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="text-muted small mt-2">วันนี้ไม่มีคาบที่ต้องจัดครูสอนแทน</div>');
 }
 
 function drawTrend(trend) {

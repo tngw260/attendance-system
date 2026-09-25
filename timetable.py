@@ -11,6 +11,7 @@
 
 สิทธิ์: แอดมินแก้ไขได้ / ครูทุกคนดูได้
 """
+import datetime
 import json
 import os
 import re
@@ -95,6 +96,78 @@ OPEN_END = '9999-12-31'          # ไม่มา "ยังไม่มีก�
 
 def squeeze(s, n):
     return re.sub(r'\s+', ' ', str(s or '')).strip()[:n]
+
+
+def term_dates(name, settings):
+    """ช่วงวันที่ของภาคเรียน "1/2569" จากหน้าตั้งค่า (sem1_start … sem2_end รูปแบบ MM-DD เหมือน semester_range ใน app.py)
+    → ('2026-05-16', '2026-10-15') · ชื่อไม่ตรงรูปแบบ = ('', '')"""
+    m = re.fullmatch(r'([12])/(25\d\d)', name or '')
+    if not m:
+        return '', ''
+    sem, year = int(m.group(1)), int(m.group(2)) - 543
+    try:
+        sm, sd = map(int, (settings.get(f'sem{sem}_start') or ('05-16' if sem == 1 else '11-01')).split('-'))
+        em, ed = map(int, (settings.get(f'sem{sem}_end') or ('10-15' if sem == 1 else '03-31')).split('-'))
+        start = datetime.date(year, sm, sd)
+        end = datetime.date(year if em >= sm else year + 1, em, ed)     # เทอม 2 ข้ามปี
+    except (ValueError, TypeError):
+        return '', ''
+    return start.isoformat(), end.isoformat()
+
+
+def term_for_date(con, date, settings):
+    """ภาคเรียนที่ใช้สอนในวันนั้น (เผยแพร่แล้วก่อน) — None = ปิดภาคเรียน"""
+    for r in con.execute('SELECT * FROM tt_terms ORDER BY published DESC, id DESC').fetchall():
+        f, t = term_dates(r['name'], settings)
+        if f and f <= date <= t:
+            return r
+    return None
+
+
+def next_school_day(date):
+    d = datetime.date.fromisoformat(date) + datetime.timedelta(days=1)
+    while d.isoweekday() > 5:
+        d += datetime.timedelta(days=1)
+    return d.isoformat()
+
+
+def day_summary(con, date, settings):
+    """ครูไม่มา + คาบที่ต้องมีครูแทน + ผลการจัด ของวันหนึ่ง — ใช้ในหน้าแรก (แอดมิน) และหน้า ผอ.
+    กติกาเดียวกับ needsOn() ใน public/js/tt-subs.js (ข้ามวันหยุด / ไม่มีนักเรียน / มีครูร่วมสอนอยู่)"""
+    names = {r['id']: r['name'] for r in con.execute('SELECT id, name FROM tt_teachers')}
+    absences = [dict(teacher_id=r['teacher_id'], name=names.get(r['teacher_id'], ''), reason=r['reason'],
+                     periods=jl(r['periods'], []), note=r['note'], date_from=r['date_from'], date_to=r['date_to'])
+                for r in con.execute('SELECT * FROM tt_absences WHERE date_from<=? AND date_to>=? ORDER BY id', (date, date))]
+    hol = con.execute('SELECT name, type FROM holidays WHERE date=?', (date,)).fetchone()
+    term = term_for_date(con, date, settings)
+    out = dict(date=date, term=dict(id=term['id'], name=term['name']) if term else None,
+               holiday=dict(hol) if hol else None, absences=absences, needs=[])
+    if not term or datetime.date.fromisoformat(date).isoweekday() > 5 or (hol and hol['type'] == 'holiday') or not absences:
+        return out
+    cfg = jl(term['config'], {})
+    times = {p['no']: p for p in cfg.get('periods', [])}
+    one_room = all(c.endswith('/1') for c in cfg.get('classes', []))
+    subs = {(s['period'], s['lesson_id']): s for s in con.execute('SELECT * FROM tt_subs WHERE date=?', (date,))}
+
+    def away(tid, p):
+        return any(a['teacher_id'] == tid and (not a['periods'] or p in a['periods']) for a in absences)
+
+    for l in con.execute("""SELECT l.*, s.period FROM tt_lessons l JOIN tt_slots s ON s.lesson_id=l.id
+                            WHERE l.term_id=? AND s.day=? ORDER BY s.period, l.id""",
+                         (term['id'], datetime.date.fromisoformat(date).isoweekday())).fetchall():
+        tids, classes, p = jl(l['teacher_ids'], []), jl(l['classes'], []), l['period']
+        gone = [t for t in tids if away(t, p)]
+        if not gone or not classes or len(gone) < len(tids):
+            continue
+        s = subs.get((p, l['id']))
+        out['needs'].append(dict(
+            period=p, time=f"{times[p]['start']}-{times[p]['end']}" if p in times else '', lesson_id=l['id'],
+            subject=l['code'] or l['title'],
+            class_label=(s['class_label'] if s and s['class_label'] else
+                         ', '.join('ม.' + (c.split('/')[0] if one_room else c) for c in classes)),
+            absent=[names.get(t, '') for t in gone], decided=bool(s),
+            sub=names.get(s['sub_id'], '') if s and s['sub_id'] else '', note=s['note'] if s else ''))
+    return out
 
 # ชื่อกลุ่มสาระจากอักษรนำรหัสวิชา
 AREAS = {
@@ -233,7 +306,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             rows = con.execute("""SELECT t.*, (SELECT COUNT(*) FROM tt_lessons l WHERE l.term_id=t.id) AS lesson_count
                                   FROM tt_terms t ORDER BY t.id DESC""").fetchall()
         u = current_user()
-        out = [dict(r, config=None) for r in rows]
+        s = get_settings()
+        out = [dict(r, config=None, **dict(zip(('start_date', 'end_date'), term_dates(r['name'], s)))) for r in rows]
         if not u or u['role'] != 'admin':
             out = [r for r in out if r['published']]
         seeds = []
@@ -260,6 +334,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         data['me'] = me['id'] if me else None
         data['can_edit'] = u['role'] == 'admin'
         s = get_settings()
+        data['term']['start_date'], data['term']['end_date'] = term_dates(data['term']['name'], s)
         data['school'] = dict(name=s.get('school_name', ''), director=s.get('director_name', ''),
                               director_title=s.get('director_title', ''), logo=s.get('school_logo', ''))
         return jsonify(data)
@@ -822,6 +897,33 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             holidays = [dict(r) for r in con.execute(
                 'SELECT date, name, type FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date', (f, t))]
         return jsonify(absences=absences, subs=subs, holidays=holidays)
+
+    @app.get('/api/tt/today')
+    @login_required
+    def tt_today():
+        """หน้าแรก: คาบสอนแทนของฉัน (วันนี้ + วันเรียนถัดไป) · แอดมินได้สรุปการจัดครูแทนของวันนี้ด้วย
+        ?date= วันที่ตามเครื่องผู้ใช้ (ไม่ส่ง = วันนี้ของเซิร์ฟเวอร์)"""
+        u = current_user()
+        d = request.args.get('date', '')
+        if not DATE_RE.match(d):
+            d = datetime.date.today().isoformat()
+        nxt = next_school_day(d)
+        s = get_settings()
+        with get_db() as con:
+            me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (u['id'],)).fetchone()
+            mine = []
+            if me:
+                names = {r['id']: r['name'] for r in con.execute('SELECT id, name FROM tt_teachers')}
+                for r in con.execute('SELECT * FROM tt_subs WHERE sub_id=? AND date IN (?,?) ORDER BY date, period',
+                                     (me['id'], d, nxt)).fetchall():
+                    term = term_for_date(con, r['date'], s)
+                    times = {p['no']: p for p in jl(term['config'], {}).get('periods', [])} if term else {}
+                    t = times.get(r['period'])
+                    mine.append(dict(date=r['date'], period=r['period'], time=f"{t['start']}-{t['end']}" if t else '',
+                                     class_label=r['class_label'], subject=r['subject'], note=r['note'],
+                                     absent=names.get(r['absent_id'], '')))
+            summary = day_summary(con, d, s) if u['role'] == 'admin' else None
+        return jsonify(date=d, next=nxt, mine=mine, summary=summary)
 
     @app.post('/api/tt/absences')
     @admin_required
