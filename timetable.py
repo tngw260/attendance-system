@@ -695,6 +695,53 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 con.execute('UPDATE tt_terms SET config=? WHERE id=?', (json.dumps(cfg, ensure_ascii=False), term_id))
         return jsonify(success=True)
 
+    @app.post('/api/tt/terms/<int:term_id>/class-tracks')
+    @tt_edit_required
+    def tt_class_tracks(term_id):
+        """ตั้งสายการเรียนของห้อง + สายของแต่ละวิชาในห้องนั้น "ครั้งเดียว" (หน้าต่างสายการเรียนแบบตารางติ๊ก)
+        {cls: '4/1', tracks: ['SMTP', 'BEP'], lessons: {lesson_id: ['SMTP', ...]}} — รายการวิชาว่าง = เรียนทั้งห้อง
+        เปลี่ยนชื่อสาย = ฝั่งหน้าเว็บส่งชื่อใหม่มาให้ทุกวิชาที่ใช้ชื่อเดิม"""
+        b = request.get_json(silent=True) or {}
+        cls = str(b.get('cls') or '')
+        if not re.fullmatch(r'\d{1,2}/\d{1,2}', cls):
+            return jsonify(success=False, message='ห้องไม่ถูกต้อง'), 400
+
+        def clean(n):
+            return re.sub(r'\s+', ' ', str(n or '').replace(',', ' ')).strip()[:30]
+
+        tracks = []
+        for n in (b.get('tracks') or []):
+            n = clean(n)
+            if n and n not in tracks:
+                tracks.append(n)
+        if len(tracks) > 12:
+            return jsonify(success=False, message='สายการเรียนมากเกินไป (ไม่เกิน 12 สาย)'), 400
+        try:
+            lessons = {int(k): list(dict.fromkeys(clean(x) for x in (v or []) if clean(x)))
+                       for k, v in (b.get('lessons') or {}).items()}
+        except (TypeError, ValueError, AttributeError):
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        with get_db() as con:
+            row = con.execute('SELECT * FROM tt_terms WHERE id=?', (term_id,)).fetchone()
+            if not row:
+                return jsonify(success=False, message='ไม่พบภาคเรียน'), 404
+            own = {r['id'] for r in con.execute('SELECT id, classes FROM tt_lessons WHERE term_id=?', (term_id,))
+                   if cls in jl(r['classes'], [])}
+            if any(lid not in own for lid in lessons):
+                return jsonify(success=False, message='มีรายการที่ไม่ได้อยู่ในห้องนี้'), 400
+            cfg = jl(row['config'], {})
+            tr = dict(cfg.get('tracks') or {})
+            if tracks:
+                tr[cls] = tracks
+            else:
+                tr.pop(cls, None)
+            cfg['tracks'] = tr
+            con.execute('UPDATE tt_terms SET config=? WHERE id=?', (json.dumps(cfg, ensure_ascii=False), term_id))
+            for lid, names in lessons.items():
+                con.execute('UPDATE tt_lessons SET track=? WHERE id=?', (','.join(names), lid))
+            out = [lesson_dict(con, lid) for lid in lessons]
+        return jsonify(success=True, tracks=tracks, lessons=out)
+
     @app.delete('/api/tt/terms/<int:term_id>')
     @admin_required
     def tt_term_delete(term_id):

@@ -670,22 +670,104 @@ async function saveTeacher(tid) {
   } catch (e) { alert(e.message); }
 }
 
-/* ═════════════ ฟอร์ม: สายการเรียนของห้อง ═════════════ */
+/* ═════════════ ฟอร์ม: สายการเรียนของห้อง (ตารางติ๊ก วิชา × สาย) ═════════════
+   ตั้งชื่อสาย + ติ๊กว่าแต่ละวิชาเรียนสายไหน ในหน้าเดียว · แก้ชื่อสาย = วิชาที่ใช้ชื่อเดิมเปลี่ยนตาม · บันทึกครั้งเดียว */
+let TRK = null;
+const trkClean = n => String(n || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
 function openTracksModal(cls) {
-  const cur = ((T.term.config.tracks || {})[cls] || []).join('\n');
-  const body = `<div class="small text-muted mb-2">พิมพ์ชื่อสาย/กลุ่มบรรทัดละ 1 ชื่อ เช่น "วิทย์-คณิต" "ศิลป์-ภาษา" — จากนั้นเลือกสายในแต่ละวิชาเพิ่มเติม
-    (วิชาพื้นฐานที่เรียนทั้งห้องไม่ต้องเลือก) วิชาต่างสายจะวางช่องเดียวกันได้โดยไม่นับว่าชน</div>
-    <textarea id="trkText" class="form-control" rows="5" placeholder="วิทย์-คณิต&#10;ศิลป์-ภาษา">${esc(cur)}</textarea>`;
-  showModal(`สายการเรียน ${classShort(cls)}`, body,
-    `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button><button class="btn btn-primary btn-sm" onclick="saveTracks('${cls}')"><i class="bi bi-save"></i> บันทึก</button>`);
+  const list = (T.term.config.tracks || {})[cls] || [];
+  const ls = T.lessons.filter(l => l.classes.includes(cls))
+    .sort((a, b) => (a.kind === 'activity') - (b.kind === 'activity') || lessonName(a).localeCompare(lessonName(b), 'th'));
+  // ชื่อสายที่วิชาในห้องนี้ใช้อยู่แต่ไม่อยู่ในรายชื่อ (เคยเปลี่ยนชื่อ/ลบ) → เพิ่มให้เห็น จะได้แก้หรือลบได้
+  const orphans = [...new Set(ls.filter(l => l.classes.length === 1).flatMap(tracksOf))].filter(n => !list.includes(n));
+  TRK = { cls, seq: 0, rows: [], ticks: new Map(), keep: new Map(), ls, orphans };
+  [...list, ...orphans].forEach(n => TRK.rows.push({ id: ++TRK.seq, old: n, name: n }));
+  ls.forEach(l => {
+    const names = tracksOf(l);
+    TRK.ticks.set(l.id, new Set(TRK.rows.filter(r => names.includes(r.old)).map(r => r.id)));
+    TRK.keep.set(l.id, names.filter(n => !TRK.rows.some(r => r.old === n)));   // สายของห้องอื่น (วิชาเรียนรวมหลายห้อง) — คงไว้
+  });
+  showModal(`<i class="bi bi-diagram-3"></i> สายการเรียน ${classShort(cls)}`, '<div id="trkBox"></div>',
+    `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+     <button class="btn btn-primary btn-sm" onclick="saveTracks()"><i class="bi bi-save"></i> บันทึก</button>`);
+  el('edModal').querySelector('.modal-dialog').classList.add('modal-xl');
+  el('edModal').addEventListener('hidden.bs.modal', () => el('edModal').querySelector('.modal-dialog').classList.remove('modal-xl'), { once: true });
+  drawTracks();
 }
-async function saveTracks(cls) {
-  const names = [...new Set(el('trkText').value.split('\n').map(s => s.replace(/,/g, ' ').trim()).filter(Boolean))];
-  const tracks = Object.assign({}, T.term.config.tracks || {}, { [cls]: names });
+function drawTracks() {
+  const R = TRK.rows;
+  const nameRow = R.map(r => `<div class="input-group input-group-sm" style="width:auto">
+      <input class="form-control trk-name" data-id="${r.id}" style="width:130px" maxlength="30" value="${esc(r.name)}" placeholder="ชื่อสาย" oninput="trkRename(${r.id}, this.value)">
+      <button class="btn btn-outline-danger" onclick="trkRemove(${r.id})" title="ลบสายนี้"><i class="bi bi-x-lg"></i></button></div>`).join('');
+  const rowsHTML = TRK.ls.map(l => {
+    const tk = TRK.ticks.get(l.id), sub = l.code && T.subjects[l.code]?.name;
+    return `<tr class="${l.kind === 'activity' ? 'text-muted' : ''}">
+      <td><b>${esc(lessonName(l))}</b>${sub ? ` <span class="small text-muted">${esc(sub)}</span>` : ''}
+        ${l.classes.length > 1 ? ` <span class="badge text-bg-light border" title="เรียนรวมหลายห้อง">${esc(classLabel({ ...l, track: '' }))}</span>` : ''}</td>
+      <td class="small text-nowrap">${esc(l.teacher_ids.length > 3 ? `ครู ${l.teacher_ids.length} ท่าน` : l.teacher_ids.map(teacherShort).join(', '))}</td>
+      ${R.map(r => `<td class="text-center"><input type="checkbox" class="form-check-input" ${tk.has(r.id) ? 'checked' : ''} onchange="trkTick(${l.id}, ${r.id}, this.checked)"></td>`).join('')}
+      <td class="text-center"><button type="button" class="btn btn-sm py-0 ${tk.size ? 'btn-outline-secondary' : 'btn-success'}" id="trkAll${l.id}"
+        onclick="trkWhole(${l.id})" title="${tk.size ? 'กดเพื่อให้เรียนทั้งห้อง (ล้างติ๊ก)' : 'เรียนทั้งห้อง'}">${tk.size ? 'ทั้งห้อง' : '✓ ทั้งห้อง'}</button></td></tr>`;
+  }).join('');
+  el('trkBox').innerHTML = `
+    <div class="small text-muted mb-2"><b>1)</b> ตั้งชื่อสายของห้องนี้ (แก้ชื่อได้ วิชาที่ใช้ชื่อเดิมจะเปลี่ยนตามให้เอง)
+      <b class="ms-2">2)</b> ติ๊กว่าแต่ละวิชาเรียนสายไหน — ไม่ติ๊ก = เรียนทั้งห้อง · วิชาต่างสายวางคาบเดียวกันได้ ไม่นับว่าชน</div>
+    ${TRK.orphans.length ? `<div class="alert alert-warning py-1 px-2 small">พบชื่อสายที่วิชาใช้อยู่แต่ไม่อยู่ในรายชื่อ: ${TRK.orphans.map(esc).join(', ')} — ใส่ไว้ให้แล้ว แก้ชื่อหรือลบได้</div>` : ''}
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">${nameRow}
+      <button class="btn btn-sm btn-outline-primary" onclick="trkAdd()"><i class="bi bi-plus-lg"></i> เพิ่มสาย</button></div>
+    ${R.length ? `<div class="table-responsive" style="max-height:55vh">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-light sticky-top"><tr><th>วิชา / กิจกรรม</th><th>ครู</th>
+          ${R.map(r => `<th class="text-center" id="trkH${r.id}">${esc(r.name) || '<span class="text-danger">(ไม่มีชื่อ)</span>'}</th>`).join('')}
+          <th class="text-center">เรียนทั้งห้อง</th></tr></thead>
+        <tbody>${rowsHTML}</tbody></table></div>`
+      : `<div class="text-muted small py-2">ห้องนี้ไม่แยกสาย — ทุกวิชาเรียนทั้งห้อง · ถ้าแยกสาย กด "+ เพิ่มสาย"</div>`}`;
+}
+function trkRename(id, v) {
+  const r = TRK.rows.find(x => x.id === id); r.name = v;
+  const h = el('trkH' + id); if (h) h.innerHTML = esc(trkClean(v)) || '<span class="text-danger">(ไม่มีชื่อ)</span>';
+}
+function trkAdd() {
+  const id = ++TRK.seq;
+  TRK.rows.push({ id, old: null, name: '' });
+  drawTracks();
+  document.querySelector(`.trk-name[data-id="${id}"]`)?.focus();
+}
+function trkRemove(id) {
+  const r = TRK.rows.find(x => x.id === id);
+  const used = TRK.ls.filter(l => TRK.ticks.get(l.id).has(id));
+  if (used.length && !confirm(`สาย "${trkClean(r.name) || '(ไม่มีชื่อ)'}" มี ${used.length} วิชาติ๊กไว้ (${used.slice(0, 5).map(lessonName).join(', ')}${used.length > 5 ? ' …' : ''})\nลบแล้ววิชาเหล่านี้จะไม่อยู่ในสายนี้ (ถ้าไม่เหลือสายไหนเลย = เรียนทั้งห้อง) ลบเลยไหม?`)) return;
+  TRK.rows = TRK.rows.filter(x => x.id !== id);
+  TRK.ticks.forEach(set => set.delete(id));
+  drawTracks();
+}
+function trkTick(lid, id, on) {
+  const tk = TRK.ticks.get(lid);
+  if (on) tk.add(id); else tk.delete(id);
+  const b = el('trkAll' + lid);
+  b.className = `btn btn-sm py-0 ${tk.size ? 'btn-outline-secondary' : 'btn-success'}`; b.textContent = tk.size ? 'ทั้งห้อง' : '✓ ทั้งห้อง';
+}
+function trkWhole(lid) { TRK.ticks.get(lid).clear(); drawTracks(); }
+async function saveTracks() {
+  if (previewGuard()) return;
+  const names = TRK.rows.map(r => trkClean(r.name));
+  if (names.some(n => !n)) { alert('ใส่ชื่อสายให้ครบ (หรือกด ✖ ลบช่องที่ไม่ใช้)'); return; }
+  if (new Set(names).size !== names.length) { alert('มีชื่อสายซ้ำกัน'); return; }
+  const before = allIssues().hard.length;                          // จุดชนก่อนบันทึก (บอกผลหลังบันทึก)
+  const lessons = {};
+  TRK.ls.forEach(l => {
+    const next = [...new Set([...TRK.keep.get(l.id), ...TRK.rows.filter(r => TRK.ticks.get(l.id).has(r.id)).map(r => trkClean(r.name))])];
+    if ([...next].sort().join(',') !== [...tracksOf(l)].sort().join(',')) lessons[l.id] = next;
+  });
   try {
-    await apiFetch(`/api/tt/terms/${T.term.id}`, { method: 'PUT', body: JSON.stringify({ config: { tracks } }) });
-    T.term.config.tracks = tracks;
-    edModal.hide(); renderEditor();
+    const r = await apiFetch(`/api/tt/terms/${T.term.id}/class-tracks`, { method: 'POST', body: JSON.stringify({ cls: TRK.cls, tracks: names, lessons }) });
+    const tr = Object.assign({}, T.term.config.tracks || {});
+    if (r.tracks.length) tr[TRK.cls] = r.tracks; else delete tr[TRK.cls];
+    T.term.config.tracks = tr;
+    r.lessons.forEach(nl => { T.lessons[T.lessons.findIndex(l => l.id === nl.id)] = nl; });
+    edModal.hide(); buildIndex(); renderEditor();
+    const after = allIssues().hard.length;
+    toastEd(`บันทึกสายการเรียน ${classShort(TRK.cls)} แล้ว: ${r.tracks.length} สาย · แก้ ${r.lessons.length} วิชา` + (after !== before ? ` · จุดชน ${before} → ${after}` : ''));
   } catch (e) { alert(e.message); }
 }
 
