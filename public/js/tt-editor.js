@@ -171,6 +171,8 @@ function renderEditor() {
       ${tracksOf(l).length ? `<span class="badge text-bg-light border">${esc(l.track)}</span>` : ''}
       ${(l.options || {}).double ? '<span class="badge bg-secondary" title="เรียนติดกัน 2 คาบ">คู่</span>' : ''}
       <span class="float-end badge bg-warning text-dark">เหลือ ${l.per_week - l.slots.length}</span>
+      ${(l.options || {}).double ? `<div class="mt-1"><button type="button" class="btn btn-sm btn-light border py-0 px-2 ed-split"
+        title="ยกเลิกคาบคู่ของวิชานี้ → ลากวางทีละคาบ หรือให้จัดอัตโนมัติวางแยกได้">✂ แยกคาบคู่</button></div>` : ''}
     </div>`).join('') || '<div class="text-muted small p-2">✓ วางครบทุกรายการแล้ว</div>';
 
   const issueList = (arr, cls) => arr.map(x => `<li class="${cls}" ${x.d ? `data-go="${x.d}-${x.p}"` : ''}>${x.d ? `<b>${DAYS[x.d - 1]} คาบ ${x.p}</b> ` : ''}${esc(x.msg)}</li>`).join('');
@@ -268,6 +270,7 @@ function bindEditor() {
     c.addEventListener('click', e => {
       if (e.target.classList.contains('x')) { e.stopPropagation(); removeChip(+c.dataset.lid, +c.dataset.d, +c.dataset.p); return; }
       if (e.target.classList.contains('lk')) { e.stopPropagation(); toggleLock(+c.dataset.lid, +c.dataset.d, +c.dataset.p); return; }
+      if (e.target.closest('.ed-split')) { e.stopPropagation(); clearPick(); setDouble(+c.dataset.lid, false); return; }
       e.stopPropagation();
       const from = c.dataset.d ? [+c.dataset.d, +c.dataset.p] : null;
       if (ED.picked && ED.picked.lid === +c.dataset.lid && String(ED.picked.from) === String(from)) { clearPick(); return; }
@@ -368,6 +371,25 @@ async function edUndo() {
 }
 function edBy(by) { ED.by = by; ED.key = ''; clearPick(); renderEditor(); }
 
+// แยก/รวมคาบคู่ของวิชาเดียว (เงื่อนไข "คาบคู่" ของรายการ) — คาบคู่ที่หาช่องติดกันไม่ได้ แยกแล้วลากวางทีละคาบ
+// หรือให้จัดอัตโนมัติวางแยกได้ · quiet = ไม่วาดหน้าใหม่/ไม่แจ้ง (ใช้ตอนแยกหลายวิชาจากหน้าจัดอัตโนมัติ)
+async function setDouble(lid, on, quiet) {
+  if (previewGuard()) return false;
+  const L = lessonById(lid);
+  if (!L) return false;
+  const body = { code: L.code, title: L.title, kind: L.kind, classes: L.classes, track: L.track, teacher_ids: L.teacher_ids,
+                 per_week: L.per_week, options: Object.assign({}, L.options || {}, { double: on }), note: L.note || '' };
+  try {
+    const r = await apiFetch(`/api/tt/lessons/${lid}`, { method: 'PUT', body: JSON.stringify(body) });
+    T.lessons[T.lessons.findIndex(l => l.id === lid)] = r.lesson;
+    if (!quiet) {
+      buildIndex(); renderEditor();
+      toastEd(on ? `${lessonName(L)} กลับเป็นคาบคู่แล้ว` : `แยกคาบคู่ ${lessonName(L)} แล้ว — ลากวางทีละคาบ หรือกด "จัดอัตโนมัติ" (รวมกลับได้ที่ ✏️ แก้ไขรายการ)`);
+    }
+    return true;
+  } catch (e) { alert(e.message); return false; }
+}
+
 /* ── ชน / เตือน ทั้งภาคเรียน: กดรายการ → ไปที่ห้อง/ครูนั้น แล้วกะพริบช่อง ── */
 function issueWhere(x) {
   if (x.type === 'class') return { by: 'class', key: String(x.key), label: classShort(x.key) };
@@ -404,7 +426,7 @@ function openEditorHelp() {
     ${step(2, 'ตั้งเงื่อนไข', 'ครูไม่ว่างบางช่วง (เช่น ไปธนาคารบ่ายวันศุกร์): รายครู → "เงื่อนไขครู" · ม.4-6 ที่แยกสาย: รายห้อง → "สายการเรียน"')}
     ${step(3, 'ล็อกช่องที่ห้ามย้าย', 'กด 🔓 บนวิชาที่ต้องอยู่ช่องเดิม (เช่น ชุมนุม ลูกเสือ ประชุม) → กลายเป็น 🔒')}
     ${step(4, 'จัดอัตโนมัติ', 'กด "จัดอัตโนมัติ" → "ดูผลในตาราง" (ยังไม่บันทึก เลือกดูห้องอื่นได้) → พอใจแล้วกด "บันทึกผลนี้"')}
-    ${step(5, 'ปรับเอง', 'ลากวิชาไปช่องใหม่ หรือแตะวิชาแล้วแตะช่อง (ใช้บนแท็บเล็ตได้) · ระหว่างเลือก ช่องจะเป็น <span class="text-success fw-bold">เขียว</span>=วางได้ <span class="text-warning fw-bold">เหลือง</span>=ผิดเงื่อนไข <span class="text-danger fw-bold">แดง</span>=ชน · พลาดกด "ย้อนกลับ"')}
+    ${step(5, 'ปรับเอง', 'ลากวิชาไปช่องใหม่ หรือแตะวิชาแล้วแตะช่อง (ใช้บนแท็บเล็ตได้) · คาบคู่ที่หาช่องติดกันไม่ได้ กด "✂ แยกคาบคู่" บนการ์ดแล้ววางทีละคาบ · ระหว่างเลือก ช่องจะเป็น <span class="text-success fw-bold">เขียว</span>=วางได้ <span class="text-warning fw-bold">เหลือง</span>=ผิดเงื่อนไข <span class="text-danger fw-bold">แดง</span>=ชน · พลาดกด "ย้อนกลับ"')}
     ${step(6, 'ตรวจแล้วเผยแพร่', 'ปุ่ม "ชน" และ "เตือน" มุมขวาต้องเป็น 0 (กดดูได้ว่าอยู่ตรงไหน) → กดปุ่มภาคเรียน → "เผยแพร่ให้ครูเห็น"')}`,
     '<button class="btn btn-primary btn-sm" data-bs-dismiss="modal">เข้าใจแล้ว</button>');
 }

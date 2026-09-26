@@ -222,12 +222,16 @@ async function runSolve() {
   // แปลงผลเป็นช่องของแต่ละรายการ (ช่องคงที่ + ที่เพิ่งวาง)
   const newSlots = new Map(T.lessons.map(l => [l.id, solver.fixed.filter(f => f.l === l).map(f => [f.d, f.p, (l.slots.find(s => s[0] === f.d && s[1] === f.p) || [])[2] || 0])]));
   res.st.pos.forEach(([d, p], sess) => { for (let q = p; q < p + sess.len; q++) newSlots.get(sess.l.id).push([d, q, 0]); });
-  SOLVED = { newSlots, res, mode };
+  const leftDbl = [...new Set(res.left.filter(s => s.len === 2).map(s => s.l.id))];     // คาบคู่ที่หาช่องติดกันไม่ได้
+  SOLVED = { newSlots, res, mode, leftDbl };
   const left = res.left.reduce((a, s) => a + s.len, 0), placed = need - left;
   const lines = [
     `<div class="alert ${left ? 'alert-warning' : 'alert-success'} py-2 mb-2">วางได้ <b>${placed}/${need}</b> คาบ ${left ? `· ยังวางไม่ได้ <b>${left}</b> คาบ` : '✓ ครบ'} · ใช้เวลา ${((performance.now() - t0) / 1000).toFixed(1)} วินาที</div>`,
     res.relaxed.length ? `<div class="small mb-1">⚠ ผ่อนกฎที่ตั้งไว้ (ซ้ำวัน/เลี่ยงคาบ/เกินวันละ N) เพื่อวาง ${res.relaxed.length} ช่วง: ${res.relaxed.map(s => esc(lessonName(s.l) + ' ' + classLabel(s.l))).join(', ')}</div>` : '',
-    res.left.length ? `<div class="small mb-1 text-danger">✖ วางไม่ได้ (ครูหรือห้องไม่มีช่องว่างตรงกัน): ${res.left.map(s => esc(lessonName(s.l) + ' ' + classLabel(s.l) + ' (' + s.l.teacher_ids.map(teacherShort).join(',') + ')')).join(', ')}</div>` : '',
+    res.left.length ? `<div class="small mb-1 text-danger">✖ วางไม่ได้ (ครูหรือห้องไม่มีช่องว่างตรงกัน): ${res.left.map(s => esc(lessonName(s.l) + ' ' + classLabel(s.l) + ' (' + s.l.teacher_ids.map(teacherShort).join(',') + ')' + (s.len === 2 ? ' [คาบคู่]' : ''))).join(', ')}</div>` : '',
+    leftDbl.length ? `<div class="alert alert-warning py-2 px-2 small mb-2 d-flex flex-wrap align-items-center gap-2">
+      <div class="me-auto">คาบคู่ <b>${leftDbl.length}</b> วิชาหาช่องติดกัน 2 คาบไม่ได้ — แยกเป็นคาบเดี่ยวแล้วให้ระบบจัดใหม่ได้เลย</div>
+      <button class="btn btn-sm btn-warning" onclick="splitLeftAndRerun(this)">✂ แยกคาบคู่แล้วจัดใหม่</button></div>` : '',
     solver.skipped.length ? `<div class="small mb-1">⏭ ข้าม (ยังไม่กำหนดครู): ${solver.skipped.map(x => esc(lessonName(x.l) + ' ' + classLabel(x.l))).join(', ')}</div>` : '',
     `<div class="small text-muted">สายที่ต้องมีคาบว่างเพราะสายอื่นเรียน: ${res.ev.misaligned} ช่อง</div>`,
   ];
@@ -239,6 +243,17 @@ async function runSolve() {
 
 // ดูผลในตาราง (ยังไม่บันทึก) — แถบ "บันทึก/ยกเลิก" วาดใน renderEditor ทุกครั้ง (เปลี่ยนห้อง/ครูก็ยังอยู่)
 // ระหว่างนี้ห้ามแก้ตาราง (previewGuard) ไม่งั้นข้อมูลในเครื่องกับเซิร์ฟเวอร์ไม่ตรงกัน
+// แยกคาบคู่ของวิชาที่วางไม่ได้ (บันทึกเงื่อนไขของรายการนั้น) แล้วจัดใหม่ทันที
+async function splitLeftAndRerun(btn) {
+  const ids = (SOLVED && SOLVED.leftDbl) || [];
+  if (!ids.length) return;
+  if (btn) btn.disabled = true;
+  for (const id of ids) if (!(await setDouble(id, false, true))) { if (btn) btn.disabled = false; return; }
+  buildIndex(); renderEditor();                                   // การ์ด/ตารางด้านหลังอัปเดตตาม
+  toastEd(`แยกคาบคู่ ${ids.length} วิชาแล้ว — กำลังจัดใหม่`);
+  await runSolve();
+}
+
 function previewSolved() {
   if (!SOLVED) return;
   T.lessons.forEach(l => { l._orig = l._orig || l.slots; l.slots = SOLVED.newSlots.get(l.id); });
