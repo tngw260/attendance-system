@@ -121,7 +121,10 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if (data.success) {
-      location.href = data.user?.must_change_pw ? '/change-password.html' : '/';
+      // ?next= หน้าเดิมก่อนถูกพามาล็อกอิน (รับเฉพาะหน้าในเว็บนี้ กันลิงก์พาออกไปเว็บอื่น)
+      const next = new URLSearchParams(location.search).get('next') || '';
+      const safe = /^\/(?![\/\\])/.test(next) && !next.startsWith('/login.html') ? next : '/';
+      location.href = data.user?.must_change_pw ? '/change-password.html' : safe;
     } else {
       err.textContent = data.message || 'เข้าสู่ระบบไม่สำเร็จ';
       err.classList.remove('d-none');

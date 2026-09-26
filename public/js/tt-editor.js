@@ -206,6 +206,9 @@ function renderEditor() {
           ${act('applyTracks()', 'magic', 'ตั้งสายการเรียนจากโครงสร้างหลักสูตร')}
           ${act('applySuggestedTracks()', 'lightbulb', 'แนะนำสายจากตารางปัจจุบัน')}
           ${draftReport() ? act('showDraftReport(draftReport())', 'clipboard-check', 'รายงานการร่างภาคเรียน') : ''}
+          <li><hr class="dropdown-divider"></li>
+          ${act('openShareModal()', 'line', 'ส่งลิงก์จัดตารางทาง LINE')}
+          ${T.is_admin ? act('openEditorsModal()', 'person-plus', 'ผู้ช่วยจัดตาราง (ฝ่ายวิชาการ)') : ''}
         </ul>
       </div>
       <button class="btn btn-sm btn-outline-secondary" onclick="openTermModal()" title="ตั้งค่า / เผยแพร่ภาคเรียน"><i class="bi bi-calendar-week"></i> ${esc(T.term.name)}${T.term.published ? ' <span class="badge bg-success">เผยแพร่แล้ว</span>' : ' <span class="badge bg-warning text-dark">ร่าง</span>'}</button>
@@ -405,6 +408,48 @@ function openEditorHelp() {
     ${step(6, 'ตรวจแล้วเผยแพร่', 'ปุ่ม "ชน" และ "เตือน" มุมขวาต้องเป็น 0 (กดดูได้ว่าอยู่ตรงไหน) → กดปุ่มภาคเรียน → "เผยแพร่ให้ครูเห็น"')}`,
     '<button class="btn btn-primary btn-sm" data-bs-dismiss="modal">เข้าใจแล้ว</button>');
 }
+/* ── ชวนฝ่ายวิชาการเข้ามาจัด: ลิงก์ตรงเข้าหน้าจัดตารางของภาคเรียนนี้ (ต้องล็อกอิน + มีสิทธิ์ผู้ช่วยจัดตาราง) ── */
+function shareLink() { return `${location.origin}/timetable.html?tab=edit&term=${encodeURIComponent(T.term.name)}`; }
+function openShareModal() {
+  const text = `📅 ชวนจัดตารางสอน ภาคเรียน ${T.term.name}${T.term.published ? '' : ' (ร่าง)'}\n`
+    + `เปิดลิงก์แล้วเข้าสู่ระบบด้วยบัญชีครูของตัวเอง ระบบจะพาเข้าหน้าจัดตารางให้เลย\n${shareLink()}\n\n`
+    + `💡 แนะนำเปิดในคอมพิวเตอร์หรือแท็บเล็ต (ลากวางสะดวกกว่ามือถือ) · ครั้งแรกมีหน้า "วิธีใช้" ให้อ่าน`;
+  showModal('<i class="bi bi-line"></i> ส่งลิงก์จัดตารางทาง LINE', `
+    <div class="small mb-2">คนที่เปิดลิงก์ต้องเป็น <b>แอดมิน</b> หรือ <b>ผู้ช่วยจัดตาราง</b> ถึงจะแก้ได้ — คนอื่นเปิดแล้วดูได้อย่างเดียว
+      ${T.is_admin ? ' · เพิ่มผู้ช่วยได้ที่ <a href="#" onclick="openEditorsModal(); return false;">ผู้ช่วยจัดตาราง</a>' : ''}</div>
+    <textarea id="lineMsg" class="form-control" rows="7" style="font-size:.9rem">${esc(text)}</textarea>`,
+    `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ปิด</button>
+     <a class="btn btn-outline-success btn-sm d-none" id="lineOpen" href="https://line.me/R/" target="_blank" rel="noopener"><i class="bi bi-line"></i> เปิดไลน์</a>
+     <button class="btn btn-success btn-sm" onclick="copyLine()"><i class="bi bi-clipboard-check"></i> ก๊อปข้อความ</button>`);
+}
+
+async function openEditorsModal() {
+  let r;
+  try { r = await apiFetch('/api/tt/editors'); } catch (e) { alert(e.message); return; }
+  const on = new Set(r.editors);
+  const admins = r.users.filter(u => u.role === 'admin'), others = r.users.filter(u => u.role !== 'admin');
+  showModal('<i class="bi bi-person-plus"></i> ผู้ช่วยจัดตาราง', `
+    <div class="small text-muted mb-2">ติ๊กครูที่ให้จัดตารางสอน / จัดครูสอนแทน / เผยแพร่ได้ (เช่น หัวหน้าวิชาการ) —
+      ไม่ได้เป็นแอดมินทั้งระบบ แก้ข้อมูลนักเรียน บัญชีผู้ใช้ หรือการตั้งค่าอื่นไม่ได้</div>
+    <div class="list-group mb-2" style="max-height:45vh; overflow:auto">
+      ${others.map(u => `<label class="list-group-item d-flex gap-2 align-items-center">
+        <input class="form-check-input m-0 edU" type="checkbox" value="${u.id}" ${on.has(u.id) ? 'checked' : ''}>
+        <span>${esc(u.full_name)} <span class="text-muted small">(${esc(u.username)})</span></span></label>`).join('')
+        || '<div class="list-group-item text-muted small">ยังไม่มีบัญชีครู — สร้างบัญชีที่หน้า "จัดการผู้ใช้" ก่อน</div>'}
+    </div>
+    <div class="small text-muted">แอดมินจัดได้อยู่แล้ว: ${admins.map(u => esc(u.full_name)).join(', ') || '-'}</div>`,
+    `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+     <button class="btn btn-primary btn-sm" onclick="saveEditors()"><i class="bi bi-save"></i> บันทึก</button>`);
+}
+async function saveEditors() {
+  const ids = [...document.querySelectorAll('.edU:checked')].map(x => +x.value);
+  try {
+    await apiFetch('/api/tt/editors', { method: 'PUT', body: JSON.stringify({ user_ids: ids }) });
+    edModal.hide();
+    toastEd(ids.length ? `ตั้งผู้ช่วยจัดตาราง ${ids.length} คนแล้ว — ส่งลิงก์ให้ได้ที่ เครื่องมือ → ส่งลิงก์` : 'ไม่มีผู้ช่วยจัดตารางแล้ว');
+  } catch (e) { alert(e.message); }
+}
+
 function maybeShowEditorHelp() {
   try { if (localStorage.getItem('ttEditorHelpSeen')) return; localStorage.setItem('ttEditorHelpSeen', '1'); } catch (e) { return; }
   openEditorHelp();
@@ -523,7 +568,7 @@ async function openTeacherModal(tid) {
   const t = IDX.teachers[tid]; if (!t) return;
   const c = t.constraints || {}, P = T.term.config.periods;
   let users = [];
-  try { users = await apiFetch('/api/tt/users'); } catch (e) {}
+  if (T.is_admin) try { users = await apiFetch('/api/tt/users'); } catch (e) {}
   const un = new Set((c.unavailable || []).map(([d, p]) => `${d}-${p}`));
   const quick = d => [['เช้า', 'am'], ['บ่าย', 'pm'], ['ทั้งวัน', 'all']]
     .map(([lab, k]) => `<button type="button" class="btn btn-link btn-sm p-0 px-1" onclick="tcToggle(${d},'${k}')">${lab}</button>`).join('');
@@ -550,8 +595,8 @@ async function openTeacherModal(tid) {
     <button type="button" class="btn btn-outline-danger btn-sm" onclick="transferTeacher(${tid})"><i class="bi bi-arrow-left-right"></i> โอนวิชาทั้งหมด</button>`;
   const body = `
     <label class="form-label small mb-0">ชื่อ-นามสกุล</label><input id="tcName" class="form-control form-control-sm mb-2" value="${esc(t.name)}">
-    <label class="form-label small mb-0">บัญชีผู้ใช้ในระบบ <span class="text-muted">(ครูล็อกอินแล้วเห็นตารางตัวเองทันที)</span></label>
-    <select id="tcUser" class="form-select form-select-sm mb-2"><option value="">— ไม่ผูก —</option>${users.map(u => `<option value="${u.id}" ${u.id === t.user_id ? 'selected' : ''}>${esc(u.full_name)} (${u.role === 'admin' ? 'แอดมิน' : 'ครู'})</option>`).join('')}</select>
+    ${T.is_admin ? `<label class="form-label small mb-0">บัญชีผู้ใช้ในระบบ <span class="text-muted">(ครูล็อกอินแล้วเห็นตารางตัวเองทันที)</span></label>
+    <select id="tcUser" class="form-select form-select-sm mb-2"><option value="">— ไม่ผูก —</option>${users.map(u => `<option value="${u.id}" ${u.id === t.user_id ? 'selected' : ''}>${esc(u.full_name)} (${u.role === 'admin' ? 'แอดมิน' : 'ครู'})</option>`).join('')}</select>` : ''}
     <label class="form-label small mb-0">คาบที่ <b class="text-danger">ไม่ว่าง</b> — จัดอัตโนมัติจะไม่วางสอนช่องนี้ (แตะช่องเพื่อสลับ หรือกด เช้า / บ่าย / ทั้งวัน)</label>
     ${grid}
     <input id="tcNote" class="form-control form-control-sm mb-2" maxlength="100" value="${esc(c.note || '')}" placeholder="เหตุผลที่ไม่ว่าง เช่น ไปธนาคารบ่ายวันศุกร์ (ขึ้นในคำเตือน)">
@@ -593,8 +638,9 @@ async function transferTeacher(tid) {
 
 async function saveTeacher(tid) {
   const unavailable = [...document.querySelectorAll('.tc-grid td.tc.off')].map(td => td.dataset.k.split('-').map(Number));
-  const body = { name: el('tcName').value, user_id: +el('tcUser').value || null,
+  const body = { name: el('tcName').value,
                  constraints: { unavailable, max_per_day: +el('tcMax').value || 0, note: el('tcNote').value.trim() } };
+  if (el('tcUser')) body.user_id = +el('tcUser').value || null;          // ผูกบัญชี = แอดมินเท่านั้น
   try {
     const r = await apiFetch(`/api/tt/teachers/${tid}`, { method: 'PUT', body: JSON.stringify(body) });
     T.teachers[T.teachers.findIndex(t => t.id === tid)] = r.teacher;
@@ -700,7 +746,7 @@ function openTermModal() {
       <button class="btn btn-${T.term.published ? 'outline-secondary' : 'success'}" onclick="setPublished(${T.term.published ? 0 : 1})">
         <i class="bi bi-${T.term.published ? 'eye-slash' : 'megaphone'}"></i> ${T.term.published ? 'ซ่อน (กลับเป็นร่าง)' : 'เผยแพร่ให้ครูเห็น'}</button>
       ${nx ? `<button class="btn btn-outline-primary" onclick="draftNext('${nx}')"><i class="bi bi-copy"></i> สร้างร่างภาคเรียน ${nx} จากภาคเรียนนี้</button>` : ''}
-      <button class="btn btn-outline-danger" onclick="deleteTerm()"><i class="bi bi-trash"></i> ลบภาคเรียนนี้ทั้งหมด</button>
+      ${T.is_admin ? '<button class="btn btn-outline-danger" onclick="deleteTerm()"><i class="bi bi-trash"></i> ลบภาคเรียนนี้ทั้งหมด</button>' : ''}
     </div>
     <div class="small text-muted mt-3">สร้างร่าง = วิชาเลื่อนรหัสตามโครงสร้างหลักสูตร ครู/ชั้น/สาย/เงื่อนไขเดิม · กิจกรรมทั้งโรงเรียนคงช่องเดิม (ล็อก) · แล้วกด "จัดอัตโนมัติ"</div>`;
   showModal('<i class="bi bi-gear"></i> ตั้งค่าภาคเรียน', body, '<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ปิด</button>');

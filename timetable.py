@@ -8,8 +8,10 @@
   tt_slots     ช่องในตาราง (วัน 1-5, คาบ 1-7) ที่วางรายการนั้นไว้
   tt_absences  ครูไม่มา (ลา / ไปราชการ / ย้ายออก) ช่วงวันที่ + คาบ (ว่าง = ทั้งวัน)
   tt_subs      การจัดครูสอนแทน รายวัน-คาบ-รายการ (เก็บรหัสวิชา/ชั้นไว้ด้วย ประวัติไม่หายเมื่อแก้ตาราง)
+  tt_editors   ผู้ช่วยจัดตาราง (เช่น ฝ่ายวิชาการ) — ไม่ต้องเป็นแอดมินทั้งระบบ
 
-สิทธิ์: แอดมินแก้ไขได้ / ครูทุกคนดูได้
+สิทธิ์: แอดมิน + ผู้ช่วยจัดตาราง แก้ตาราง/สอนแทน/เผยแพร่ได้ · ลบภาคเรียน นำเข้า ผูกบัญชี ตั้งผู้ช่วย = แอดมินเท่านั้น
+       ครูทุกคนดูได้
 """
 import datetime
 import json
@@ -85,6 +87,10 @@ CREATE TABLE IF NOT EXISTS tt_subs (
     note        TEXT DEFAULT '',
     updated_at  TEXT DEFAULT (datetime('now','localtime')),
     UNIQUE(date, period, lesson_id)
+);
+CREATE TABLE IF NOT EXISTS tt_editors (
+    user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    added_at    TEXT DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_ttabs_to ON tt_absences(date_to);
 CREATE INDEX IF NOT EXISTS idx_ttsub_date ON tt_subs(date);
@@ -277,6 +283,7 @@ def lesson_dict(con, lid):
 
 
 def init(app, get_db, login_required, admin_required, current_user, get_settings):
+    from functools import wraps
     from flask import jsonify, request
 
     with get_db() as con:
@@ -288,6 +295,26 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             cfg = jl((con.execute('SELECT config FROM tt_terms WHERE id=?', (l['term_id'],)).fetchone() or {'config': None})['config'], {})
             con.execute('UPDATE tt_lessons SET options=? WHERE id=?',
                         (json.dumps(infer_options(slots, cfg.get('lunch_after', 4))), l['id']))
+
+    def can_edit_tt(u):
+        """แอดมิน หรือผู้ช่วยจัดตาราง (tt_editors)"""
+        if not u:
+            return False
+        if u['role'] == 'admin':
+            return True
+        with get_db() as con:
+            return bool(con.execute('SELECT 1 FROM tt_editors WHERE user_id=?', (u['id'],)).fetchone())
+
+    def tt_edit_required(f):
+        @wraps(f)
+        def wrapper(*a, **kw):
+            u = current_user()
+            if not u:
+                return jsonify(error='unauthorized'), 401
+            if not can_edit_tt(u):
+                return jsonify(error='forbidden', message='ต้องเป็นแอดมินหรือผู้ช่วยจัดตาราง'), 403
+            return f(*a, **kw)
+        return wrapper
 
     def link_users(con):
         """ผูกครูในตารางกับบัญชีผู้ใช้ที่ชื่อตรงกัน (ทำเฉพาะคนที่ยังไม่ได้ผูก)"""
@@ -308,7 +335,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         u = current_user()
         s = get_settings()
         out = [dict(r, config=None, **dict(zip(('start_date', 'end_date'), term_dates(r['name'], s)))) for r in rows]
-        if not u or u['role'] != 'admin':
+        if not can_edit_tt(u):                   # ร่างเห็นเฉพาะแอดมิน/ผู้ช่วยจัดตาราง
             out = [r for r in out if r['published']]
         seeds = []
         if u and u['role'] == 'admin' and os.path.isdir(SEED_DIR):
@@ -328,11 +355,12 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             data = term_payload(con, term_id)
             if not data:
                 return jsonify(error='not found'), 404
-            if not data['term']['published'] and u['role'] != 'admin':
+            if not data['term']['published'] and not can_edit_tt(u):
                 return jsonify(error='ตารางนี้ยังไม่เผยแพร่'), 403
             me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (u['id'],)).fetchone()
         data['me'] = me['id'] if me else None
-        data['can_edit'] = u['role'] == 'admin'
+        data['can_edit'] = can_edit_tt(u)
+        data['is_admin'] = u['role'] == 'admin'           # ลบภาคเรียน / ผูกบัญชี / ตั้งผู้ช่วย
         s = get_settings()
         data['term']['start_date'], data['term']['end_date'] = term_dates(data['term']['name'], s)
         data['school'] = dict(name=s.get('school_name', ''), director=s.get('director_name', ''),
@@ -403,6 +431,29 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             con.execute('UPDATE tt_teachers SET user_id=? WHERE id=?', (uid or None, teacher_id))
         return jsonify(success=True)
 
+    @app.get('/api/tt/editors')
+    @admin_required
+    def tt_editors_get():
+        """รายชื่อบัญชีทั้งหมด + ใครเป็นผู้ช่วยจัดตาราง"""
+        with get_db() as con:
+            ids = [r['user_id'] for r in con.execute('SELECT user_id FROM tt_editors')]
+            users = [dict(r) for r in con.execute('SELECT id, full_name, username, role FROM users ORDER BY role, full_name')]
+        return jsonify(editors=ids, users=users)
+
+    @app.put('/api/tt/editors')
+    @admin_required
+    def tt_editors_put():
+        """{user_ids: [..]} = ผู้ช่วยจัดตารางทั้งหมด (แทนที่รายชื่อเดิม)"""
+        try:
+            ids = sorted({int(x) for x in ((request.get_json(silent=True) or {}).get('user_ids') or [])})
+        except (TypeError, ValueError):
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        with get_db() as con:
+            ids = [i for i in ids if con.execute("SELECT 1 FROM users WHERE id=? AND role<>'admin'", (i,)).fetchone()]
+            con.execute('DELETE FROM tt_editors')
+            con.executemany('INSERT INTO tt_editors (user_id) VALUES (?)', [(i,) for i in ids])
+        return jsonify(success=True, editors=ids)
+
     @app.get('/api/tt/users')
     @admin_required
     def tt_users():
@@ -417,7 +468,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         return (dict(row, config=jl(row['config'], {})) if row else None)
 
     @app.post('/api/tt/slots')
-    @admin_required
+    @tt_edit_required
     def tt_slots_update():
         """วาง/ย้าย/เอาออก/ล็อก ช่องของรายการเดียว: {lesson_id, remove:[[d,p]], add:[[d,p]], lock:[[d,p,0|1]]}
         ตรวจทุกช่องก่อนเขียน — ย้ายไปช่องที่ผิดต้องไม่ทำให้ช่องเดิมหาย"""
@@ -450,7 +501,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         return [t for t in ids if con.execute('SELECT 1 FROM tt_teachers WHERE id=?', (t,)).fetchone()]
 
     @app.post('/api/tt/lessons')
-    @admin_required
+    @tt_edit_required
     def tt_lesson_create():
         b = request.get_json() or {}
         try:
@@ -472,7 +523,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             return jsonify(success=True, lesson=lesson_dict(con, lid))
 
     @app.put('/api/tt/lessons/<int:lid>')
-    @admin_required
+    @tt_edit_required
     def tt_lesson_update(lid):
         b = request.get_json() or {}
         try:
@@ -493,7 +544,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             return jsonify(success=True, lesson=lesson_dict(con, lid))
 
     @app.delete('/api/tt/lessons/<int:lid>')
-    @admin_required
+    @tt_edit_required
     def tt_lesson_delete(lid):
         with get_db() as con:
             con.execute('DELETE FROM tt_slots WHERE lesson_id=?', (lid,))
@@ -511,7 +562,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                         (code, name, AREAS.get(code[0], '')))
 
     @app.post('/api/tt/teachers')
-    @admin_required
+    @tt_edit_required
     def tt_teacher_create():
         name = bare_name((request.get_json() or {}).get('name', ''))
         if not name:
@@ -531,7 +582,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         return jsonify(success=True, teacher=dict(t, constraints={}))
 
     @app.put('/api/tt/teachers/<int:tid>')
-    @admin_required
+    @tt_edit_required
     def tt_teacher_update(tid):
         """แก้ชื่อ / เงื่อนไข {unavailable:[[d,p]], max_per_day:n, note} / ผูกบัญชีผู้ใช้"""
         b = request.get_json(silent=True) or {}
@@ -564,18 +615,18 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 con.execute('UPDATE tt_teachers SET name=? WHERE id=?', (name, tid))
             if cons is not None:
                 con.execute('UPDATE tt_teachers SET constraints=? WHERE id=?', (json.dumps(cons, ensure_ascii=False), tid))
-            if 'user_id' in b:
+            if 'user_id' in b and current_user()['role'] == 'admin':      # ผูกบัญชีผู้ใช้ = แอดมินเท่านั้น
                 uid = b.get('user_id') or None
                 if uid:
                     con.execute('UPDATE tt_teachers SET user_id=NULL WHERE user_id=?', (uid,))
                 con.execute('UPDATE tt_teachers SET user_id=? WHERE id=?', (uid, tid))
-            if 'active' in b:
+            if 'active' in b and current_user()['role'] == 'admin':
                 con.execute('UPDATE tt_teachers SET active=? WHERE id=?', (1 if b['active'] else 0, tid))
             t = con.execute('SELECT * FROM tt_teachers WHERE id=?', (tid,)).fetchone()
         return jsonify(success=True, teacher=dict(t, constraints=jl(t['constraints'], {})))
 
     @app.post('/api/tt/terms/<int:term_id>/transfer-teacher')
-    @admin_required
+    @tt_edit_required
     def tt_transfer_teacher(term_id):
         """ครูย้ายออก / เปลี่ยนผู้สอน: โอนทุกวิชา+กิจกรรมของครูคนหนึ่ง "เฉพาะภาคเรียนนี้" ให้ครูอีกคน
         {from_id, to_id | new_name, deactivate} — ภาคเรียนอื่นไม่แตะ ตารางเทอมเก่ายังเป็นชื่อครูเดิม
@@ -619,7 +670,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         return jsonify(success=True, moved=moved, to_id=dst)
 
     @app.put('/api/tt/terms/<int:term_id>')
-    @admin_required
+    @tt_edit_required
     def tt_term_update(term_id):
         """แก้ค่าภาคเรียน: ชื่อ, เผยแพร่, config (คาบเวลา / สายการเรียนของแต่ละห้อง / ผู้ลงนาม)"""
         b = request.get_json() or {}
@@ -663,7 +714,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             return json.load(f)
 
     @app.post('/api/tt/terms/<int:term_id>/apply-tracks')
-    @admin_required
+    @tt_edit_required
     def tt_apply_tracks(term_id):
         """วิชาที่มีเฉพาะบางแผนการเรียน → ใส่ชื่อแผนให้ (วิชาที่ทุกแผนเรียน = ทั้งห้อง)
         ไม่แตะรายการที่ตั้งกลุ่มไว้แล้ว เช่น 'กลุ่ม 1' และรายการที่เรียนรวมหลายชั้น"""
@@ -732,7 +783,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         return re.sub(r'[\s\d()]+$', '', re.sub(r'\s+', '', n or ''))[:6]
 
     @app.post('/api/tt/terms/<int:term_id>/draft-next')
-    @admin_required
+    @tt_edit_required
     def tt_draft_next(term_id):
         """สร้างภาคเรียนถัดไปจากภาคเรียนนี้: วิชาเลื่อนรหัสตามโครงสร้างหลักสูตร ครู/ชั้น/สาย/เงื่อนไขเดิม
         กิจกรรมทั้งโรงเรียน (ชุมนุม ลูกเสือ บำเพ็ญฯ ประชุม) คงช่องเดิม + ล็อก / อย่างอื่นรอจัด"""
@@ -846,7 +897,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                        message=f'สร้างร่างภาคเรียน {name} แล้ว: รายวิชา {n_sub} รายการ + กิจกรรม {len(out) - n_sub} รายการ')
 
     @app.post('/api/tt/terms/<int:term_id>/slots-bulk')
-    @admin_required
+    @tt_edit_required
     def tt_slots_bulk(term_id):
         """บันทึกผลจัดอัตโนมัติ: {lessons: {lesson_id: [[d,p],...]}} แทนที่ช่องที่ไม่ได้ล็อกของรายการนั้น"""
         data = (request.get_json(silent=True) or {}).get('lessons') or {}
@@ -941,11 +992,11 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     mine.append(dict(date=r['date'], period=r['period'], time=f"{t['start']}-{t['end']}" if t else '',
                                      class_label=r['class_label'], subject=r['subject'], note=r['note'],
                                      absent=names.get(r['absent_id'], '')))
-            summary = day_summary(con, d, s) if u['role'] == 'admin' else None
+            summary = day_summary(con, d, s) if can_edit_tt(u) else None
         return jsonify(date=d, next=nxt, mine=mine, summary=summary)
 
     @app.post('/api/tt/absences')
-    @admin_required
+    @tt_edit_required
     def tt_absence_create():
         a, err = clean_absence(request.get_json() or {})
         if err:
@@ -959,7 +1010,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         return jsonify(success=True, absence=absence_dict(r))
 
     @app.put('/api/tt/absences/<int:aid>')
-    @admin_required
+    @tt_edit_required
     def tt_absence_update(aid):
         a, err = clean_absence(request.get_json() or {})
         if err:
@@ -977,7 +1028,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         return jsonify(success=True, absence=absence_dict(r), removed_subs=removed)
 
     @app.delete('/api/tt/absences/<int:aid>')
-    @admin_required
+    @tt_edit_required
     def tt_absence_delete(aid):
         with get_db() as con:
             old = con.execute('SELECT * FROM tt_absences WHERE id=?', (aid,)).fetchone()
@@ -988,7 +1039,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         return jsonify(success=True, removed_subs=removed)
 
     @app.post('/api/tt/subs')
-    @admin_required
+    @tt_edit_required
     def tt_subs_save():
         """บันทึกการจัดครูแทนของ 1 วัน
         {date, items: [{period, lesson_id, absent_id, sub_id | null, subject, class_label, note}], clear: [{period, lesson_id}]}

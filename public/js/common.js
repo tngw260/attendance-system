@@ -150,7 +150,9 @@ async function apiFetch(url, options = {}) {
   });
   if (res.status === 401) {
     try { sessionStorage.removeItem('authMe.v1'); } catch {}
-    if (!location.pathname.endsWith('login.html')) location.href = '/login.html';
+    // ส่งหน้าเดิมไปด้วย → ล็อกอินเสร็จกลับมาที่เดิม (เช่น ลิงก์จัดตารางที่ส่งทาง LINE)
+    if (!location.pathname.endsWith('login.html'))
+      location.href = '/login.html?next=' + encodeURIComponent(location.pathname + location.search);
     throw new Error('unauthorized');
   }
   if (res.status === 403) throw new Error('สิทธิ์ไม่เพียงพอ');
