@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>คู่มือจัดตารางสอน — โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</title>
+  <!-- หน้านี้เปิดได้โดยไม่ต้องล็อกอิน (ส่งลิงก์ทาง LINE ได้) · ภาพหน้าจอทั้งหมดอยู่ /img/guide/ -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root { --g: #1e6b3a; --g2: #2e8b57; --ink: #1f2933; --mute: #5f6b76; --line: #e3e8ee; --soft: #f3f7f4; --warn: #fff6db; --tip: #eaf4ff; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-family: 'Sarabun', sans-serif; font-size: 17px; line-height: 1.7; color: var(--ink); background: #fbfcfb; }
+    a { color: var(--g2); }
+    header { background: linear-gradient(135deg, var(--g), var(--g2)); color: #fff; padding: 28px 16px 22px; }
+    header .in, main { max-width: 920px; margin: 0 auto; }
+    header h1 { margin: 0; font-size: 1.9rem; line-height: 1.3; }
+    header p { margin: 4px 0 14px; opacity: .92; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; border: 2px solid #fff;
+      color: #fff; text-decoration: none; font-weight: 600; font-size: .95rem; background: transparent; cursor: pointer; font-family: inherit; }
+    .btn.solid { background: #fff; color: var(--g); }
+    main { padding: 8px 16px 60px; }
+    .toc { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; margin: 18px 0 8px; }
+    .toc b { display: block; margin-bottom: 4px; }
+    .toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 28px; }
+    .toc li { break-inside: avoid; }
+    section { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px 10px; margin: 18px 0; }
+    h2 { font-size: 1.35rem; margin: 0 0 10px; color: var(--g); display: flex; align-items: center; gap: 10px; }
+    h2 .no { background: var(--g); color: #fff; border-radius: 10px; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; }
+    h3 { font-size: 1.1rem; margin: 18px 0 6px; }
+    .step { display: flex; gap: 12px; margin: 16px 0 6px; }
+    .step .n { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--g2); color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+    .step .b { flex: 1; min-width: 0; }
+    .step h3 { margin: 0 0 4px; }
+    figure { margin: 10px 0 14px; }
+    figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    figcaption { font-size: .88rem; color: var(--mute); margin-top: 4px; }
+    .note { border-radius: 10px; padding: 10px 14px; margin: 10px 0; }
+    .tip { background: var(--tip); } .warn { background: var(--warn); } .ok { background: var(--soft); }
+    .note b:first-child { margin-right: 4px; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: .96rem; }
+    th, td { border: 1px solid var(--line); padding: 6px 9px; vertical-align: top; text-align: left; }
+    th { background: var(--soft); }
+    .num { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: #dc2626; color: #fff; font-weight: 700; font-size: .85rem; align-items: center; justify-content: center; }
+    .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+    .kbd { display: inline-block; padding: 0 7px; border: 1px solid #c9d1d9; border-bottom-width: 2px; border-radius: 6px; background: #fff; font-size: .9rem; white-space: nowrap; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+    details { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin: 8px 0; }
+    details summary { cursor: pointer; font-weight: 600; }
+    details[open] summary { margin-bottom: 4px; }
+    ul, ol { padding-left: 22px; }
+    .who td:first-child { white-space: nowrap; font-weight: 600; }
+    .top { position: fixed; right: 14px; bottom: 14px; background: var(--g); color: #fff; width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 1.3rem; box-shadow: 0 3px 10px rgba(0,0,0,.2); }
+    footer { text-align: center; color: var(--mute); font-size: .9rem; padding: 10px 16px 30px; }
+    @media (max-width: 640px) {
+      body { font-size: 16px; }
+      header h1 { font-size: 1.55rem; }
+      .toc ol { columns: 1; }
+      .two { grid-template-columns: 1fr; }
+      section { padding: 14px 14px 6px; }
+      th, td { padding: 5px 6px; }
+    }
+    @media print {
+      @page { size: A4; margin: 12mm 12mm 14mm; }
+      body { background: #fff; font-size: 13pt; line-height: 1.5; }
+      header { background: none; color: var(--ink); padding: 0 0 8px; border-bottom: 2px solid var(--g); }
+      header .btns, .top { display: none !important; }
+      section, .toc { border: none; padding: 0; margin: 10px 0; }
+      section { break-before: auto; }
+      figure, .note, table, details, .step { break-inside: avoid; }
+      details { border: none; padding: 0; } details > summary { list-style: none; }
+      figure img { box-shadow: none; max-height: 120mm; width: auto; }
+      a { color: var(--ink); text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="in">
+    <h1><i class="bi bi-calendar-week"></i> คู่มือจัดตารางสอน</h1>
+    <p>ระบบเช็คชื่อ · โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม — อ่านทีละขั้น ทำตามได้เลย</p>
+    <div class="btns">
+      <a class="btn solid" href="/timetable.html"><i class="bi bi-box-arrow-up-right"></i> เปิดหน้าตารางสอน</a>
+      <button class="btn" onclick="printGuide()"><i class="bi bi-printer"></i> พิมพ์คู่มือ</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <nav class="toc">
+    <b><i class="bi bi-list-ul"></i> สารบัญ</b>
+    <ol>
+      <li><a href="#s1">รู้จักระบบใน 1 นาที</a></li>
+      <li><a href="#s2">เข้าใช้งาน</a></li>
+      <li><a href="#s3">ดูและพิมพ์ตาราง (ครูทุกคน)</a></li>
+      <li><a href="#s4">หน้าจัดตาราง: ปุ่มไหนทำอะไร</a></li>
+      <li><a href="#s5">จัดตารางเทอมใหม่ ทีละขั้น</a></li>
+      <li><a href="#s6">ครูย้ายออก / ครูใหม่มาแทน</a></li>
+      <li><a href="#s7">จัดครูสอนแทนรายวัน</a></li>
+      <li><a href="#s8">ชวนฝ่ายวิชาการมาช่วยจัด</a></li>
+      <li><a href="#s9">ปัญหาที่พบบ่อย</a></li>
+      <li><a href="#s10">ความหมายของสีและสัญลักษณ์</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <section id="s1">
+    <h2><span class="no">1</span> รู้จักระบบใน 1 นาที</h2>
+    <p>ระบบตารางสอนอยู่ในเว็บเช็คชื่อของโรงเรียน ทำได้ 4 อย่างหลัก</p>
+    <ul>
+      <li><b>ดู/พิมพ์ตาราง</b> รายครู รายห้อง และภาระงานสอน — หน้าตาเหมือนไฟล์ตารางเดิมของโรงเรียน</li>
+      <li><b>จัดตาราง</b> ลากวิชาไปวางเอง หรือกด <b>จัดอัตโนมัติ</b> ให้ระบบวางให้ทั้งโรงเรียนในไม่กี่วินาที ระบบเตือนเองเมื่อครูสอนซ้อนหรือห้องชน</li>
+      <li><b>จัดครูสอนแทน</b> เมื่อครูลา/ไปราชการ ระบบหาคาบที่ต้องมีคนแทนและแนะนำครูที่ว่างให้ พิมพ์ใบบันทึกและส่ง LINE ได้</li>
+      <li><b>ครูเห็นตารางตัวเอง</b> ทั้งบนคอมพิวเตอร์และมือถือ รวมถึงคาบสอนแทนของตัวเอง</li>
+    </ul>
+    <h3>ใครทำอะไรได้</h3>
+    <table class="who">
+      <tr><th>ผู้ใช้</th><th>ทำได้</th></tr>
+      <tr><td>ครูทุกคน</td><td>ดูและพิมพ์ตารางที่ <b>เผยแพร่แล้ว</b> · ดูรายการสอนแทน · เห็นคาบสอนแทนของตัวเองในหน้าแรก</td></tr>
+      <tr><td>ผู้ช่วยจัดตาราง<br><small>(เช่น ฝ่ายวิชาการ)</small></td><td>ทุกอย่างของครู + จัดตาราง จัดอัตโนมัติ จัดครูสอนแทน เผยแพร่ตาราง · เห็นตารางที่ยังเป็น <b>ร่าง</b></td></tr>
+      <tr><td>แอดมิน</td><td>ทุกอย่าง + ลบภาคเรียน ผูกบัญชีครู และตั้งว่าใครเป็นผู้ช่วยจัดตาราง</td></tr>
+    </table>
+  </section>
+
+  <!-- 2 -->
+  <section id="s2">
+    <h2><span class="no">2</span> เข้าใช้งาน</h2>
+    <ol>
+      <li>เข้าเว็บเช็คชื่อของโรงเรียน แล้วเลือกเมนู <b>ตารางสอน</b> — หรือกด <b>ลิงก์ที่ส่งมาทาง LINE</b></li>
+      <li>ถ้ายังไม่ได้เข้าสู่ระบบ ให้ล็อกอินด้วยบัญชีครูของตัวเอง ระบบจะพากลับมาหน้าที่ลิงก์ชี้ไว้ให้เอง</li>
+      <li>ระบบเปิดตารางของ <b>ภาคเรียนที่ใช้สอนอยู่วันนี้</b> ให้อัตโนมัติ ถ้าต้องการเทอมอื่นเลือกที่ช่อง <b>ภาคเรียน</b> มุมซ้ายบน</li>
+    </ol>
+    <div class="note tip"><b>💡</b>จัดตารางใช้ <b>คอมพิวเตอร์หรือแท็บเล็ต</b> จะสะดวกที่สุด (หน้าจอกว้าง ลากวางง่าย) ส่วนมือถือเหมาะกับดูตาราง
+      — ถ้าเปิดลิงก์ในแอป LINE แล้วระบบแนะนำให้เปิดใน Chrome/Safari ให้กดตาม</div>
+  </section>
+
+  <!-- 3 -->
+  <section id="s3">
+    <h2><span class="no">3</span> ดูและพิมพ์ตาราง (ครูทุกคน)</h2>
+    <p>แถบด้านบนมีปุ่ม <span class="kbd">รายครู</span> <span class="kbd">รายห้อง</span> <span class="kbd">ภาระงาน</span> <span class="kbd">สอนแทน</span>
+      กดเลือกมุมมอง แล้วเลือกครูหรือห้องจากช่องถัดไป</p>
+    <figure><img src="/img/guide/view.png" alt="ตารางสอนรายครู" loading="lazy">
+      <figcaption>ตารางสอนรายครู — กด <b>พิมพ์</b> (คนที่เลือก) หรือ <b>ทุกคน</b> (พิมพ์ทุกคน/ทุกห้องต่อกัน คนละ 1 หน้า)</figcaption></figure>
+    <div class="two">
+      <div>
+        <ul>
+          <li><b>พิมพ์</b> ออกมาเป็น A4 แนวนอน 1 หน้าต่อคน มีช่องลงชื่อหัวหน้าวิชาการและผู้อำนวยการ</li>
+          <li>ใช้ Chrome ระบบตั้งแนวนอนให้เอง · ใช้ Safari/iPad ถ้ากระดาษเป็นแนวตั้ง ระบบหมุนตารางให้เต็มแผ่นเอง</li>
+          <li><b>ภาระงาน</b> = จำนวนคาบสอน/กิจกรรมของครูทุกคน ใช้ตรวจความเท่าเทียมของงาน</li>
+          <li>บนมือถือ ตารางจะเปลี่ยนเป็น <b>รายวัน</b> อ่านง่าย มีป้าย "วันนี้" และไฮไลต์คาบที่กำลังสอน</li>
+        </ul>
+      </div>
+      <figure><img src="/img/guide/mobile.png" alt="ตารางบนมือถือ" loading="lazy" style="max-width:min(260px,100%)"><figcaption>บนมือถือ: ดูเป็นรายวัน</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section id="s4">
+    <h2><span class="no">4</span> หน้าจัดตาราง: ปุ่มไหนทำอะไร</h2>
+    <p>กดปุ่มสีแดง <span class="kbd">จัดตาราง</span> (เห็นเฉพาะแอดมินและผู้ช่วยจัดตาราง) ครั้งแรกจะมีหน้า "วิธีใช้" สั้น ๆ ขึ้นมาให้อ่าน</p>
+    <figure><img src="/img/guide/overview.png" alt="หน้าจัดตาราง" loading="lazy"><figcaption>หน้าจัดตาราง (ตัวอย่าง ม.5) — ตัวเลขสีแดงตรงกับตารางด้านล่าง</figcaption></figure>
+    <table>
+      <tr><th style="width:44px">#</th><th>ปุ่ม / ส่วน</th><th>ใช้ทำอะไร</th></tr>
+      <tr><td><span class="num">1</span></td><td>รายห้อง / รายครู</td><td>เลือกว่าจะจัดดูตารางของ "ห้อง" หรือของ "ครู"</td></tr>
+      <tr><td><span class="num">2</span></td><td>ช่องเลือก</td><td>เลือกห้อง (ม.1–ม.6) หรือเลือกครู</td></tr>
+      <tr><td><span class="num">3</span></td><td>สายการเรียน / เงื่อนไขครู</td><td>มุมมองรายห้อง = ตั้งสายการเรียนของห้อง · มุมมองรายครู = ตั้งคาบที่ครูไม่ว่าง และโอนวิชาเมื่อครูย้าย</td></tr>
+      <tr><td><span class="num">4</span></td><td>+ เพิ่มรายการสอน</td><td>เพิ่มวิชา/กิจกรรมที่ยังไม่มีในรายการ</td></tr>
+      <tr><td><span class="num">5</span></td><td>ย้อนกลับ</td><td>ย้อนการวาง/ย้าย/เอาออกครั้งล่าสุด (ย้อนได้หลายครั้ง)</td></tr>
+      <tr><td><span class="num">6</span></td><td>จัดอัตโนมัติ</td><td>ให้ระบบวางวิชาทั้งโรงเรียนให้ (ดูขั้นที่ 6)</td></tr>
+      <tr><td><span class="num">7</span></td><td>เครื่องมือ</td><td>ตั้งสายจากหลักสูตร · แนะนำสายจากตาราง · รายงานการร่าง · ส่งลิงก์ทาง LINE · ผู้ช่วยจัดตาราง (แอดมิน)</td></tr>
+      <tr><td><span class="num">8</span></td><td>ภาคเรียน (ร่าง / เผยแพร่แล้ว)</td><td>ตั้งค่าภาคเรียน · <b>เผยแพร่ให้ครูเห็น</b> · สร้างร่างเทอมถัดไป</td></tr>
+      <tr><td><span class="num">9</span></td><td>วิธีใช้</td><td>เปิดคำแนะนำ 6 ขั้นแบบสั้น</td></tr>
+      <tr><td><span class="num">10</span></td><td>ชน / เตือน</td><td>จำนวนปัญหาทั้งภาคเรียน · <b>กดเพื่อดูรายการ</b> แล้วกดรายการไหนระบบพาไปที่ช่องนั้นให้</td></tr>
+      <tr><td><span class="num">11</span></td><td>ยังไม่ได้วาง</td><td>วิชาที่ยังวางไม่ครบ (บอก "เหลือ N คาบ") ลากจากตรงนี้ไปวางในตาราง</td></tr>
+      <tr><td><span class="num">12</span></td><td>ปัญหาในห้องนี้</td><td>ปัญหาเฉพาะห้อง/ครูที่เปิดดูอยู่ · กดรายการที่มีวัน-คาบ ช่องนั้นจะกะพริบ</td></tr>
+      <tr><td><span class="num">13</span></td><td>คำอธิบายใต้ตาราง</td><td>วิธีลาก/เอาออก/ล็อก และความหมายสีช่อง — ด้านล่างสุดมีตาราง "ภาระงานสอน" ของห้อง/ครูนั้น กด ✏️ เพื่อแก้แต่ละวิชา</td></tr>
+    </table>
+  </section>
+
+  <!-- 5 -->
+  <section id="s5">
+    <h2><span class="no">5</span> จัดตารางเทอมใหม่ ทีละขั้น</h2>
+    <p>ลำดับที่แนะนำ ทำตามนี้จะเร็วและชนน้อยที่สุด</p>
+
+    <div class="step"><div class="n">1</div><div class="b">
+      <h3>สร้างร่างภาคเรียนใหม่</h3>
+      <p>เปิดเทอมปัจจุบัน → จัดตาราง → กดปุ่ม <b>ภาคเรียน</b> <span class="num" style="width:20px;height:20px;font-size:.75rem">8</span>
+        → <b>สร้างร่างภาคเรียน … จากภาคเรียนนี้</b> ระบบเลื่อนรหัสวิชาตามโครงสร้างหลักสูตรให้ (เช่น ค21101 → ค21102) ครู/ชั้น/สายเดิมตามมาด้วย
+        กิจกรรมรวม (ชุมนุม ลูกเสือ ประชุม) อยู่ช่องเดิมและล็อกไว้</p>
+      <figure><img src="/img/guide/term.png" alt="ตั้งค่าภาคเรียน" loading="lazy" style="max-width:min(620px,100%)"><figcaption>หน้าต่างภาคเรียน — เผยแพร่ / สร้างร่างเทอมถัดไป · วันเปิด-ปิดภาคเรียนแก้ได้ที่หน้าตั้งค่าระบบ</figcaption></figure>
+      <div class="note warn"><b>⚠</b>ร่างที่สร้างใหม่ <b>ครูทั่วไปยังไม่เห็น</b> จนกว่าจะกด "เผยแพร่" — แก้ได้เต็มที่ไม่กระทบตารางที่ใช้อยู่ · หลังสร้างร่าง ให้เปิด <b>เครื่องมือ → รายงานการร่าง</b> ดูวิชาที่ต้องตรวจ (รหัสไม่พบในหลักสูตร วิชาที่ยังไม่มีครู ฯลฯ)</div>
+    </div></div>
+
+    <div class="step"><div class="n">2</div><div class="b">
+      <h3>ตรวจรายการสอนของแต่ละห้อง</h3>
+      <p>เลือก <b>รายห้อง</b> ทีละห้อง แล้วดูตาราง "ภาระงานสอน" ด้านล่างสุด กด ✏️ เพื่อแก้ หรือ <b>+ เพิ่มรายการสอน</b> ถ้าขาดวิชา</p>
+      <figure><img src="/img/guide/lesson.png" alt="แก้ไขรายการสอน" loading="lazy" style="max-width:min(620px,100%)"><figcaption>หน้าต่างแก้ไขรายการสอน</figcaption></figure>
+      <table>
+        <tr><th>ช่อง</th><th>ความหมาย</th></tr>
+        <tr><td>รายวิชา / กิจกรรม</td><td>รายวิชานับเป็นคาบสอน · กิจกรรม (ชุมนุม ติว O-NET ฯลฯ) นับแยก</td></tr>
+        <tr><td>ชั้น</td><td>ห้องที่เรียน — ติ๊กหลายห้องได้ถ้าเรียนรวม (เช่น ศาสนา ม.4–6)</td></tr>
+        <tr><td>สาย/กลุ่มผู้เรียน</td><td>ไม่ติ๊ก = เรียนทั้งห้อง · ติ๊ก = เฉพาะนักเรียนสายนั้น (ตั้งทีละห้องได้ง่ายกว่าที่ขั้นที่ 3)</td></tr>
+        <tr><td>ครูผู้สอน</td><td>ติ๊กได้หลายคน (สอนร่วม) · ไม่มีชื่อกด "+ เพิ่มครู"</td></tr>
+        <tr><td>คาบ/สัปดาห์</td><td>จำนวนคาบที่ต้องวางในตาราง</td></tr>
+        <tr><td>เรียนติดกัน 2 คาบ</td><td>วิชาคาบคู่ ระบบจะหาช่องติดกันให้</td></tr>
+        <tr><td>หลีกเลี่ยงคาบ</td><td>คาบที่ไม่อยากให้วาง เช่น พละไม่เอาคาบ 5 หลังอาหาร (เป็นคำเตือน ไม่ห้ามเด็ดขาด)</td></tr>
+      </table>
+    </div></div>
+
+    <div class="step"><div class="n">3</div><div class="b">
+      <h3>ตั้งสายการเรียน (ห้องที่แยกสาย เช่น ม.4–6)</h3>
+      <p>รายห้อง → เลือกห้อง → ปุ่ม <b>สายการเรียน</b> จะได้หน้าต่างแบบตารางติ๊กหน้าเดียว</p>
+      <ul>
+        <li><b>ด้านบน</b> พิมพ์ชื่อสายของห้อง แก้ชื่อได้ (วิชาที่ใช้ชื่อเดิมเปลี่ยนตามให้เอง) · ✖ ลบ · <b>+ เพิ่มสาย</b></li>
+        <li><b>ด้านล่าง</b> ติ๊กว่าแต่ละวิชาเรียนสายไหน · วิชาที่ไม่ติ๊กขึ้น <b>✓ ทั้งห้อง</b> (วิชาพื้นฐาน) · กดบันทึกครั้งเดียว</li>
+      </ul>
+      <figure><img src="/img/guide/tracks.png" alt="สายการเรียน" loading="lazy"><figcaption>สายการเรียน ม.4 — แถวคือวิชา คอลัมน์คือสาย</figcaption></figure>
+      <div class="note ok"><b>✔</b>วิชา <b>ต่างสาย</b> วางคาบเดียวกันได้ ไม่นับว่าชน (นักเรียนแยกไปเรียนคนละห้อง) · ถ้าไม่อยากตั้งเอง ใช้ <b>เครื่องมือ → ตั้งสายการเรียนจากโครงสร้างหลักสูตร</b></div>
+    </div></div>
+
+    <div class="step"><div class="n">4</div><div class="b">
+      <h3>ตั้งเงื่อนไขครู (ครูไม่ว่างบางช่วง)</h3>
+      <p>รายครู → เลือกครู → ปุ่ม <b>เงื่อนไขครู</b> แตะช่องที่ครูไม่ว่าง (ขึ้น ✖ สีแดง) หรือกด <b>เช้า / บ่าย / ทั้งวัน</b> ท้ายแถว
+        พิมพ์เหตุผลได้ เช่น "ไปธนาคาร" และจำกัด "สอนไม่เกินวันละ … คาบ" ได้</p>
+      <figure><img src="/img/guide/teacher.png" alt="เงื่อนไขครู" loading="lazy" style="max-width:min(620px,100%)"><figcaption>ตัวอย่าง: ครูไม่ว่างบ่ายวันศุกร์ (ไปธนาคาร) — จัดอัตโนมัติจะไม่วางสอนช่องนี้</figcaption></figure>
+    </div></div>
+
+    <div class="step"><div class="n">5</div><div class="b">
+      <h3>ล็อกช่องที่ห้ามย้าย</h3>
+      <p>วิชาที่ต้องอยู่ช่องเดิม (เช่น ชุมนุม ลูกเสือ ประชุม) กดไอคอน <b>🔓</b> มุมล่างขวาของวิชา → กลายเป็น <b>🔒</b>
+        จัดอัตโนมัติจะไม่ย้ายช่องที่ล็อก · จะปลดล็อกกด 🔒 อีกครั้ง</p>
+      <figure><img src="/img/guide/chips.png" alt="ปุ่มล็อก" loading="lazy" style="max-width:min(520px,100%)"><figcaption>วิชาปกติมี × (เอาออก) และ 🔓 จาง ๆ · วิชาที่ล็อกมี 🔒 มุมบน</figcaption></figure>
+    </div></div>
+
+    <div class="step"><div class="n">6</div><div class="b">
+      <h3>กดจัดอัตโนมัติ</h3>
+      <ol>
+        <li>กด <b>จัดอัตโนมัติ</b> → เลือก <b>จัดใหม่ทั้งหมด</b> (คงช่องที่ล็อกไว้) หรือ <b>วางเฉพาะคาบที่ยังไม่ได้วาง</b> → <b>เริ่มจัด</b></li>
+        <li>ระบบบอกว่า "วางได้ …/… คาบ" · ไม่พอใจกด <b>จัดใหม่อีกรอบ</b> (สุ่มใหม่ทุกครั้ง)</li>
+        <li>กด <b>ดูผลในตาราง</b> — ยังไม่บันทึก เลือกดูห้อง/ครูอื่นได้ (ระหว่างนี้ยังแก้ไม่ได้)</li>
+        <li>พอใจแล้วกด <b>บันทึกผลนี้</b> · ไม่เอากด <b>ยกเลิก</b> ตารางเดิมกลับมาเหมือนเดิม</li>
+      </ol>
+      <figure><img src="/img/guide/solve.png" alt="จัดอัตโนมัติ" loading="lazy" style="max-width:min(620px,100%)"><figcaption>ผลจัดอัตโนมัติ — ถ้ามีคาบคู่ที่หาช่องติดกันไม่ได้ จะมีปุ่ม <b>✂ แยกคาบคู่แล้วจัดใหม่</b> กดครั้งเดียวจัดต่อให้</figcaption></figure>
+      <div class="note tip"><b>💡</b>ถ้ายังวางไม่ได้บางคาบ แปลว่าครูกับห้องไม่มีช่องว่างตรงกันจริง ๆ — ลองปลดเงื่อนไขครูบางช่อง แยกคาบคู่ หรือให้ครูแลกคาบกัน แล้วกดจัดใหม่</div>
+    </div></div>
+
+    <div class="step"><div class="n">7</div><div class="b">
+      <h3>ปรับเองด้วยการลากวาง</h3>
+      <ul>
+        <li><b>ลาก</b> วิชาไปช่องใหม่ หรือ <b>แตะวิชา แล้วแตะช่อง</b> (ใช้บนแท็บเล็ตได้) · แตะวิชาเดิมซ้ำ = ยกเลิกการเลือก</li>
+        <li>ตอนเลือกวิชา ทุกช่องจะเปลี่ยนสี: <span class="sw" style="background:#4caf50"></span>วางได้ <span class="sw" style="background:#e0a800"></span>ผิดเงื่อนไข <span class="sw" style="background:#dc3545"></span>ชน (ชี้ค้างที่ช่องเพื่อดูเหตุผล)</li>
+        <li>กด <b>×</b> หรือลากกลับไปที่ "ยังไม่ได้วาง" = เอาออก · พลาดกด <b>ย้อนกลับ</b></li>
+      </ul>
+      <figure><img src="/img/guide/pick.png" alt="สีช่องตอนเลือกวิชา" loading="lazy"><figcaption>เลือกวิชาแล้ว ช่องเขียวคือวางได้ทันที</figcaption></figure>
+      <div class="two">
+        <div><p><b>วิชาคาบคู่ที่วางไม่ลง</b> — การ์ดในกล่อง "ยังไม่ได้วาง" มีปุ่ม <b>✂ แยกคาบคู่</b> กดแล้ววางทีละคาบได้เลย
+          (จะกลับเป็นคาบคู่ ให้กด ✏️ แล้วติ๊ก "เรียนติดกัน 2 คาบ")</p></div>
+        <figure><img src="/img/guide/pendcard.png" alt="ปุ่มแยกคาบคู่" loading="lazy"><figcaption>ปุ่ม ✂ แยกคาบคู่ บนการ์ด</figcaption></figure>
+      </div>
+    </div></div>
+
+    <div class="step"><div class="n">8</div><div class="b">
+      <h3>ตรวจให้ "ชน 0" แล้วเผยแพร่</h3>
+      <p>ดูปุ่ม <b>ชน</b> และ <b>เตือน</b> มุมขวาบน กดเพื่อดูรายการทั้งภาคเรียน กดรายการไหน ระบบพาไปที่ห้อง/ครูและช่องนั้นให้</p>
+      <figure><img src="/img/guide/issues.png" alt="รายการคำเตือน" loading="lazy" style="max-width:min(620px,100%)"><figcaption>รายการคำเตือนทั้งภาคเรียน</figcaption></figure>
+      <p>เมื่อ <b>ชน = 0</b> (เตือนเหลือน้อยที่สุด) กดปุ่ม <b>ภาคเรียน</b> → <b>เผยแพร่ให้ครูเห็น</b> ครูทุกคนจะเห็นตารางใหม่ทันที
+        — เผยแพร่ล่วงหน้าได้ ครูยังเห็นตารางเทอมปัจจุบันจนถึงวันเปิดเทอมใหม่</p>
+    </div></div>
+  </section>
+
+  <!-- 6 -->
+  <section id="s6">
+    <h2><span class="no">6</span> ครูย้ายออก / ครูใหม่มาแทน</h2>
+    <ol>
+      <li>เปิดภาคเรียนที่ต้องการ → จัดตาราง → <b>รายครู</b> → เลือกครูที่ย้ายออก → <b>เงื่อนไขครู</b></li>
+      <li>ส่วนล่างของหน้าต่าง "ครูย้ายออก / เปลี่ยนผู้สอน" เลือก <b>ให้ ➕ ครูใหม่ (รอย้ายมา)</b> หรือเลือกครูที่มีอยู่แล้ว</li>
+      <li>ติ๊ก "ย้ายออกแล้ว" → กด <b>โอนวิชาทั้งหมด</b> — วิชาและกิจกรรมทั้งหมดย้ายไปอยู่กับ "ครูใหม่" เฉพาะภาคเรียนนี้ (ตารางเทอมก่อนยังเป็นชื่อเดิม)</li>
+      <li>เมื่อครูใหม่มาถึง: รายครู → เลือก "ครูใหม่" → เงื่อนไขครู → แก้เป็นชื่อจริง (แอดมินเลือกบัญชีผู้ใช้ให้ด้วย)</li>
+    </ol>
+    <div class="note tip"><b>💡</b>พิมพ์ "ตารางสอนครูใหม่" เก็บไว้มอบให้ครูที่ย้ายมาได้เลย · ระหว่างรอครูใหม่ ให้บันทึก "ครูไม่มา" แบบ <b>ยังไม่มีกำหนด</b> ในแท็บสอนแทน (หัวข้อ 7)</div>
+  </section>
+
+  <!-- 7 -->
+  <section id="s7">
+    <h2><span class="no">7</span> จัดครูสอนแทนรายวัน</h2>
+    <div class="step"><div class="n">1</div><div class="b">
+      <h3>บันทึกครูไม่มา</h3>
+      <p>กดแท็บ <b>สอนแทน</b> → เลือกวันที่ (ปุ่ม ‹ › เลื่อนวัน) → <b>+ บันทึกครูไม่มา</b> เลือกครู สาเหตุ (ลาป่วย ลากิจ ไปราชการ ย้ายออก ฯลฯ)
+        เลือก <b>ทั้งวัน / ช่วงเช้า / ช่วงบ่าย / เลือกคาบ</b> และช่วงวันที่ (หลายวันได้ หรือ "ยังไม่มีกำหนด")</p>
+      <figure><img src="/img/guide/absence.png" alt="บันทึกครูไม่มา" loading="lazy" style="max-width:min(620px,100%)"><figcaption>บันทึกครูไม่มา</figcaption></figure>
+    </div></div>
+    <div class="step"><div class="n">2</div><div class="b">
+      <h3>เลือกครูสอนแทน</h3>
+      <p>ระบบแสดงคาบที่ต้องมีคนแทนให้เอง (ข้ามวันหยุด ประชุมครู และวิชาที่มีครูร่วมสอนอยู่) · กด <b>จัดอัตโนมัติ</b> ให้ระบบเลือก หรือเลือกเองจากช่อง "สอนแทนโดย"</p>
+      <ul>
+        <li>รายชื่อเรียงให้แล้ว: <b>สอนแทนมาน้อยก่อน</b> (กระจายงานให้เท่ากันทั้งเทอม) · สาระเดียวกัน · สอนห้องนั้นอยู่ · วันนั้นมีคาบน้อย</li>
+        <li>ครูที่มีสอนคาบนั้น ไม่มา หรือตั้งเงื่อนไขไม่ว่าง จะเลือกไม่ได้ · คาบคู่ระบบให้ครูคนเดียวดูทั้ง 2 คาบ</li>
+        <li>ไม่มีใครว่าง เลือก <b>✗ ไม่มีครูแทน (มอบงาน/รวมห้อง)</b> แล้วพิมพ์หมายเหตุ เช่น "ให้ทำใบงาน หน้า 12"</li>
+      </ul>
+      <figure><img src="/img/guide/sub.png" alt="แท็บสอนแทน" loading="lazy"><figcaption>แท็บสอนแทน — ซ้าย: ครูที่ไม่มา และจำนวนคาบสอนแทนของแต่ละคน · ขวา: คาบที่ต้องจัด</figcaption></figure>
+    </div></div>
+    <div class="step"><div class="n">3</div><div class="b">
+      <h3>แจ้งครู: ส่ง LINE และพิมพ์ใบบันทึก</h3>
+      <div class="two">
+        <div>
+          <ul>
+            <li>กด <b>ส่ง LINE</b> → <b>ก๊อปข้อความ</b> → <b>เปิดไลน์</b> → วางในกลุ่มครู (คาบติดกันรวมเป็น "คาบ 3-4" ให้)</li>
+            <li>กด <b>พิมพ์</b> (ปุ่มเขียวด้านบน) ได้ "บันทึกการจัดครูสอนแทน" A4 มีช่องลงชื่อครูสอนแทน ผู้จัด และผู้อำนวยการ</li>
+            <li>ครูที่ได้สอนแทนจะเห็นกล่องเหลือง <b>"คาบสอนแทนของคุณ"</b> ในหน้าแรกและในตารางของตัวเอง · ผอ. เห็นสรุปในหน้าภาพรวมของ ผอ.</li>
+          </ul>
+        </div>
+        <figure><img src="/img/guide/subline.png" alt="ส่ง LINE" loading="lazy"><figcaption>ข้อความพร้อมส่ง LINE</figcaption></figure>
+      </div>
+      <figure><img src="/img/guide/subsheet.png" alt="ใบบันทึกการจัดครูสอนแทน" loading="lazy" style="max-width:min(560px,100%)"><figcaption>ใบบันทึกการจัดครูสอนแทน (ตัวอย่างส่วนบน)</figcaption></figure>
+    </div></div>
+  </section>
+
+  <!-- 8 -->
+  <section id="s8">
+    <h2><span class="no">8</span> ชวนฝ่ายวิชาการมาช่วยจัด (สำหรับแอดมิน)</h2>
+    <ol>
+      <li>ดูว่าครูคนนั้นมีบัญชีในเว็บแล้ว (ถ้ายังไม่มี สร้างที่หน้า <b>จัดการผู้ใช้</b> บทบาท "ครู")</li>
+      <li>จัดตาราง → <b>เครื่องมือ</b> → <b>ผู้ช่วยจัดตาราง (ฝ่ายวิชาการ)</b> → ติ๊กชื่อ → บันทึก</li>
+      <li><b>เครื่องมือ</b> → <b>ส่งลิงก์จัดตารางทาง LINE</b> → ก๊อปข้อความ → ส่งในไลน์ คนที่กดลิงก์จะเข้าหน้าจัดตารางของเทอมนั้นทันที (หลังล็อกอิน)</li>
+    </ol>
+    <figure><img src="/img/guide/share.png" alt="ส่งลิงก์จัดตาราง" loading="lazy" style="max-width:min(620px,100%)"><figcaption>ข้อความชวนจัดตาราง พร้อมลิงก์</figcaption></figure>
+    <div class="note ok"><b>🔒</b>ผู้ช่วยจัดตาราง <b>ไม่ใช่แอดมินทั้งระบบ</b> — แก้ข้อมูลนักเรียน บัญชีผู้ใช้ หรือการตั้งค่าอื่นไม่ได้ · คนที่ไม่มีสิทธิ์กดลิงก์ก็แค่ดูตารางได้ตามปกติ</div>
+  </section>
+
+  <!-- 9 -->
+  <section id="s9">
+    <h2><span class="no">9</span> ปัญหาที่พบบ่อย</h2>
+    <details><summary>วิชาวางไม่ลง / จัดอัตโนมัติแล้วยังเหลือบางคาบ</summary>
+      <p>ครูกับห้องไม่มีช่องว่างตรงกัน ลองทีละข้อ: (1) ถ้าเป็นคาบคู่ กด <b>✂ แยกคาบคู่</b> (2) ปลดเงื่อนไข "ไม่ว่าง" ของครูบางช่อง
+        (3) ปลดล็อก 🔒 วิชาที่ไม่จำเป็นต้องอยู่ที่เดิม (4) ตรวจสายการเรียน — วิชาต่างสายควรติ๊กสายให้ถูก จะวางพร้อมกันได้ แล้วกดจัดใหม่</p></details>
+    <details><summary>ขึ้น "ชน" หรือช่องมีกรอบแดง แก้อย่างไร</summary>
+      <p>กดปุ่ม <b>ชน</b> มุมขวาบน → กดรายการ ระบบพาไปที่ช่องนั้น · แตะวิชาในช่องนั้นแล้วย้ายไปช่องเขียว · ถ้าเป็น "ห้องชน" ของวิชาต่างสาย ให้ตั้งสายการเรียนให้ถูก (ขั้นที่ 3)</p></details>
+    <details><summary>ลากวิชาไม่ได้ (โดยเฉพาะบนแท็บเล็ต/มือถือ)</summary>
+      <p>ใช้วิธี <b>แตะวิชา 1 ครั้ง</b> (ขอบน้ำเงิน) แล้ว <b>แตะช่องปลายทาง</b> · ถ้าวิชาล็อกอยู่ (🔒) ต้องกด 🔒 ปลดล็อกก่อน ·
+        ถ้าขึ้นว่า "กำลังดูผลจัดอัตโนมัติ" ให้กด บันทึกผลนี้ หรือ ยกเลิก ก่อน</p></details>
+    <details><summary>กดพลาด / วางผิด</summary><p>กด <b>ย้อนกลับ</b> ได้หลายครั้ง (ย้อนได้ในภาคเรียนเดียวกัน)</p></details>
+    <details><summary>เปิดลิงก์แล้วแก้ตารางไม่ได้ / ไม่เห็นปุ่ม "จัดตาราง"</summary>
+      <p>บัญชีนั้นยังไม่เป็น "ผู้ช่วยจัดตาราง" ให้แอดมินเพิ่มให้ (หัวข้อ 8) แล้วโหลดหน้าใหม่</p></details>
+    <details><summary>ไม่เห็นภาคเรียนที่เป็นร่าง</summary><p>ร่างเห็นเฉพาะแอดมินและผู้ช่วยจัดตาราง ครูทั่วไปจะเห็นเมื่อกด "เผยแพร่" แล้ว</p></details>
+    <details><summary>ครูบอกว่าไม่เห็นตารางของตัวเอง / ไม่เห็นกล่องสอนแทน</summary>
+      <p>ชื่อครูในตารางต้องผูกกับบัญชีผู้ใช้ของครูคนนั้น ปกติระบบผูกให้เองเมื่อชื่อตรงกัน ถ้าไม่ตรง แอดมินเข้า รายครู → เงื่อนไขครู → เลือก "บัญชีผู้ใช้"</p></details>
+    <details><summary>พิมพ์ออกมาแนวตั้ง / ตารางเล็ก</summary>
+      <p>Chrome ตั้งแนวนอนให้เอง · Safari/iPad ถ้ากระดาษแนวตั้งระบบหมุนตารางให้เต็มแผ่น หรือเลือก <b>Landscape (แนวนอน)</b> ในหน้าต่างพิมพ์ก็ได้ · ตั้งขนาดกระดาษเป็น A4</p></details>
+    <details><summary>เว็บยังแสดงหน้าตาแบบเก่า</summary><p>กด <span class="kbd">Ctrl</span> + <span class="kbd">F5</span> (Mac: <span class="kbd">Cmd</span> + <span class="kbd">Shift</span> + <span class="kbd">R</span>) ครั้งเดียว ครั้งต่อไประบบอัปเดตเอง</p></details>
+    <details><summary>ระบบเปิดเทอมผิด / วันเปิด-ปิดภาคเรียนไม่ตรง</summary>
+      <p>ระบบเลือกเทอมตามวันเปิด-ปิดภาคเรียนในหน้า <b>ตั้งค่าระบบ</b> (ค่าตั้งต้น เทอม 1 = 16 พ.ค.–15 ต.ค., เทอม 2 = 1 พ.ย.–31 มี.ค.) แอดมินแก้ได้ที่นั่น · หรือเลือกเทอมเองที่ช่อง "ภาคเรียน"</p></details>
+  </section>
+
+  <!-- 10 -->
+  <section id="s10">
+    <h2><span class="no">10</span> ความหมายของสีและสัญลักษณ์</h2>
+    <table>
+      <tr><th style="width:170px">เห็นอะไร</th><th>หมายถึง</th></tr>
+      <tr><td><span class="sw" style="background:#4caf50"></span>ช่องเขียว</td><td>(ตอนเลือกวิชา) วางได้ ไม่มีปัญหา</td></tr>
+      <tr><td><span class="sw" style="background:#e0a800"></span>ช่องเหลือง</td><td>วางได้ แต่ผิดเงื่อนไขที่ตั้งไว้ เช่น วิชาซ้ำวันเดียวกัน อยู่คาบที่ตั้งให้เลี่ยง</td></tr>
+      <tr><td><span class="sw" style="background:#dc3545"></span>ช่องแดง / กรอบแดง</td><td>ชน: ครูสอนซ้อน ห้องเรียนซ้อน หรือครูไม่ว่างคาบนั้น</td></tr>
+      <tr><td>×</td><td>เอาวิชาออกจากช่องนั้น (กลับไปอยู่ "ยังไม่ได้วาง")</td></tr>
+      <tr><td>🔓 / 🔒</td><td>ปลดล็อกอยู่ / ล็อกแล้ว — จัดอัตโนมัติไม่ย้ายช่องที่ล็อก</td></tr>
+      <tr><td>✂ แยกคาบคู่</td><td>ยกเลิกคาบคู่ของวิชานั้น ให้วางทีละคาบได้</td></tr>
+      <tr><td><span class="kbd" style="background:#6c757d;color:#fff;border-color:#6c757d">คู่</span></td><td>วิชาเรียนติดกัน 2 คาบ</td></tr>
+      <tr><td><span class="kbd" style="background:#ffc107;border-color:#ffc107">เหลือ 2</span></td><td>ยังต้องวางอีก 2 คาบ</td></tr>
+      <tr><td>ชน N / เตือน N</td><td>จำนวนปัญหาทั้งภาคเรียน (กดดูรายการได้) — ก่อนเผยแพร่ควรให้ "ชน" เป็น 0</td></tr>
+      <tr><td>ร่าง / เผยแพร่แล้ว</td><td>ร่าง = ครูทั่วไปยังไม่เห็น · เผยแพร่แล้ว = ครูทุกคนเห็น</td></tr>
+    </table>
+    <figure><img src="/img/guide/help.png" alt="หน้าต่างวิธีใช้" loading="lazy" style="max-width:min(620px,100%)"><figcaption>ลืมขั้นตอน? กดปุ่ม <b>วิธีใช้</b> ในหน้าจัดตารางได้ทุกเมื่อ</figcaption></figure>
+  </section>
+</main>
+
+<footer>คู่มือจัดตารางสอน · ระบบเช็คชื่อ โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม · ภาพประกอบจากข้อมูลตัวอย่าง</footer>
+<a class="top" href="#" title="กลับด้านบน"><i class="bi bi-arrow-up"></i></a>
+<script>
+// พิมพ์: โหลดภาพที่ยังไม่ได้เลื่อนไปดูให้ครบก่อน (ภาพโหลดแบบ lazy) ไม่งั้นกระดาษได้ภาพว่าง
+async function printGuide() {
+  document.querySelectorAll('img[loading="lazy"]').forEach(i => { i.loading = 'eager'; });
+  await Promise.all([...document.images].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
+  print();
+}
+// พิมพ์ (รวมกดพิมพ์จากเมนูเบราว์เซอร์): กางคำตอบ "ปัญหาที่พบบ่อย" ทั้งหมด แล้วหุบคืนหลังพิมพ์
+let closedDetails = [];
+addEventListener('beforeprint', () => { closedDetails = [...document.querySelectorAll('details:not([open])')]; closedDetails.forEach(d => { d.open = true; }); });
+addEventListener('afterprint', () => { closedDetails.forEach(d => { d.open = false; }); closedDetails = []; });
+</script>
+</body>
+</html>

@@ -428,14 +428,15 @@ function openEditorHelp() {
     ${step(4, 'จัดอัตโนมัติ', 'กด "จัดอัตโนมัติ" → "ดูผลในตาราง" (ยังไม่บันทึก เลือกดูห้องอื่นได้) → พอใจแล้วกด "บันทึกผลนี้"')}
     ${step(5, 'ปรับเอง', 'ลากวิชาไปช่องใหม่ หรือแตะวิชาแล้วแตะช่อง (ใช้บนแท็บเล็ตได้) · คาบคู่ที่หาช่องติดกันไม่ได้ กด "✂ แยกคาบคู่" บนการ์ดแล้ววางทีละคาบ · ระหว่างเลือก ช่องจะเป็น <span class="text-success fw-bold">เขียว</span>=วางได้ <span class="text-warning fw-bold">เหลือง</span>=ผิดเงื่อนไข <span class="text-danger fw-bold">แดง</span>=ชน · พลาดกด "ย้อนกลับ"')}
     ${step(6, 'ตรวจแล้วเผยแพร่', 'ปุ่ม "ชน" และ "เตือน" มุมขวาต้องเป็น 0 (กดดูได้ว่าอยู่ตรงไหน) → กดปุ่มภาคเรียน → "เผยแพร่ให้ครูเห็น"')}`,
-    '<button class="btn btn-primary btn-sm" data-bs-dismiss="modal">เข้าใจแล้ว</button>');
+    '<a class="btn btn-outline-primary btn-sm me-auto" href="/timetable-guide.html" target="_blank" rel="noopener"><i class="bi bi-book"></i> คู่มือฉบับเต็ม (มีภาพประกอบ)</a>'
+    + '<button class="btn btn-primary btn-sm" data-bs-dismiss="modal">เข้าใจแล้ว</button>');
 }
 /* ── ชวนฝ่ายวิชาการเข้ามาจัด: ลิงก์ตรงเข้าหน้าจัดตารางของภาคเรียนนี้ (ต้องล็อกอิน + มีสิทธิ์ผู้ช่วยจัดตาราง) ── */
 function shareLink() { return `${location.origin}/timetable.html?tab=edit&term=${encodeURIComponent(T.term.name)}`; }
 function openShareModal() {
   const text = `📅 ชวนจัดตารางสอน ภาคเรียน ${T.term.name}${T.term.published ? '' : ' (ร่าง)'}\n`
     + `เปิดลิงก์แล้วเข้าสู่ระบบด้วยบัญชีครูของตัวเอง ระบบจะพาเข้าหน้าจัดตารางให้เลย\n${shareLink()}\n\n`
-    + `💡 แนะนำเปิดในคอมพิวเตอร์หรือแท็บเล็ต (ลากวางสะดวกกว่ามือถือ) · ครั้งแรกมีหน้า "วิธีใช้" ให้อ่าน`;
+    + `💡 แนะนำเปิดในคอมพิวเตอร์หรือแท็บเล็ต (ลากวางสะดวกกว่ามือถือ)\n📖 คู่มือจัดตารางสอน (มีภาพประกอบ): ${location.origin}/timetable-guide.html`;
   showModal('<i class="bi bi-line"></i> ส่งลิงก์จัดตารางทาง LINE', `
     <div class="small mb-2">คนที่เปิดลิงก์ต้องเป็น <b>แอดมิน</b> หรือ <b>ผู้ช่วยจัดตาราง</b> ถึงจะแก้ได้ — คนอื่นเปิดแล้วดูได้อย่างเดียว
       ${T.is_admin ? ' · เพิ่มผู้ช่วยได้ที่ <a href="#" onclick="openEditorsModal(); return false;">ผู้ช่วยจัดตาราง</a>' : ''}</div>
