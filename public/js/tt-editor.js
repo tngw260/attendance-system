@@ -101,6 +101,13 @@ function allIssues() {
     if (n < pw) soft.push({ type, key, lid: l.id, msg: `${name} ยังวางไม่ครบ (${n}/${pw})` });
     if (n > pw) soft.push({ type, key, lid: l.id, msg: `${name} วางเกิน (${n}/${pw})` });
     if (l.kind !== 'subject') return;
+    // รหัสวิชาบอกชั้น: หลักที่ 1 = 2 ม.ต้น / 3 ม.ปลาย · หลักที่ 2 = ปีที่ (0 = วิชาเลือกได้หลายชั้น ไม่ตรวจ) เช่น ง31102 = ม.4
+    const cm = /^[ก-ฮA-Z]+([23])([1-3])\d{3}$/.exec(l.code || '');
+    if (cm && l.classes.length) {
+      const want = +cm[2] + (cm[1] === '3' ? 3 : 0), got = [...new Set(l.classes.map(c => +c.split('/')[0]))];
+      if (got.length !== 1 || got[0] !== want)
+        soft.push({ type, key, lid: l.id, msg: `${name}: รหัสวิชาเป็นของ ม.${want} แต่เรียนที่ ${got.map(g => 'ม.' + g).join(', ')} — ตรวจรหัสวิชา` });
+    }
     const ss = sessionsOf(l), o = l.options || {};
     if (o.double && n >= 2 && ss.filter(s => s.ps.length === 1).length > pw % 2)
       soft.push({ type, key, lid: l.id, msg: `${name} ต้องเรียนติดกัน 2 คาบ แต่วางแยก` });
