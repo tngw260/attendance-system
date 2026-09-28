@@ -25,11 +25,23 @@ const lockedAt = (l, d, p) => l.slots.some(s => s[0] === d && s[1] === p && s[2]
 const isUnavailable = (tid, d, p) => (((IDX.teachers[tid] || {}).constraints || {}).unavailable || []).some(([a, b]) => a === d && b === p);
 const unavReason = tid => ((IDX.teachers[tid] || {}).constraints || {}).note || 'เงื่อนไขครู';
 
+// สายย่อย: config.track_parents[ห้อง][สาย] = สายแม่ เช่น ม.5 "กลุ่ม 2" อยู่ใน "BEP" (เด็กชุดเดียวกัน)
+const trackParents = cls => ((T.term.config.track_parents || {})[cls]) || {};
+function trackChain(cls, t) {                    // [สาย, สายแม่, สายแม่ของแม่, …]
+  const P = trackParents(cls), out = [t];
+  while (P[out[out.length - 1]] && out.length < 6) out.push(P[out[out.length - 1]]);
+  return out;
+}
+const trackRoot = (cls, t) => { const c = trackChain(cls, t); return c[c.length - 1]; };
+
 // สองรายการในห้องเดียวกันเรียนพร้อมกันไม่ได้ ถ้ามีฝั่งใดเรียนทั้งห้อง หรือสายซ้อนกัน
+// (สายเดียวกัน หรือสายย่อยกับสายแม่ของมัน · สายย่อยต่างสายแม่ / กลุ่มย่อยคนละกลุ่ม = คนละคน เรียนพร้อมกันได้)
 function classOverlap(a, b) {
   const ta = tracksOf(a), tb = tracksOf(b);
   if (!ta.length || !tb.length) return true;
-  return ta.some(t => tb.includes(t));
+  const shared = a.classes.filter(c => b.classes.includes(c));
+  return (shared.length ? shared : ['']).some(c =>
+    ta.some(x => tb.some(y => trackChain(c, x).includes(y) || trackChain(c, y).includes(x))));
 }
 
 /* ── ปัญหาถ้าวางรายการ l ที่ (d,p) ── hard = ชนจริง / soft = ผิดเงื่อนไขที่ตั้งไว้ */
@@ -540,7 +552,11 @@ function openLessonModal(id, prefill) {
     <label class="form-label small mb-0 mt-1">หลีกเลี่ยงคาบ</label>
     <div>${P.map(x => `<label class="me-2"><input type="checkbox" class="lfAvoid" value="${x.no}" ${(o.avoid || []).includes(x.no) ? 'checked' : ''}> ${x.no}</label>`).join('')}</div>
     <label class="form-label small mb-0 mt-2">หมายเหตุ</label><input id="lfNote" class="form-control form-control-sm" value="${esc(l.note || '')}">
-    ${id ? `<div class="small text-muted mt-2">วางในตารางแล้ว ${l.slots.length} คาบ</div>` : ''}`;
+    ${id ? `<div class="small text-muted mt-2">วางในตารางแล้ว ${l.slots.length} คาบ</div>` : ''}
+    ${id && l.teacher_ids.length >= 2 && l.teacher_ids.length <= 4 && !tracksOf(l).length ? `<div class="alert alert-info py-2 px-2 small mt-2 mb-0">
+      <b>ครู ${l.teacher_ids.length} คนนี้สอนแยกกลุ่มกันไหม?</b> (นักเรียนแบ่งไปเรียนกับครูแต่ละคน เช่น วิชาเลือก)
+      ถ้าใช่ กดแยก — ครูคนไหนไม่มา ระบบจะจัดครูแทนให้เฉพาะกลุ่มนั้น · ถ้าสอนร่วมกันในห้องเดียว ไม่ต้องกด
+      <div class="mt-1"><button type="button" class="btn btn-sm btn-outline-primary" onclick="splitByTeacher(${id})">✂ แยกเป็นกลุ่มละครู</button></div></div>` : ''}`;
   const foot = `${id ? `<button class="btn btn-outline-danger btn-sm me-auto" onclick="deleteLesson(${id})"><i class="bi bi-trash"></i> ลบรายการ</button>` : ''}
     <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
     <button class="btn btn-primary btn-sm" onclick="saveLesson(${id || 'null'})"><i class="bi bi-save"></i> บันทึก</button>`;
@@ -567,6 +583,20 @@ async function saveLesson(id) {
     if (id) T.lessons[T.lessons.findIndex(l => l.id === id)] = r.lesson; else T.lessons.push(r.lesson);
     if (code) T.subjects[code] = Object.assign(T.subjects[code] || { code }, { name });
     edModal.hide(); buildIndex(); renderEditor();
+  } catch (e) { alert(e.message); }
+}
+
+// วิชาเดียวที่มีครูหลายคนแต่นักเรียนแยกกลุ่ม → รายการละครู สาย "กลุ่ม 1, 2, …" (ช่องในตาราง/ล็อกเหมือนเดิม)
+async function splitByTeacher(lid) {
+  if (previewGuard()) return;
+  const L = lessonById(lid);
+  if (!confirm(`แยก ${lessonName(L)} ${classLabel(L)} เป็น ${L.teacher_ids.length} กลุ่ม กลุ่มละครู (${L.teacher_ids.map(teacherShort).join(', ')})?\n• ช่องในตารางเหมือนเดิม\n• ห้องนี้จะมีสาย "กลุ่ม 1, 2, …" เพิ่ม (แก้ชื่อได้ที่ปุ่มสายการเรียน)`)) return;
+  try {
+    const r = await apiFetch(`/api/tt/lessons/${lid}/split-teachers`, { method: 'POST' });
+    r.lessons.forEach(nl => { const i = T.lessons.findIndex(l => l.id === nl.id); if (i >= 0) T.lessons[i] = nl; else T.lessons.push(nl); });
+    T.term.config.tracks = Object.assign({}, T.term.config.tracks || {}, r.tracks);
+    edModal.hide(); buildIndex(); renderEditor();
+    toastEd(`แยกแล้ว: ${r.lessons.map(l => `${l.track} ${teacherShort(l.teacher_ids[0])}`).join(' · ')}`);
   } catch (e) { alert(e.message); }
 }
 
@@ -684,7 +714,7 @@ async function saveTeacher(tid) {
    ตั้งชื่อสาย + ติ๊กว่าแต่ละวิชาเรียนสายไหน ในหน้าเดียว · แก้ชื่อสาย = วิชาที่ใช้ชื่อเดิมเปลี่ยนตาม · บันทึกครั้งเดียว */
 let TRK = null;
 const trkClean = n => String(n || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
-function openTracksModal(cls) {
+async function openTracksModal(cls) {
   const list = (T.term.config.tracks || {})[cls] || [];
   const ls = T.lessons.filter(l => l.classes.includes(cls))
     .sort((a, b) => (a.kind === 'activity') - (b.kind === 'activity') || lessonName(a).localeCompare(lessonName(b), 'th'));
@@ -697,6 +727,14 @@ function openTracksModal(cls) {
     TRK.ticks.set(l.id, new Set(TRK.rows.filter(r => names.includes(r.old)).map(r => r.id)));
     TRK.keep.set(l.id, names.filter(n => !TRK.rows.some(r => r.old === n)));   // สายของห้องอื่น (วิชาเรียนรวมหลายห้อง) — คงไว้
   });
+  const par = trackParents(cls);
+  TRK.rows.forEach(r => { const pr = par[r.old] && TRK.rows.find(x => x.old === par[r.old]); r.parent = pr ? pr.id : null; });
+  // แนะนำ "กลุ่ม …" อยู่ในสายไหน จากตารางเทอมนี้ · ร่างที่ยังไม่ชัด → ดูจากตารางเทอมที่ใช้สอนอยู่
+  TRK.suggest = inferParents(cls, TRK.rows, T.lessons);
+  const cur = typeof termForDate === 'function' && termForDate(todayLocal());
+  if (TRK.rows.some(r => !r.parent && /^กลุ่ม/.test(r.name) && !TRK.suggest[r.id]) && cur && cur.id !== T.term.id) {
+    try { Object.assign(TRK.suggest, inferParents(cls, TRK.rows, (await apiFetch(`/api/tt/terms/${cur.id}`)).lessons), TRK.suggest); } catch (e) {}
+  }
   showModal(`<i class="bi bi-diagram-3"></i> สายการเรียน ${classShort(cls)}`, '<div id="trkBox"></div>',
     `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
      <button class="btn btn-primary btn-sm" onclick="saveTracks()"><i class="bi bi-save"></i> บันทึก</button>`);
@@ -707,8 +745,11 @@ function openTracksModal(cls) {
 function drawTracks() {
   const R = TRK.rows;
   const nameRow = R.map(r => `<div class="input-group input-group-sm" style="width:auto">
-      <input class="form-control trk-name" data-id="${r.id}" style="width:130px" maxlength="30" value="${esc(r.name)}" placeholder="ชื่อสาย" oninput="trkRename(${r.id}, this.value)">
+      <input class="form-control trk-name" data-id="${r.id}" style="width:120px" maxlength="30" value="${esc(r.name)}" placeholder="ชื่อสาย" oninput="trkRename(${r.id}, this.value)">
+      <select class="form-select trk-par" style="max-width:150px" onchange="trkParent(${r.id}, this.value)" title="กลุ่มย่อยของสายไหน (เด็กชุดเดียวกัน)">
+        <option value="">สายหลัก</option>${R.filter(x => x.id !== r.id).map(x => `<option value="${x.id}" ${r.parent === x.id ? 'selected' : ''}>อยู่ใน ${esc(x.name) || '(ไม่มีชื่อ)'}</option>`).join('')}</select>
       <button class="btn btn-outline-danger" onclick="trkRemove(${r.id})" title="ลบสายนี้"><i class="bi bi-x-lg"></i></button></div>`).join('');
+  const sug = Object.entries(TRK.suggest || {}).map(([id, p]) => [R.find(x => x.id === +id), R.find(x => x.id === p)]).filter(([a, b]) => a && b && !a.parent);
   const rowsHTML = TRK.ls.map(l => {
     const tk = TRK.ticks.get(l.id), sub = l.code && T.subjects[l.code]?.name;
     return `<tr class="${l.kind === 'activity' ? 'text-muted' : ''}">
@@ -725,6 +766,11 @@ function drawTracks() {
     ${TRK.orphans.length ? `<div class="alert alert-warning py-1 px-2 small">พบชื่อสายที่วิชาใช้อยู่แต่ไม่อยู่ในรายชื่อ: ${TRK.orphans.map(esc).join(', ')} — ใส่ไว้ให้แล้ว แก้ชื่อหรือลบได้</div>` : ''}
     <div class="d-flex flex-wrap gap-2 align-items-center mb-2">${nameRow}
       <button class="btn btn-sm btn-outline-primary" onclick="trkAdd()"><i class="bi bi-plus-lg"></i> เพิ่มสาย</button></div>
+    <div class="small text-muted mb-2"><b>3)</b> ถ้าเป็น<b>กลุ่มย่อย</b>ของสาย (เช่น "กลุ่ม 2" คือเด็ก BEP) เลือก <b>อยู่ใน BEP</b> — ระบบจะนับว่าชนกับวิชาของ BEP (เด็กชุดเดียวกัน)
+      แต่เรียนพร้อมวิชาของสายอื่นได้</div>
+    ${sug.length ? `<div class="alert alert-info py-1 px-2 small d-flex flex-wrap align-items-center gap-2">
+      <span>💡 แนะนำจากตาราง: ${sug.map(([a, b]) => `<b>${esc(a.name)}</b> อยู่ใน <b>${esc(b.name)}</b>`).join(' · ')} (ไม่เคยเรียนพร้อมกัน)</span>
+      <button class="btn btn-sm btn-info py-0" onclick="trkUseSuggest()">ใช้คำแนะนำ</button></div>` : ''}
     ${R.length ? `<div class="table-responsive" style="max-height:55vh">
       <table class="table table-sm table-hover align-middle mb-0">
         <thead class="table-light sticky-top"><tr><th>วิชา / กิจกรรม</th><th>ครู</th>
@@ -736,6 +782,29 @@ function drawTracks() {
 function trkRename(id, v) {
   const r = TRK.rows.find(x => x.id === id); r.name = v;
   const h = el('trkH' + id); if (h) h.innerHTML = esc(trkClean(v)) || '<span class="text-danger">(ไม่มีชื่อ)</span>';
+  document.querySelectorAll(`.trk-par option[value="${id}"]`).forEach(o => { o.textContent = 'อยู่ใน ' + (trkClean(v) || '(ไม่มีชื่อ)'); });
+}
+function trkParent(id, v) { TRK.rows.find(x => x.id === id).parent = v ? +v : null; }
+function trkUseSuggest() {
+  Object.entries(TRK.suggest || {}).forEach(([id, p]) => { const r = TRK.rows.find(x => x.id === +id); if (r && !r.parent && TRK.rows.some(x => x.id === p)) r.parent = p; });
+  drawTracks();
+}
+// "กลุ่ม …" ที่ไม่เคยเรียนพร้อมกับวิชาของสายหลักสายเดียว (แต่เรียนพร้อมสายอื่น) = น่าจะเป็นเด็กสายนั้น
+function inferParents(cls, rows, lessons) {
+  const at = {}, out = {};
+  lessons.filter(l => l.classes.includes(cls)).forEach(l => l.slots.forEach(([d, p]) => (at[d + '-' + p] = at[d + '-' + p] || []).push(l)));
+  rows.forEach(r => {
+    if (r.parent || !r.old || !/^กลุ่ม/.test(r.old)) return;
+    const co = new Set(); let seen = false;
+    Object.values(at).forEach(ls => {
+      if (!ls.some(l => tracksOf(l).includes(r.old))) return;
+      seen = true;
+      ls.forEach(l => { if (!tracksOf(l).includes(r.old)) tracksOf(l).forEach(t => co.add(t)); });
+    });
+    const cand = rows.filter(x => x.id !== r.id && x.old && !/^กลุ่ม/.test(x.old) && !co.has(x.old));
+    if (seen && co.size && cand.length === 1) out[r.id] = cand[0].id;
+  });
+  return out;
 }
 function trkAdd() {
   const id = ++TRK.seq;
@@ -748,6 +817,7 @@ function trkRemove(id) {
   const used = TRK.ls.filter(l => TRK.ticks.get(l.id).has(id));
   if (used.length && !confirm(`สาย "${trkClean(r.name) || '(ไม่มีชื่อ)'}" มี ${used.length} วิชาติ๊กไว้ (${used.slice(0, 5).map(lessonName).join(', ')}${used.length > 5 ? ' …' : ''})\nลบแล้ววิชาเหล่านี้จะไม่อยู่ในสายนี้ (ถ้าไม่เหลือสายไหนเลย = เรียนทั้งห้อง) ลบเลยไหม?`)) return;
   TRK.rows = TRK.rows.filter(x => x.id !== id);
+  TRK.rows.forEach(x => { if (x.parent === id) x.parent = null; });
   TRK.ticks.forEach(set => set.delete(id));
   drawTracks();
 }
@@ -769,11 +839,16 @@ async function saveTracks() {
     const next = [...new Set([...TRK.keep.get(l.id), ...TRK.rows.filter(r => TRK.ticks.get(l.id).has(r.id)).map(r => trkClean(r.name))])];
     if ([...next].sort().join(',') !== [...tracksOf(l)].sort().join(',')) lessons[l.id] = next;
   });
+  const parents = {};
+  TRK.rows.forEach(r => { const p = r.parent && TRK.rows.find(x => x.id === r.parent); if (p) parents[trkClean(r.name)] = trkClean(p.name); });
   try {
-    const r = await apiFetch(`/api/tt/terms/${T.term.id}/class-tracks`, { method: 'POST', body: JSON.stringify({ cls: TRK.cls, tracks: names, lessons }) });
+    const r = await apiFetch(`/api/tt/terms/${T.term.id}/class-tracks`, { method: 'POST', body: JSON.stringify({ cls: TRK.cls, tracks: names, lessons, parents }) });
     const tr = Object.assign({}, T.term.config.tracks || {});
     if (r.tracks.length) tr[TRK.cls] = r.tracks; else delete tr[TRK.cls];
     T.term.config.tracks = tr;
+    const tp = Object.assign({}, T.term.config.track_parents || {});
+    if (Object.keys(r.parents || {}).length) tp[TRK.cls] = r.parents; else delete tp[TRK.cls];
+    T.term.config.track_parents = tp;
     r.lessons.forEach(nl => { T.lessons[T.lessons.findIndex(l => l.id === nl.id)] = nl; });
     edModal.hide(); buildIndex(); renderEditor();
     const after = allIssues().hard.length;

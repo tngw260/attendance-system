@@ -149,13 +149,14 @@ function ttSolve(opts) {
     const unplaced = sessions.filter(s => !st.pos.has(s)).reduce((a, s) => a + s.len, 0);
     let mis = 0;
     Object.entries(classTracks).forEach(([cls, trs]) => {
-      if (trs.length < 2) return;
+      const roots = [...new Set(trs.map(t => trackRoot(cls, t)))];     // นับที่สายหลัก (สายย่อยรวมกับสายแม่)
+      if (roots.length < 2) return;
       for (let s = 0; s < NS; s++) {
         const here = st.at[s].filter(e => e.l.classes.includes(cls));
         if (!here.length) continue;
         const cov = new Set();
-        here.forEach(e => { const t = tracksOf(e.l); (t.length ? t : trs).forEach(x => cov.add(x)); });
-        if (trs.some(t => !cov.has(t))) mis++;
+        here.forEach(e => { const t = tracksOf(e.l); (t.length ? t.map(x => trackRoot(cls, x)) : roots).forEach(x => cov.add(x)); });
+        if (roots.some(t => !cov.has(t))) mis++;
       }
     });
     return { unplaced, misaligned: mis, score: -unplaced * 100 - mis * 3 };

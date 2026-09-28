@@ -719,8 +719,18 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         try:
             lessons = {int(k): list(dict.fromkeys(clean(x) for x in (v or []) if clean(x)))
                        for k, v in (b.get('lessons') or {}).items()}
+            # สายย่อย → สายแม่ (เช่น ม.5 "กลุ่ม 2" อยู่ใน "BEP") ใช้ตรวจชน: สายย่อยชนกับสายแม่ แต่ไม่ชนสายอื่น
+            parents = {clean(k): clean(v) for k, v in (b.get('parents') or {}).items() if clean(k) and clean(v)}
         except (TypeError, ValueError, AttributeError):
             return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        for k, v in parents.items():
+            if k not in tracks or v not in tracks or k == v:
+                return jsonify(success=False, message=f'สาย "{k}" อยู่ในสายที่ไม่มีในห้องนี้'), 400
+            seen, x = {k}, v                                  # กันวน (ก อยู่ใน ข และ ข อยู่ใน ก)
+            while x in parents:
+                if x in seen:
+                    return jsonify(success=False, message='ตั้งสายย่อยวนกันอยู่ — ตรวจช่อง "อยู่ในสาย"'), 400
+                seen.add(x); x = parents[x]
         with get_db() as con:
             row = con.execute('SELECT * FROM tt_terms WHERE id=?', (term_id,)).fetchone()
             if not row:
@@ -736,11 +746,60 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             else:
                 tr.pop(cls, None)
             cfg['tracks'] = tr
+            tp = dict(cfg.get('track_parents') or {})
+            if parents:
+                tp[cls] = parents
+            else:
+                tp.pop(cls, None)
+            cfg['track_parents'] = tp
             con.execute('UPDATE tt_terms SET config=? WHERE id=?', (json.dumps(cfg, ensure_ascii=False), term_id))
             for lid, names in lessons.items():
                 con.execute('UPDATE tt_lessons SET track=? WHERE id=?', (','.join(names), lid))
             out = [lesson_dict(con, lid) for lid in lessons]
-        return jsonify(success=True, tracks=tracks, lessons=out)
+        return jsonify(success=True, tracks=tracks, parents=parents, lessons=out)
+
+    @app.post('/api/tt/lessons/<int:lid>/split-teachers')
+    @tt_edit_required
+    def tt_split_teachers(lid):
+        """วิชาเดียวที่มีครูหลายคน แต่นักเรียน "แยกกลุ่ม" ไปเรียนกับครูแต่ละคน (เช่น เลือกเสรี ม.3)
+        → แยกเป็นรายการละครู สาย "กลุ่ม 1, 2, …" ช่องในตาราง/ล็อกเหมือนเดิม
+        ผล: ตรวจชนถูก และครูคนไหนไม่มา ระบบจัดครูแทนให้เฉพาะกลุ่มนั้น"""
+        with get_db() as con:
+            L = lesson_dict(con, lid)
+            if not L:
+                return jsonify(success=False, message='ไม่พบรายการ'), 404
+            if len(L['teacher_ids']) < 2:
+                return jsonify(success=False, message='รายการนี้มีครูคนเดียวอยู่แล้ว'), 400
+            if L['track']:
+                return jsonify(success=False, message='รายการนี้ตั้งสายไว้แล้ว — แยกกลุ่มได้เฉพาะรายการที่เรียนทั้งห้อง'), 400
+            term = con.execute('SELECT * FROM tt_terms WHERE id=?', (L['term_id'],)).fetchone()
+            cfg = jl(term['config'], {})
+            tr = dict(cfg.get('tracks') or {})
+            used = {t for c in L['classes'] for t in tr.get(c, [])}
+            names, k = [], 1
+            while len(names) < len(L['teacher_ids']):          # ชื่อกลุ่มที่ห้องยังไม่ใช้
+                if f'กลุ่ม {k}' not in used:
+                    names.append(f'กลุ่ม {k}')
+                k += 1
+            ids = []
+            for i, (tid, name) in enumerate(zip(L['teacher_ids'], names)):
+                if i == 0:
+                    con.execute('UPDATE tt_lessons SET teacher_ids=?, track=? WHERE id=?', (json.dumps([tid]), name, lid))
+                    ids.append(lid)
+                    continue
+                nid = con.execute("""INSERT INTO tt_lessons (term_id, code, title, kind, classes, track, teacher_ids, per_week, options, note)
+                                     VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                                  (L['term_id'], L['code'], L['title'], L['kind'], json.dumps(L['classes']), name,
+                                   json.dumps([tid]), L['per_week'], json.dumps(L['options'] or {}), L.get('note') or '')).lastrowid
+                for d, p, lk in L['slots']:
+                    con.execute('INSERT INTO tt_slots (lesson_id, day, period, locked) VALUES (?,?,?,?)', (nid, d, p, lk))
+                ids.append(nid)
+            for c in L['classes']:
+                tr[c] = list(tr.get(c, [])) + [n for n in names if n not in tr.get(c, [])]
+            cfg['tracks'] = tr
+            con.execute('UPDATE tt_terms SET config=? WHERE id=?', (json.dumps(cfg, ensure_ascii=False), L['term_id']))
+            out = [lesson_dict(con, i) for i in ids]
+        return jsonify(success=True, lessons=out, tracks={c: tr[c] for c in L['classes']})
 
     @app.delete('/api/tt/terms/<int:term_id>')
     @admin_required
