@@ -274,7 +274,7 @@ function renderSubsBody() {
         <span class="badge ${done < todo.length ? 'bg-danger' : 'bg-success'}">จัดแล้ว ${done}/${todo.length}</span></div>
       ${admin && todo.length ? `<button class="btn btn-sm btn-primary" onclick="autoAssign()"><i class="bi bi-magic"></i> จัดอัตโนมัติ</button>
         <button class="btn btn-sm btn-outline-secondary" onclick="clearDay()">ล้าง</button>` : ''}
-      ${todo.length ? `<button class="btn btn-sm btn-success" onclick="openLineModal()"><i class="bi bi-line"></i> ส่ง LINE</button>` : ''}
+      ${todo.length ? `<button class="btn btn-sm btn-success" onclick="openLineModal()"><i class="bi bi-line"></i> ส่ง LINE / รูปภาพ</button>` : ''}
     </div>
     ${needs.length ? `<div class="table-responsive"><table class="table table-sm align-middle mb-1 sub-table">
       <thead class="table-light"><tr><th class="text-center">คาบ</th><th>ชั้น</th><th>วิชา</th><th class="d-none d-md-table-cell">ครูที่ไม่มา</th><th>สอนแทนโดย</th></tr></thead>
@@ -368,37 +368,114 @@ async function deleteAbsence(id) {
   } catch (e) { alert(e.message); }
 }
 
-/* ── ส่ง LINE (แบบเดียวกับหน้าแจ้งไลน์ครูเวร: ก๊อปข้อความ → เปิดไลน์ → วางในกลุ่มครู) ── */
+/* ── ส่ง LINE / ดาวน์โหลดรูป — รูปแบบที่โรงเรียนใช้ในกลุ่มไลน์ครู:
+   🧡วันพฤหัสบดี ที่ 24 กันยายน 2569 · แยกตามครูที่ไม่มา "ครูณัฐธิดา (ไปราชการ)" · "คาบ 1-2 ม.5 ครูเปี่ยมจิตร" ── */
 function lineText() {
-  const date = SUB.date, P = Object.fromEntries(periodsOf().map(x => [x.no, x]));
+  const date = SUB.date, d = dateOf(date);
   const saved = new Map(savedOn(date).map(s => [`${s.period}-${s.lesson_id}`, s]));
-  const out = [`📋 สอนแทน ${formatThaiDateFull(date).replace('พ.ศ. ', '')}`];
-  const abs = absencesOn(date);
-  if (abs.length) out.push('ครูไม่มา: ' + abs.map(a => `${tShort(a.teacher_id)} (${a.reason || 'ไม่มา'}${a.periods.length ? ' ' + periodLabel(a.periods) : ''})`).join(', '));
-  const rows = [];                                   // คาบติดกัน วิชาเดียวกัน ครูแทนคนเดียวกัน → รวมเป็น "คาบ 3-4"
-  needsOn(date).filter(n => !n.skip).forEach(n => {
-    const s = saved.get(n.key);
-    const who = !s ? '❗ยังไม่จัด' : s.sub_id ? tShort(s.sub_id) : 'ไม่มีครูแทน';
-    const last = rows[rows.length - 1];
-    if (last && last.l.id === n.l.id && last.p2 === n.p - 1 && last.who === who) { last.p2 = n.p; return; }
-    rows.push({ l: n.l, p1: n.p, p2: n.p, who, gone: n.gone, note: s?.note || '' });
+  const out = [`🧡วัน${THAI_DAYS[d.getDay()]} ที่ ${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`];
+  const needs = needsOn(date).filter(n => !n.skip), abs = absencesOn(date);
+  const order = [...new Set(abs.map(a => a.teacher_id))];                 // เรียงตามบันทึกครูไม่มา
+  needs.forEach(n => { if (!order.includes(n.absent)) order.push(n.absent); });
+  order.forEach(tid => {
+    const mine = needs.filter(n => n.absent === tid).sort((a, b) => a.p - b.p);
+    if (!mine.length) return;                                             // ไม่มา แต่วันนั้นไม่มีคาบต้องจัด → ไม่ต้องแสดง
+    const reason = abs.find(a => a.teacher_id === tid)?.reason;
+    out.push('', `${tShort(tid)}${reason ? ` (${reason})` : ''}`);
+    const rows = [];                                                      // คาบติดกัน ห้องเดียวกัน ครูแทนคนเดียวกัน → "คาบ 1-2"
+    mine.forEach(n => {
+      const s = saved.get(n.key), cls = classLabel({ ...n.l, track: '' });
+      const who = !s ? '❗ยังไม่จัด' : s.sub_id ? tShort(s.sub_id) : `ไม่มีครูแทน${s.note ? ` (${s.note})` : ''}`;
+      const last = rows[rows.length - 1];
+      if (last && last.cls === cls && last.who === who && last.p2 === n.p - 1) { last.p2 = n.p; return; }
+      rows.push({ p1: n.p, p2: n.p, cls, who });
+    });
+    rows.forEach(r => out.push(`คาบ ${r.p1 === r.p2 ? r.p1 : r.p1 + '-' + r.p2} ${r.cls} ${r.who}`));
   });
-  out.push('');
-  rows.forEach(r => out.push(`คาบ ${r.p1 === r.p2 ? r.p1 : r.p1 + '-' + r.p2} (${P[r.p1]?.start || ''}) ${classLabel(r.l)} ${lessonName(r.l)}` +
-    ` (${r.gone.map(tShort).join(', ')}) → ${r.who}${r.note ? ' · ' + r.note : ''}`));
-  out.push('', 'ดูทั้งหมด: ' + location.origin + '/timetable.html?tab=sub&date=' + date);
+  if (out.length === 1) out.push('', 'ไม่มีคาบที่ต้องจัดครูสอนแทน');
   return out.join('\n');
 }
 
 function openLineModal() {
   const left = needsOn(SUB.date).filter(n => !n.skip && !savedOn(SUB.date).some(s => `${s.period}-${s.lesson_id}` === n.key)).length;
-  showModal('<i class="bi bi-line"></i> ส่งรายการสอนแทนเข้า LINE', `
+  showModal('<i class="bi bi-line"></i> ส่งรายการสอนแทน — ข้อความ / รูปภาพ', `
     ${left ? `<div class="alert alert-warning py-1 px-2 small">ยังไม่ได้จัด ${left} คาบ — ในข้อความจะขึ้นว่า "❗ยังไม่จัด"</div>` : ''}
-    <textarea id="lineMsg" class="form-control" rows="12" style="font-size:.9rem">${esc(lineText())}</textarea>
-    <div class="small text-muted mt-1">แก้ข้อความได้ก่อนก๊อป · กด "ก๊อปข้อความ" แล้ววางในกลุ่มไลน์ครู</div>`,
-    `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ปิด</button>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label small mb-1">ข้อความ <span class="text-muted">(แก้ได้ รูปเปลี่ยนตาม)</span></label>
+        <textarea id="lineMsg" class="form-control" rows="14" style="font-size:.95rem" oninput="updateSubPreview()">${esc(lineText())}</textarea>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small mb-1">รูปภาพ <span class="text-muted">(มือถือ: กดค้างที่รูปเพื่อบันทึกได้ด้วย)</span></label>
+        <img id="subImgPrev" class="img-fluid border rounded w-100" alt="รูปรายการสอนแทน" style="background:#fff">
+      </div>
+    </div>`,
+    `<button class="btn btn-secondary btn-sm me-auto" data-bs-dismiss="modal">ปิด</button>
      <a class="btn btn-outline-success btn-sm d-none" id="lineOpen" href="https://line.me/R/" target="_blank" rel="noopener"><i class="bi bi-line"></i> เปิดไลน์</a>
-     <button class="btn btn-success btn-sm" onclick="copyLine()"><i class="bi bi-clipboard-check"></i> ก๊อปข้อความ</button>`);
+     <button class="btn btn-outline-success btn-sm" onclick="copyLine()"><i class="bi bi-clipboard-check"></i> ก๊อปข้อความ</button>
+     <button class="btn btn-success btn-sm" onclick="downloadSubImage()"><i class="bi bi-download"></i> ดาวน์โหลดรูป</button>
+     ${canShareFiles() ? '<button class="btn btn-primary btn-sm" onclick="shareSubImage()"><i class="bi bi-share"></i> แชร์รูป</button>' : ''}`);
+  updateSubPreview();
+}
+
+// วาดข้อความเป็นรูป (พื้นขาว ตัวหนังสือเทาเข้ม แบบรูปที่ใช้ในกลุ่มไลน์) — กว้าง 1080 px ชัดทั้งมือถือและคอม
+async function subImageCanvas(text) {
+  try { await document.fonts.load('400 42px Sarabun'); await document.fonts.load('600 42px Sarabun'); } catch (e) {}
+  const W = 1080, PAD = 64, FS = 42, LH = Math.round(FS * 1.62), MAXW = W - PAD * 2;
+  const cv = document.createElement('canvas'), cx = cv.getContext('2d');
+  const font = w => `${w} ${FS}px Sarabun, "Noto Sans Thai", Thonburi, sans-serif`;
+  cx.font = font(600);
+  const lines = [];                                        // ตัดบรรทัดที่ยาวเกินรูป (ตัดที่ช่องว่างก่อน ไม่มีก็ตัดทีละตัวอักษร)
+  text.replace(/\r/g, '').split('\n').forEach(raw => {
+    let cur = '';
+    for (const part of raw.split(/(\s+)/)) {
+      if (cx.measureText(cur + part).width <= MAXW) { cur += part; continue; }
+      if (cur.trim()) { lines.push(cur.trimEnd()); cur = ''; }
+      for (const ch of part.trimStart()) {
+        if (cx.measureText(cur + ch).width > MAXW) { lines.push(cur); cur = ''; }
+        cur += ch;
+      }
+    }
+    lines.push(cur);
+  });
+  cv.width = W; cv.height = PAD * 2 + lines.length * LH;
+  cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, cv.width, cv.height);
+  cx.textBaseline = 'middle';
+  lines.forEach((ln, i) => {
+    const head = i === 0 || (ln.trim() && !/^คาบ\s/.test(ln) && (i === 0 || !lines[i - 1].trim()));   // หัววัน / ชื่อครูที่ไม่มา
+    cx.font = font(head ? 600 : 400); cx.fillStyle = head ? '#1f1f1f' : '#3d3d3d';
+    cx.fillText(ln, PAD, PAD + i * LH + LH / 2);
+  });
+  return cv;
+}
+let subPrevTimer = null;
+function updateSubPreview() {
+  clearTimeout(subPrevTimer);
+  subPrevTimer = setTimeout(async () => {
+    const img = el('subImgPrev'), ta = el('lineMsg');
+    if (img && ta) img.src = (await subImageCanvas(ta.value)).toDataURL('image/png');
+  }, 250);
+}
+const subImageName = () => `สอนแทน-${SUB.date}.png`;
+async function subImageBlob() {
+  const cv = await subImageCanvas(el('lineMsg').value);
+  return new Promise(res => cv.toBlob(res, 'image/png'));
+}
+async function downloadSubImage() {
+  const url = URL.createObjectURL(await subImageBlob());
+  const a = Object.assign(document.createElement('a'), { href: url, download: subImageName() });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toastEd('ดาวน์โหลดรูปแล้ว — ส่งในกลุ่มไลน์ได้เลย');
+}
+// มือถือ: เปิดหน้าแชร์ของเครื่อง (เลือก LINE ได้ทันที) · ไม่รองรับ → ดาวน์โหลดแทน
+function canShareFiles() {
+  try { return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.png', { type: 'image/png' })] })); } catch (e) { return false; }
+}
+async function shareSubImage() {
+  const file = new File([await subImageBlob()], subImageName(), { type: 'image/png' });
+  try { await navigator.share({ files: [file], title: 'สอนแทน' }); }
+  catch (e) { if (e.name !== 'AbortError') downloadSubImage(); }
 }
 
 async function copyLine() {
