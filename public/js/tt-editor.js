@@ -102,6 +102,8 @@ function allIssues() {
     if (n > pw) soft.push({ type, key, lid: l.id, msg: `${name} วางเกิน (${n}/${pw})` });
     if (l.kind !== 'subject') return;
     // รหัสวิชาบอกชั้น: หลักที่ 1 = 2 ม.ต้น / 3 ม.ปลาย · หลักที่ 2 = ปีที่ (0 = วิชาเลือกได้หลายชั้น ไม่ตรวจ) เช่น ง31102 = ม.4
+    if (l.code && !/^([ก-ฮ]{1,2}|[A-Z]{1,3})\d{5}$/.test(l.code))          // เช่น "พ3020..." ที่ถูกตัดมาจากไฟล์ตารางเดิม
+      soft.push({ type, key, lid: l.id, msg: `${name}: รหัสวิชาไม่ครบ/รูปแบบผิด (ควรเป็นอักษร + ตัวเลข 5 หลัก เช่น พ30201)` });
     const cm = /^[ก-ฮA-Z]+([23])([1-3])\d{3}$/.exec(l.code || '');
     if (cm && l.classes.length) {
       const want = +cm[2] + (cm[1] === '3' ? 3 : 0), got = [...new Set(l.classes.map(c => +c.split('/')[0]))];
