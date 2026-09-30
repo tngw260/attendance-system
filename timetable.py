@@ -488,6 +488,10 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             np_ = len(term['config'].get('periods') or [1] * 7)
             if any(not (1 <= d <= nd and 1 <= p <= np_) for d, p in add):
                 return jsonify(success=False, message='ช่องไม่ถูกต้อง'), 400
+            staff_p = {x['no'] for x in term['config'].get('periods') or [] if x.get('teacher_only')}
+            bad = sorted({p for _, p in add if p in staff_p})
+            if bad and jl(con.execute('SELECT classes FROM tt_lessons WHERE id=?', (lid,)).fetchone()['classes'], []):
+                return jsonify(success=False, message=f'คาบ {bad[0]} เป็นคาบของครูหลังเลิกเรียน — วางวิชาของนักเรียนไม่ได้'), 400
             for d, p in remove:
                 con.execute('DELETE FROM tt_slots WHERE lesson_id=? AND day=? AND period=?', (lid, d, p))
             for d, p in add:
@@ -801,6 +805,74 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             out = [lesson_dict(con, i) for i in ids]
         return jsonify(success=True, lessons=out, tracks={c: tr[c] for c in L['classes']})
 
+    @app.post('/api/tt/terms/<int:term_id>/staff-periods')
+    @tt_edit_required
+    def tt_staff_periods(term_id):
+        """คาบของครูหลังเลิกเรียน (เช่น PLC คาบ 8-9) — ต่อท้ายคาบเรียน ติดธง teacher_only
+        ขึ้นเฉพาะตารางครู · ตารางนักเรียน/จัดอัตโนมัติ/สอนแทน ไม่ใช้คาบเหล่านี้
+        {title: 'PLC', count: 2, minutes: 50, days: [1..5], teacher_ids: [...]} · count 0 = เอาออก"""
+        b = request.get_json(silent=True) or {}
+        title = re.sub(r'\s+', ' ', str(b.get('title') or 'PLC')).strip()[:40] or 'PLC'
+        try:
+            count, minutes = int(b.get('count', 2)), int(b.get('minutes', 50))
+            days = sorted({int(d) for d in (b.get('days') or [])})
+            tids = list(dict.fromkeys(int(t) for t in (b.get('teacher_ids') or [])))
+        except (TypeError, ValueError):
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        if not (0 <= count <= 3 and 20 <= minutes <= 120):
+            return jsonify(success=False, message='จำนวนคาบ 0-3 คาบ ความยาว 20-120 นาที'), 400
+        with get_db() as con:
+            row = con.execute('SELECT * FROM tt_terms WHERE id=?', (term_id,)).fetchone()
+            if not row:
+                return jsonify(success=False, message='ไม่พบภาคเรียน'), 404
+            cfg = jl(row['config'], {})
+            nd = len(cfg.get('days') or [1, 2, 3, 4, 5])
+            if count and (not days or any(not 1 <= d <= nd for d in days)):
+                return jsonify(success=False, message='เลือกวันอย่างน้อย 1 วัน'), 400
+            known = {r['id'] for r in con.execute('SELECT id FROM tt_teachers')}
+            if count and (not tids or any(t not in known for t in tids)):
+                return jsonify(success=False, message='เลือกครูอย่างน้อย 1 คน'), 400
+            regular = [p for p in cfg.get('periods') or [] if not p.get('teacher_only')]
+            if not regular:
+                return jsonify(success=False, message='ภาคเรียนนี้ยังไม่มีคาบเรียน'), 400
+            h, m = (int(x) for x in re.split(r'[.:]', regular[-1]['end']))
+            extra = []
+            for i in range(count):                            # ต่อจากคาบสุดท้ายของนักเรียน
+                s = h * 60 + m + i * minutes
+                extra.append(dict(no=len(regular) + i + 1, start=f'{s // 60:02d}.{s % 60:02d}',
+                                  end=f'{(s + minutes) // 60:02d}.{(s + minutes) % 60:02d}', teacher_only=True))
+            ids = [r['id'] for r in con.execute('SELECT id FROM tt_lessons WHERE term_id=?', (term_id,))]
+            q = ','.join('?' * len(ids))
+            if ids:                                           # ช่องที่เกินจำนวนคาบใหม่ → เอาออก
+                con.execute(f'DELETE FROM tt_slots WHERE lesson_id IN ({q}) AND period>?', (*ids, len(regular) + count))
+            staff = [r for r in con.execute('SELECT * FROM tt_lessons WHERE term_id=?', (term_id,))
+                     if jl(r['options'], {}).get('staff')]
+            if not count:
+                for r in staff:
+                    con.execute('DELETE FROM tt_lessons WHERE id=?', (r['id'],))
+                cfg.pop('staff_label', None)
+            else:
+                per_week = len(days) * count
+                if staff:
+                    lid = staff[0]['id']
+                    con.execute('UPDATE tt_lessons SET title=?, teacher_ids=?, per_week=? WHERE id=?',
+                                (title, json.dumps(tids), per_week, lid))
+                    for r in staff[1:]:
+                        con.execute('DELETE FROM tt_lessons WHERE id=?', (r['id'],))
+                else:
+                    lid = con.execute("""INSERT INTO tt_lessons (term_id, code, title, kind, classes, track, teacher_ids, per_week, options, note)
+                                         VALUES (?, '', ?, 'activity', '[]', '', ?, ?, ?, '')""",
+                                      (term_id, title, json.dumps(tids), per_week, json.dumps({'staff': True}))).lastrowid
+                con.execute('DELETE FROM tt_slots WHERE lesson_id=?', (lid,))
+                for d in days:
+                    for p in extra:
+                        con.execute('INSERT INTO tt_slots (lesson_id, day, period, locked) VALUES (?,?,?,1)', (lid, d, p['no']))
+                cfg['staff_label'] = title
+            cfg['periods'] = regular + extra
+            con.execute('UPDATE tt_terms SET config=? WHERE id=?', (json.dumps(cfg, ensure_ascii=False), term_id))
+        return jsonify(success=True, periods=cfg['periods'],
+                       message=f'ตั้ง{title} คาบ {extra[0]["no"]}-{extra[-1]["no"]} แล้ว' if extra else 'เอาคาบหลังเลิกเรียนออกแล้ว')
+
     @app.delete('/api/tt/terms/<int:term_id>')
     @admin_required
     def tt_term_delete(term_id):
@@ -924,7 +996,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 who = ', '.join(teacher_name.get(t, '') for t in l['teacher_ids'])
                 cls_txt = ', '.join('ม.' + c.split('/')[0] for c in classes)
                 if l['kind'] != 'subject' or not l['code']:
-                    fixed = bool(re.search(r'ชุมนุม|ลูกเสือ|บำเพ็ญ|ประชุม', l['title'] or ''))
+                    fixed = bool(re.search(r'ชุมนุม|ลูกเสือ|บำเพ็ญ|ประชุม', l['title'] or '')) or bool((l['options'] or {}).get('staff'))
                     key = ('act', l['id'])
                     out[key] = dict(src=l, code=l['code'], title=l['title'], kind=l['kind'], classes=classes,
                                     track=l['track'], teacher_ids=l['teacher_ids'], per_week=l['per_week'],

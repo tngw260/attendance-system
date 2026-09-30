@@ -370,6 +370,10 @@ function classLabel(l) {
 const lessonName = l => l.code || l.title;
 const teacherShort = id => { const t = IDX.teachers[id]; return t ? 'ครู' + t.name.split(' ')[0] : ''; };
 const isMeeting = l => /^ประชุม/.test(l.title || '');
+// คาบของครูหลังเลิกเรียน (เช่น PLC คาบ 8-9) — ต่อท้ายคาบเรียน ขึ้นเฉพาะตารางครู
+const isStaffPeriod = p => (T.term.config.periods.find(x => x.no === p) || {}).teacher_only === true;
+const periodsFor = mode => T.term.config.periods.filter(x => mode === 'teacher' || !x.teacher_only);
+const staffLabel = () => T.term.config.staff_label || 'PLC';
 
 /* ===== ข้อมูลในช่อง (วัน, คาบ) ของมุมมองปัจจุบัน ===== */
 function cellLessons(mode, key, d, p) {
@@ -394,7 +398,7 @@ function cellHTML(mode, ls) {
 
 /* ===== หน้า A4 แนวนอน (หน้าตาเหมือนไฟล์เดิม) ===== */
 function pageHTML(mode, key) {
-  const cfg = T.term.config, P = cfg.periods, lunchAfter = cfg.lunch_after || 4;
+  const cfg = T.term.config, P = periodsFor(mode), lunchAfter = cfg.lunch_after || 4;
   const sig = ls => ls.map(l => l.id).join(',');
   let rows = '';
   DAYS.forEach((dn, di) => {
@@ -419,7 +423,10 @@ function pageHTML(mode, key) {
   const h1 = `<th>คาบที่</th>${pre}` + P.map(x => `<th>${x.no}</th>` + (x.no === lunchAfter ? lunch : '')).join('');
   const h2 = `<th class="diag"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" stroke="#000" stroke-width="1" vector-effect="non-scaling-stroke"/></svg><span class="d1">วัน</span><span class="d2">เวลา</span></th>`
            + P.map(x => `<td>${esc(x.start)} - ${esc(x.end)} น.</td>`).join('');
-  const colw = [68, ...(cfg.pre || []).map(() => 43.5), ...P.map((x, i) => [83.5, (x.no === lunchAfter ? 36 : 0)])].flat().filter(w => w);
+  // ความกว้างคอลัมน์คาบ: ปกติ 83.5pt · มีคาบของครูหลังเลิกเรียน → คาบนั้นกว้าง 52pt คาบอื่นแบ่งที่เหลือ (ตารางกว้างเท่าเดิม)
+  const nStaff = P.filter(x => x.teacher_only).length;
+  const wReg = nStaff ? (779 - 68 - (cfg.pre || []).length * 43.5 - 36 - nStaff * 52) / (P.length - nStaff) : 83.5;
+  const colw = [68, ...(cfg.pre || []).map(() => 43.5), ...P.map(x => [x.teacher_only ? 52 : wReg, (x.no === lunchAfter ? 36 : 0)])].flat().filter(w => w);
   // แถววัน: คอลัมน์ rowspan (ก่อนเรียน/พัก) ถูกจองไว้แล้ว → เซลล์ของแต่ละวันเรียงต่อได้เลย
   let title, box = '';
   const termName = T.term.name, school = T.school.name || '';
@@ -427,7 +434,7 @@ function pageHTML(mode, key) {
     const t = IDX.teachers[key];
     title = `ตารางสอนครู${t ? esc(t.name).replace(' ', '&nbsp; ') : ''} ภาคเรียนที่ ${esc(termName)} ${esc(school)}`;
     const c = teacherCounts(+key);
-    box = `<div class="tt-box">คาบสอน <u>${c.teach}</u> คาบ<br>กิจกรรม <u>${c.act}</u> คาบ<br>รวม <u>${c.teach + c.act}</u> คาบ</div>`;
+    box = `<div class="tt-box">คาบสอน <u>${c.teach}</u> คาบ<br>กิจกรรม <u>${c.act}</u> คาบ<br>${c.staff ? `${esc(staffLabel())} <u>${c.staff}</u> คาบ<br>` : ''}รวม <u>${c.teach + c.act + c.staff}</u> คาบ</div>`;
   } else {
     title = `ตารางเรียนชั้น${esc(classFull(key))} ภาคเรียนที่ ${esc(termName)} ${esc(school)}`;
   }
@@ -449,18 +456,20 @@ function pageHTML(mode, key) {
 }
 
 function teacherCounts(tid) {
-  let teach = 0, act = 0;
+  let teach = 0, act = 0, staff = 0;
   T.lessons.forEach(l => {
     if (!l.teacher_ids.includes(tid)) return;
-    if (l.kind === 'subject') teach += l.slots.length;
-    else if (!isMeeting(l)) act += l.slots.length;       // ประชุมครูไม่นับ (ตามแบบเดิม)
+    const n = l.slots.filter(s => !isStaffPeriod(s[1])).length;
+    staff += l.slots.length - n;                          // คาบหลังเลิกเรียน (PLC) แยกบรรทัด
+    if (l.kind === 'subject') teach += n;
+    else if (!isMeeting(l)) act += n;                    // ประชุมครูไม่นับ (ตามแบบเดิม)
   });
-  return { teach, act };
+  return { teach, act, staff };
 }
 
 /* ===== มือถือ: รายวัน ===== */
 function mobileHTML(mode, key) {
-  const P = T.term.config.periods, now = new Date();
+  const P = periodsFor(mode), now = new Date();
   const today = now.getDay();                     // 1=จันทร์
   const hhmm = `${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`;
   let html = '<div class="tt-mobile">';
@@ -483,17 +492,18 @@ function mobileHTML(mode, key) {
 
 /* ===== ภาระงานสอน ===== */
 function loadHTML() {
+  const hasStaff = T.term.config.periods.some(x => x.teacher_only);
   const rows = T.teachers.filter(t => IDX.byTeacher[t.id]).map((t, i) => {
     const c = teacherCounts(t.id);
     const subj = T.lessons.filter(l => l.teacher_ids.includes(t.id) && l.kind === 'subject')
       .map(l => `<span class="badge text-bg-light border me-1 mb-1">${esc(lessonName(l))} ${esc(classLabel(l))} · ${l.slots.length}</span>`).join('');
     return `<tr><td class="text-center">${i + 1}</td><td class="fw-600">ครู${esc(t.name)}${t.id === T.me ? ' <span class="badge bg-info">ฉัน</span>' : ''}</td>
-      <td class="text-center">${c.teach}</td><td class="text-center">${c.act}</td><td class="text-center fw-bold">${c.teach + c.act}</td><td>${subj}</td></tr>`;
+      <td class="text-center">${c.teach}</td><td class="text-center">${c.act}</td>${hasStaff ? `<td class="text-center">${c.staff}</td>` : ''}<td class="text-center fw-bold">${c.teach + c.act + c.staff}</td><td>${subj}</td></tr>`;
   }).join('');
   return `<div class="container"><div class="card"><div class="card-body">
     <h5 class="fw-bold mb-3"><i class="bi bi-list-ol me-1"></i>ภาระงานสอน ภาคเรียนที่ ${esc(T.term.name)} (คาบ/สัปดาห์)</h5>
     <div class="table-responsive"><table class="table table-sm table-bordered load-table">
-      <thead class="table-light"><tr><th>ที่</th><th>ครู</th><th>คาบสอน</th><th>กิจกรรม</th><th>รวม</th><th>รายวิชา (รหัส ชั้น · คาบ)</th></tr></thead>
+      <thead class="table-light"><tr><th>ที่</th><th>ครู</th><th>คาบสอน</th><th>กิจกรรม</th>${hasStaff ? `<th>${esc(staffLabel())}</th>` : ''}<th>รวม</th><th>รายวิชา (รหัส ชั้น · คาบ)</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
     <div class="small text-muted">กิจกรรมไม่นับประชุมครู (ตามแบบตารางเดิม)</div>
   </div></div></div>`;
@@ -559,8 +569,8 @@ async function printDoc(all) {
   if (all) setTimeout(render, 500);
 }
 </script>
-<script src="/js/tt-editor.js?v=16"></script>
-<script src="/js/tt-solver.js?v=4"></script>
+<script src="/js/tt-editor.js?v=17"></script>
+<script src="/js/tt-solver.js?v=5"></script>
 <script src="/js/tt-subs.js?v=4"></script>
 </body>
 </html>

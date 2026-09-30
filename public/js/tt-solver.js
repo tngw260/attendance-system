@@ -33,7 +33,9 @@ function ttSolve(opts) {
     const dbl = (l.options || {}).double;
     while (need > 0) { const len = dbl && need >= 2 ? 2 : 1; sessions.push({ l, len }); need -= len; }
   });
-  const fits = (d, p, len) => p + len - 1 <= NP && !(len === 2 && p === LA);
+  // วิชาของนักเรียนวางได้ถึงคาบสุดท้ายของนักเรียน (คาบของครูหลังเลิกเรียน เช่น PLC ไม่ใช้)
+  const NPS = T.term.config.periods.filter(x => !x.teacher_only).length || NP;
+  const fits = (l, d, p, len) => p + len - 1 <= (l.classes.length ? NPS : NP) && !(len === 2 && p === LA);
 
   // ── สถานะของรอบค้นหา ──
   function newState() {
@@ -65,7 +67,7 @@ function ttSolve(opts) {
   }
   // วางได้ไหม (relax = ข้ามกฎที่ตั้งได้ ใช้ตอนสุดท้ายถ้าวางไม่ลงจริง ๆ)
   function canPlace(st, l, d, p, len, relax) {
-    if (!fits(d, p, len)) return false;
+    if (!fits(l, d, p, len)) return false;
     for (let q = p; q < p + len; q++) {
       const s = sidx(d, q);
       for (const t of l.teacher_ids) if ((st.tBusy[t] && st.tBusy[t][s]) || unav[t].has(s)) return false;
@@ -103,7 +105,7 @@ function ttSolve(opts) {
   // ช่วงที่ขวางตำแหน่ง (null = ขวางด้วยของคงที่/ครูไม่ว่าง แก้ไม่ได้)
   function blockers(st, S, d, p) {
     const l = S.l;
-    if (!fits(d, p, S.len)) return null;
+    if (!fits(l, d, p, S.len)) return null;
     const set = new Set();
     for (let q = p; q < p + S.len; q++) {
       const s = sidx(d, q);

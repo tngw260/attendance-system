@@ -58,6 +58,7 @@ function conflictsAt(l, d, p) {
     if (isUnavailable(tid, d, p))
       out.push({ hard: l.kind === 'subject', msg: `${teacherShort(tid)} ไม่ว่างคาบนี้ (${unavReason(tid)})` });
   });
+  if (l.classes.length && isStaffPeriod(p)) out.push({ hard: true, msg: `คาบ ${p} เป็นคาบของครูหลังเลิกเรียน นักเรียนไม่มีเรียน` });
   if (((l.options || {}).avoid || []).includes(p)) out.push({ hard: false, msg: `วิชานี้ตั้งให้เลี่ยงคาบ ${p}` });
   if (!(l.options || {}).allow_same_day && l.kind === 'subject') {
     const same = l.slots.filter(s => s[0] === d && !(ED.picked && ED.picked.from && ED.picked.from[0] === s[0] && ED.picked.from[1] === s[1]));
@@ -112,6 +113,8 @@ function allIssues() {
     const type = l.classes.length ? 'class' : 'teacher';
     if (n < pw) soft.push({ type, key, lid: l.id, msg: `${name} ยังวางไม่ครบ (${n}/${pw})` });
     if (n > pw) soft.push({ type, key, lid: l.id, msg: `${name} วางเกิน (${n}/${pw})` });
+    if (l.classes.length) l.slots.filter(s => isStaffPeriod(s[1])).forEach(([d, p]) =>
+      hard.push({ d, p, type, key, lid: l.id, msg: `${name} อยู่คาบ ${p} ซึ่งเป็นคาบของครูหลังเลิกเรียน — ย้ายไปคาบ 1-${T.term.config.periods.filter(x => !x.teacher_only).length}` }));
     if (l.kind !== 'subject') return;
     // รหัสวิชาบอกชั้น: หลักที่ 1 = 2 ม.ต้น / 3 ม.ปลาย · หลักที่ 2 = ปีที่ (0 = วิชาเลือกได้หลายชั้น ไม่ตรวจ) เช่น ง31102 = ม.4
     if (l.code && !/^([ก-ฮ]{1,2}|[A-Z]{1,3})\d{5}$/.test(l.code))          // เช่น "พ3020..." ที่ถูกตัดมาจากไฟล์ตารางเดิม
@@ -158,7 +161,7 @@ function lessonsInCell(d, p) {
 /* ═════════════ วาดหน้าจัดตาราง ═════════════ */
 function renderEditor() {
   if (!ED.key) ED.key = ED.by === 'class' ? (IDX.classes[0] || '') : String((T.teachers[0] || {}).id || '');
-  const P = T.term.config.periods, issues = allIssues();
+  const P = periodsFor(ED.by), issues = allIssues();      // มุมมองรายห้องไม่แสดงคาบของครูหลังเลิกเรียน
   const opts = ED.by === 'class'
     ? IDX.classes.map(c => `<option value="${c}" ${c === ED.key ? 'selected' : ''}>${classShort(c)}</option>`).join('')
     : T.teachers.map(t => `<option value="${t.id}" ${String(t.id) === ED.key ? 'selected' : ''}>ครู${esc(t.name)}</option>`).join('');
@@ -228,6 +231,7 @@ function renderEditor() {
         <ul class="dropdown-menu">
           ${act('applyTracks()', 'magic', 'ตั้งสายการเรียนจากโครงสร้างหลักสูตร')}
           ${act('applySuggestedTracks()', 'lightbulb', 'แนะนำสายจากตารางปัจจุบัน')}
+          ${act('openStaffModal()', 'people', 'คาบของครูหลังเลิกเรียน (PLC)')}
           ${draftReport() ? act('showDraftReport(draftReport())', 'clipboard-check', 'รายงานการร่างภาคเรียน') : ''}
           <li><hr class="dropdown-divider"></li>
           ${act('openShareModal()', 'line', 'ส่งลิงก์จัดตารางทาง LINE')}
@@ -520,7 +524,7 @@ function openLessonModal(id, prefill) {
   const l = id ? lessonById(id) : Object.assign({ code: '', title: '', kind: 'subject', classes: ED.by === 'class' ? [ED.key] : [],
     track: '', teacher_ids: ED.by === 'teacher' ? [+ED.key] : [], per_week: 1, options: {}, note: '' }, prefill || {});
   if (prefill && prefill.name && prefill.code) T.subjects[prefill.code] = Object.assign(T.subjects[prefill.code] || { code: prefill.code }, { name: prefill.name });
-  const o = l.options || {}, P = T.term.config.periods;
+  const o = l.options || {}, P = periodsFor('class');
   const trackNames = [...new Set(IDX.classes.flatMap(c => (T.term.config.tracks || {})[c] || []))];
   const body = `
     <div class="mb-2">
@@ -553,7 +557,7 @@ function openLessonModal(id, prefill) {
     <div>${P.map(x => `<label class="me-2"><input type="checkbox" class="lfAvoid" value="${x.no}" ${(o.avoid || []).includes(x.no) ? 'checked' : ''}> ${x.no}</label>`).join('')}</div>
     <label class="form-label small mb-0 mt-2">หมายเหตุ</label><input id="lfNote" class="form-control form-control-sm" value="${esc(l.note || '')}">
     ${id ? `<div class="small text-muted mt-2">วางในตารางแล้ว ${l.slots.length} คาบ</div>` : ''}
-    ${id && l.teacher_ids.length >= 2 && l.teacher_ids.length <= 4 && !tracksOf(l).length ? `<div class="alert alert-info py-2 px-2 small mt-2 mb-0">
+    ${id && l.classes.length && l.teacher_ids.length >= 2 && l.teacher_ids.length <= 4 && !tracksOf(l).length ? `<div class="alert alert-info py-2 px-2 small mt-2 mb-0">
       <b>ครู ${l.teacher_ids.length} คนนี้สอนแยกกลุ่มกันไหม?</b> (นักเรียนแบ่งไปเรียนกับครูแต่ละคน เช่น วิชาเลือก)
       ถ้าใช่ กดแยก — ครูคนไหนไม่มา ระบบจะจัดครูแทนให้เฉพาะกลุ่มนั้น · ถ้าสอนร่วมกันในห้องเดียว ไม่ต้องกด
       <div class="mt-1"><button type="button" class="btn btn-sm btn-outline-primary" onclick="splitByTeacher(${id})">✂ แยกเป็นกลุ่มละครู</button></div></div>` : ''}`;
@@ -924,6 +928,59 @@ function nextTermName(n) {
 function draftReport() {
   try { const n = JSON.parse(T.term.note || '{}'); return n.report ? Object.assign({ from: n.draft_from }, n.report) : null; } catch (e) { return null; }
 }
+/* ── คาบของครูหลังเลิกเรียน (PLC) — ต่อท้ายคาบเรียน ขึ้นเฉพาะตารางครู ── */
+function openStaffModal() {
+  if (previewGuard()) return;
+  const cfg = T.term.config, sp = cfg.periods.filter(x => x.teacher_only), reg = cfg.periods.filter(x => !x.teacher_only);
+  const cur = T.lessons.find(l => (l.options || {}).staff);
+  const mins = t => { const [h, m] = t.split(/[.:]/).map(Number); return h * 60 + m; };
+  const len = sp.length ? mins(sp[0].end) - mins(sp[0].start) : 50;
+  const days = cur ? [...new Set(cur.slots.map(s => s[0]))] : DAYS.map((_, i) => i + 1);
+  const tids = cur ? cur.teacher_ids : T.teachers.filter(t => t.active !== 0).map(t => t.id);
+  const body = `
+    <div class="small text-muted mb-2">เพิ่มคาบต่อจากคาบ ${reg.length} (เลิกเรียน ${esc(reg[reg.length - 1].end)} น.) <b>ขึ้นเฉพาะตารางสอนครู</b> ·
+      ตารางเรียนนักเรียน จัดอัตโนมัติ และสอนแทน ไม่ใช้คาบเหล่านี้ · กล่องสรุปคาบในตารางครูแยกบรรทัดให้</div>
+    <div class="row g-2">
+      <div class="col-5"><label class="form-label small mb-0">ชื่อ</label><input id="spTitle" class="form-control form-control-sm" value="${esc(cfg.staff_label || 'PLC')}"></div>
+      <div class="col-3"><label class="form-label small mb-0">จำนวนคาบ</label>
+        <select id="spCount" class="form-select form-select-sm" onchange="spPreview()">${[1, 2, 3].map(n => `<option ${n === (sp.length || 2) ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+      <div class="col-4"><label class="form-label small mb-0">นาที/คาบ</label><input id="spMin" type="number" min="20" max="120" step="5" class="form-control form-control-sm" value="${len}" oninput="spPreview()"></div>
+    </div>
+    <div id="spTimes" class="small fw-bold text-primary mt-1"></div>
+    <label class="form-label small mb-0 mt-2">วัน</label>
+    <div>${DAYS.map((dn, i) => `<label class="me-3"><input type="checkbox" class="spDay" value="${i + 1}" ${days.includes(i + 1) ? 'checked' : ''}> ${dn}</label>`).join('')}</div>
+    <label class="form-label small mb-0 mt-2">ครูที่เข้าร่วม
+      <a href="#" class="ms-2" onclick="document.querySelectorAll('.spT').forEach(x => x.checked = true); return false;">เลือกทุกคน</a>
+      <a href="#" class="ms-2" onclick="document.querySelectorAll('.spT').forEach(x => x.checked = false); return false;">ไม่เลือก</a></label>
+    <div>${T.teachers.map(t => `<label class="me-3"><input type="checkbox" class="spT" value="${t.id}" ${tids.includes(t.id) ? 'checked' : ''}> ${esc(t.name.split(' ')[0])}</label>`).join('')}</div>`;
+  const foot = `${sp.length ? '<button class="btn btn-outline-danger btn-sm me-auto" onclick="saveStaff(true)"><i class="bi bi-trash"></i> เอาคาบหลังเลิกเรียนออก</button>' : ''}
+    <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+    <button class="btn btn-primary btn-sm" onclick="saveStaff(false)"><i class="bi bi-save"></i> บันทึก</button>`;
+  showModal('<i class="bi bi-people"></i> คาบของครูหลังเลิกเรียน (PLC)', body, foot);
+  spPreview();
+}
+function spPreview() {
+  const reg = T.term.config.periods.filter(x => !x.teacher_only), n = +el('spCount').value, m = +el('spMin').value || 0;
+  const [h, mm] = reg[reg.length - 1].end.split(/[.:]/).map(Number), fmt = x => `${String(Math.floor(x / 60)).padStart(2, '0')}.${String(x % 60).padStart(2, '0')}`;
+  el('spTimes').textContent = Array.from({ length: n }, (_, i) => { const s = h * 60 + mm + i * m; return `คาบ ${reg.length + i + 1} ${fmt(s)}-${fmt(s + m)} น.`; }).join(' · ');
+}
+async function saveStaff(remove) {
+  const sp = T.term.config.periods.filter(x => x.teacher_only).length;
+  if (remove && !confirm(`เอาคาบ ${T.term.config.periods.length - sp + 1}-${T.term.config.periods.length} ออกจากตารางครูทุกคน?`)) return;
+  const b = remove ? { count: 0 } : {
+    title: el('spTitle').value.trim(), count: +el('spCount').value, minutes: +el('spMin').value,
+    days: [...document.querySelectorAll('.spDay:checked')].map(x => +x.value),
+    teacher_ids: [...document.querySelectorAll('.spT:checked')].map(x => +x.value) };
+  if (!remove && !b.days.length) { alert('เลือกวันอย่างน้อย 1 วัน'); return; }
+  if (!remove && !b.teacher_ids.length) { alert('เลือกครูอย่างน้อย 1 คน'); return; }
+  try {
+    const r = await apiFetch(`/api/tt/terms/${T.term.id}/staff-periods`, { method: 'POST', body: JSON.stringify(b) });
+    edModal.hide();
+    await loadTerm(T.term.id);
+    toastEd(r.message);
+  } catch (e) { alert(e.message); }
+}
+
 function openTermModal() {
   const nx = nextTermName(T.term.name);
   const body = `
