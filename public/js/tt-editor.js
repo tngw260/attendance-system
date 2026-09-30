@@ -934,7 +934,7 @@ function openStaffModal() {
   const cfg = T.term.config, sp = cfg.periods.filter(x => x.teacher_only), reg = cfg.periods.filter(x => !x.teacher_only);
   const cur = T.lessons.find(l => (l.options || {}).staff);
   const mins = t => { const [h, m] = t.split(/[.:]/).map(Number); return h * 60 + m; };
-  const len = sp.length ? mins(sp[0].end) - mins(sp[0].start) : 50;
+  const len = sp.length ? mins(sp[0].end) - mins(sp[0].start) : 40;   // ค่าเริ่มต้นของโรงเรียน: คาบละ 40 นาที (15.10-16.30)
   const days = cur ? [...new Set(cur.slots.map(s => s[0]))] : DAYS.map((_, i) => i + 1);
   const tids = cur ? cur.teacher_ids : T.teachers.filter(t => t.active !== 0).map(t => t.id);
   const body = `
