@@ -943,7 +943,7 @@ function openStaffModal() {
     <div class="row g-2">
       <div class="col-5"><label class="form-label small mb-0">ชื่อ</label><input id="spTitle" class="form-control form-control-sm" value="${esc(cfg.staff_label || 'PLC')}"></div>
       <div class="col-3"><label class="form-label small mb-0">จำนวนคาบ</label>
-        <select id="spCount" class="form-select form-select-sm" onchange="spPreview()">${[1, 2, 3].map(n => `<option ${n === (sp.length || 2) ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+        <select id="spCount" class="form-select form-select-sm" onchange="spPreview()">${[1, 2, 3].map(n => `<option ${n === (sp.length || 1) ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
       <div class="col-4"><label class="form-label small mb-0">นาที/คาบ</label><input id="spMin" type="number" min="20" max="120" step="5" class="form-control form-control-sm" value="${len}" oninput="spPreview()"></div>
     </div>
     <div id="spTimes" class="small fw-bold text-primary mt-1"></div>

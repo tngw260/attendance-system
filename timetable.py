@@ -814,7 +814,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         b = request.get_json(silent=True) or {}
         title = re.sub(r'\s+', ' ', str(b.get('title') or 'PLC')).strip()[:40] or 'PLC'
         try:
-            count, minutes = int(b.get('count', 2)), int(b.get('minutes', 40))
+            count, minutes = int(b.get('count', 1)), int(b.get('minutes', 40))
             days = sorted({int(d) for d in (b.get('days') or [])})
             tids = list(dict.fromkeys(int(t) for t in (b.get('teacher_ids') or [])))
         except (TypeError, ValueError):
