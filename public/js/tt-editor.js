@@ -56,6 +56,38 @@ function effectiveMaxRun(tid, m = maxRunOf(tid)) {
   while (e < 7 && runCapacity(tid, e) < load) e++;
   return e;
 }
+// ครูขอ "คาบว่างติดกัน 2 คาบทุกวัน" (เงื่อนไขครู free_pair): ว่าง = ไม่มีรายการใดเลย (วิชา/กิจกรรม/ประชุม)
+// นับคาบ 1..คาบสุดท้ายของนักเรียน (PLC หลังเลิกเรียนไม่นับ) · คาบ 4 กับ 5 ที่คั่นพักกลางวันนับว่าติดกัน
+const wantsFreePair = tid => !!(((IDX.teachers[tid] || {}).constraints || {}).free_pair);
+const busyLoad = tid => T.lessons.filter(l => l.teacher_ids.includes(tid) && !(l.options || {}).staff).reduce((a, l) => a + l.per_week, 0);
+// เพดานคาบต่อวัน: ไม่มีคู่ว่าง / มีคู่ว่าง (คิดรวมกฎสอนติดกันของครูคนนั้น — ช่วงยาว k สอนได้ k − ⌊k/(m+1)⌋)
+const segCap = (k, m) => m ? k - Math.floor(k / (m + 1)) : k;
+function pairDayCaps(tid) {
+  const m = effectiveMaxRun(tid), segs = runSegments(), n = periodsFor('class').length;
+  const noPair = segs.reduce((a, [s, e]) => a + segCap(e - s + 1, m), 0);
+  let pair = 0;
+  for (let q = 1; q < n; q++) {                     // ว่างคาบ q กับ q+1 → ที่เหลือในแต่ละช่วงคิดเพดานใหม่
+    let cap = 0;
+    for (const [s, e] of segs) {
+      let k = 0;
+      for (let p = s; p <= e + 1; p++) { if (p <= e && p !== q && p !== q + 1) k++; else { cap += segCap(k, m); k = 0; } }
+    }
+    pair = Math.max(pair, cap);
+  }
+  return { noPair, pair };
+}
+// วันที่มีคู่ว่างได้มากสุดต่อสัปดาห์ (ครูมีรายการ busyLoad คาบ)
+function freePairMaxDays(tid) {
+  const { noPair, pair } = pairDayCaps(tid), D = DAYS.length, load = busyLoad(tid);
+  if (noPair <= pair) return D;
+  return Math.max(0, Math.min(D, Math.floor((D * noPair - load) / (noPair - pair))));
+}
+function hasFreePair(isBusy) {                     // isBusy(p) → คาบ p ครูมีรายการ
+  const n = periodsFor('class').length;
+  for (let p = 1; p < n; p++) if (!isBusy(p) && !isBusy(p + 1)) return true;
+  return false;
+}
+const dayBusy = (tid, d) => p => ((IDX.byTeacher[tid] || {})[`${d}-${p}`] || []).length > 0;
 function teacherRuns(tid) {                       // [{d, s, e}] ช่วงที่ครูสอนต่อเนื่อง
   const map = IDX.byTeacher[tid] || {}, out = [];
   for (let d = 1; d <= DAYS.length; d++) for (const [a, b] of runSegments()) {
@@ -141,6 +173,12 @@ function conflictsAt(l, d, p) {
     while (e + 1 <= b && on(e + 1)) e++;
     if (e - s + 1 > mx) out.push({ hard: false, msg: `${teacherShort(tid)} จะสอนติดกัน ${e - s + 1} คาบ (กฎไม่เกิน ${mx})` });
   });
+  if (!isStaffPeriod(p)) l.teacher_ids.forEach(tid => {                         // วางแล้ววันนั้นครูไม่เหลือคาบว่างติดกัน 2 คาบ
+    if (!wantsFreePair(tid)) return;
+    const from = ED.picked && ED.picked.lid === l.id && ED.picked.from && ED.picked.from[0] === d ? ED.picked.from[1] : 0;
+    const busy = q => q !== from && dayBusy(tid, d)(q);
+    if (hasFreePair(busy) && !hasFreePair(q => q === p || busy(q))) out.push({ hard: false, msg: `${teacherShort(tid)} วันนี้จะไม่มีคาบว่างติดกัน 2 คาบ` });
+  });
   if (((l.options || {}).avoid || []).includes(p)) out.push({ hard: false, msg: `วิชานี้ตั้งให้เลี่ยงคาบ ${p}` });
   if (!(l.options || {}).allow_same_day && l.kind === 'subject') {
     const same = l.slots.filter(s => s[0] === d && !(ED.picked && ED.picked.from && ED.picked.from[0] === s[0] && ED.picked.from[1] === s[1]));
@@ -220,6 +258,12 @@ function allIssues() {
     (o.avoid || []).forEach(p => {
       if (l.slots.some(s => s[1] === p)) soft.push({ type, key, lid: l.id, msg: `${name} อยู่คาบ ${p} (ตั้งให้เลี่ยง)` });
     });
+  });
+  T.teachers.forEach(t => {
+    if (!wantsFreePair(t.id) || !IDX.byTeacher[t.id]) return;
+    const k = freePairMaxDays(t.id), note = k < DAYS.length ? ` (มีรายการ ${busyLoad(t.id)} คาบ/สัปดาห์ ว่างติดกันได้มากสุด ${k} วัน)` : '';
+    for (let d = 1; d <= DAYS.length; d++) if (!hasFreePair(dayBusy(t.id, d)))
+      soft.push({ type: 'teacher', key: String(t.id), msg: `${teacherShort(t.id)} วัน${DAYS[d - 1]} ไม่มีคาบว่างติดกัน 2 คาบ${note}` });
   });
   const busyP = classBusyPeriods();
   classHoles(busyP).forEach(h => soft.push({ d: h.d, p: h.p, type: 'class', key: h.cls,
@@ -770,6 +814,9 @@ async function openTeacherModal(tid) {
     <div class="row g-2 align-items-center mt-1"><div class="col-auto small">สอนติดกันไม่เกิน</div>
       <div class="col-3"><input id="tcRun" type="number" min="2" max="7" class="form-control form-control-sm" value="${c.max_run || ''}" placeholder="${T.term.config.max_run ? 'ตามกฎ ' + T.term.config.max_run : 'ไม่จำกัด'}"></div>
       <div class="col-auto small">คาบ <span class="text-muted">(ว่าง = ตามกฎการจัดตาราง${T.term.config.max_run ? ' ' + T.term.config.max_run + ' คาบ' : ''})</span></div></div>
+    <label class="d-block small mt-2"><input type="checkbox" id="tcFreePair" ${c.free_pair ? 'checked' : ''}> <b>อยากมีคาบว่างติดกันอย่างน้อย 2 คาบทุกวัน</b>
+      <span class="text-muted">— คาบ 4 กับ 5 ที่คั่นพักกลางวันนับว่าติดกัน</span>
+      ${freePairMaxDays(tid) < DAYS.length ? `<span class="d-block text-warning-emphasis">⚠ ครูคนนี้มีรายการ ${busyLoad(tid)} คาบ/สัปดาห์ (วิชา+กิจกรรม) ทำได้มากสุด ${freePairMaxDays(tid)} วัน — ถ้าจะให้ครบทุกวัน ต้องไม่เกิน ${DAYS.length * pairDayCaps(tid).pair} คาบ${effectiveMaxRun(tid) ? ' (คิดรวมกฎสอนติดกันแล้ว)' : ''}</span>` : ''}</label>
     <label class="d-block small mt-2"><input type="checkbox" id="tcNoDbl" ${c.no_double ? 'checked' : ''}> <b>ไม่สอนคาบคู่</b>
       <span class="text-muted">— วิชาของครูคนนี้วางทีละคาบ ไม่เรียนติดกัน 2 คาบ (จัดอัตโนมัติจะแยกให้เอง)</span></label>
     ${transfer}`;
@@ -809,7 +856,7 @@ async function transferTeacher(tid) {
 async function saveTeacher(tid) {
   const unavailable = [...document.querySelectorAll('.tc-grid td.tc.off')].map(td => td.dataset.k.split('-').map(Number));
   const body = { name: el('tcName').value,
-                 constraints: { unavailable, max_per_day: +el('tcMax').value || 0, note: el('tcNote').value.trim(), no_double: el('tcNoDbl').checked, max_run: +el('tcRun').value || 0 } };
+                 constraints: { unavailable, max_per_day: +el('tcMax').value || 0, note: el('tcNote').value.trim(), no_double: el('tcNoDbl').checked, max_run: +el('tcRun').value || 0, free_pair: el('tcFreePair').checked } };
   if (el('tcUser')) body.user_id = +el('tcUser').value || null;          // ผูกบัญชี = แอดมินเท่านั้น
   try {
     const r = await apiFetch(`/api/tt/teachers/${tid}`, { method: 'PUT', body: JSON.stringify(body) });

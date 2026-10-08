@@ -588,7 +588,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.put('/api/tt/teachers/<int:tid>')
     @tt_edit_required
     def tt_teacher_update(tid):
-        """แก้ชื่อ / เงื่อนไข {unavailable:[[d,p]], max_per_day:n, note, no_double, max_run} / ผูกบัญชีผู้ใช้"""
+        """แก้ชื่อ / เงื่อนไข {unavailable:[[d,p]], max_per_day:n, note, no_double, max_run, free_pair} / ผูกบัญชีผู้ใช้"""
         b = request.get_json(silent=True) or {}
         cons = None
         if 'constraints' in b:                   # ตรวจก่อนเขียนอะไรลงฐานข้อมูล
@@ -608,6 +608,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 cons['note'] = note              # เหตุผลที่ไม่ว่าง เช่น ไปธนาคาร — แสดงในคำเตือน
             if c.get('no_double'):
                 cons['no_double'] = True         # ไม่สอนคาบคู่ — วิชาของครูคนนี้วางทีละคาบ
+            if c.get('free_pair'):
+                cons['free_pair'] = True         # อยากมีคาบว่างติดกัน 2 คาบทุกวัน
             if str(c.get('max_run') or '').isdigit() and 2 <= int(c['max_run']) <= 7:
                 cons['max_run'] = int(c['max_run'])   # สอนติดกันไม่เกิน N คาบ (เหนือกว่ากฎของครูทุกคน)
         with get_db() as con:

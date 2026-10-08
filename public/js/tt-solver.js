@@ -21,6 +21,11 @@ function ttSolve(opts) {
     maxDay[t.id] = c.max_per_day || 99;
     maxRun[t.id] = effectiveMaxRun(t.id) || 99;        // คาบสอนรวมเกินที่กฎรองรับ → ผ่อนเฉพาะครูคนนั้น
   });
+  // ครูขอคาบว่างติดกัน 2 คาบทุกวัน: pairAllow = จำนวนวันที่ยอมให้ไม่มีคู่ว่าง (0 = ต้องได้ทุกวัน · คาบมากเกิน → ยอมเท่าที่จำเป็น)
+  const pairAllow = {};
+  T.teachers.forEach(t => { if (wantsFreePair(t.id)) pairAllow[t.id] = ND - freePairMaxDays(t.id); });
+  const pairList = Object.keys(pairAllow).map(Number);
+  const pairT = Object.fromEntries(pairList.map(t => [t, pairAllow[t] ? 'soft' : 'hard']));
   const runRaised = T.teachers.filter(t => maxRunOf(t.id) && maxRun[t.id] > maxRunOf(t.id))
     .map(t => ({ t, from: maxRunOf(t.id), to: maxRun[t.id], load: teachLoad(t.id) }));
   const classTracks = T.term.config.tracks || {};
@@ -72,6 +77,17 @@ function ttSolve(opts) {
     }
     return g;
   }
+  // วันนั้นครู t ยังมีคู่คาบว่างติดกันไหม หลังเพิ่มช่วง adds [[p,len]] และเอาช่วง rem [p,len] ออก
+  function pairOK(st, t, d, adds, rem) {
+    const tb = st.tBusy[t];
+    const busy = q => adds.some(([a, n]) => q >= a && q < a + n) || (!(rem && q >= rem[0] && q < rem[0] + rem[1]) && !!(tb && tb[sidx(d, q)]));
+    for (let q = 1; q < NPS; q++) if (!busy(q) && !busy(q + 1)) return true;
+    return false;
+  }
+  const killsPair = (st, t, d, p, len) => pairOK(st, t, d, []) && !pairOK(st, t, d, [[p, len]]);
+  const missDays = (st, t) => { let n = 0; for (let d = 1; d <= ND; d++) if (!pairOK(st, t, d, [])) n++; return n; };
+  // ครูที่ทำได้ทุกวัน: ห้ามวางจนวันนั้นไม่เหลือคู่ว่าง · ครูที่คาบมากเกิน: ไม่ห้าม แต่หักคะแนน (ดู score)
+  const pairBlocked = (st, t, d, p, len) => pairAllow[t] === 0 && killsPair(st, t, d, p, len);
   const runOk = (st, l, d, p, len) => !teachesStudents(l) || l.teacher_ids.every(t => {
     if (maxRun[t] >= 99) return true;
     const [L, R] = runAround(st, t, d, p, len);
@@ -118,6 +134,7 @@ function ttSolve(opts) {
     if (!relax && !sameDayOk(l) && st.dayUse[l.id] && st.dayUse[l.id][d] > 0) return false;
     if (!relax && isSub(l)) for (const t of l.teacher_ids) if (((st.tDay[t] && st.tDay[t][d]) || 0) + len > maxDay[t]) return false;
     if (!relax && !runOk(st, l, d, p, len)) return false;
+    if (!relax) for (const t of l.teacher_ids) if (pairBlocked(st, t, d, p, len)) return false;
     return true;
   }
   // คะแนนตำแหน่ง (มาก = ดี)
@@ -132,6 +149,8 @@ function ttSolve(opts) {
     if (st.dayUse[l.id]) for (let dd = 1; dd <= ND; dd++) if (st.dayUse[l.id][dd] && Math.abs(dd - d) === 1) sc -= 0.6; // เว้นวัน
     if (len === 2 && p <= LA) sc += 0.3;                                                               // คาบคู่ชอบช่วงเช้า
     sc += 5 * holeGain(st, l, d, p, len);                                                              // เติมคาบที่นักเรียนห้ามว่าง
+    for (const t of l.teacher_ids) if (pairT[t] === 'soft' && killsPair(st, t, d, p, len))            // ครูขอคาบว่างติดกัน (ทำไม่ได้ครบ)
+      sc -= missDays(st, t) < pairAllow[t] ? 1 : 6;                                                    // ใช้โควตาวันที่ยอมได้ก่อน เกินแล้วหักหนัก
     if (teachesStudents(l)) for (const x of runRaised) if (l.teacher_ids.includes(x.t.id)) {            // ครูที่ผ่อนกฎ: เกินกฎเดิมให้น้อยวันที่สุด
       const [L, R] = runAround(st, x.t.id, d, p, len);
       if (L + len + R > x.from) sc -= 1.5;
@@ -179,6 +198,15 @@ function ttSolve(opts) {
       else if (right && right.sess && L + S.len <= mx) set.add(right.sess);
       else if ((!L || (left && left.sess)) && (!R || (right && right.sess))) { if (left) set.add(left.sess); if (right) set.add(right.sess); }
       else return null;
+    }
+    // ครูขอคาบว่างติดกัน: วางแล้ววันนั้นไม่เหลือคู่ว่าง → ย้ายช่วงอื่นของครูคนนั้นในวันนั้นออก 1 ช่วง
+    for (const t of l.teacher_ids) {
+      if (!pairBlocked(st, t, d, p, S.len)) continue;
+      const mine = new Set();
+      for (let q = 1; q <= NPS; q++) st.at[sidx(d, q)].forEach(e => { if (e.sess && e.l.teacher_ids.includes(t)) mine.add(e.sess); });
+      const x = [...mine].find(X => { const [, xp] = st.pos.get(X); return pairOK(st, t, d, [[p, S.len]], [xp, X.len]); });
+      if (!x) return null;
+      set.add(x);
     }
     return [...set];
   }
@@ -248,6 +276,23 @@ function ttSolve(opts) {
       }
     }
   }
+  // ครูที่ขอคาบว่างติดกัน: วันที่ยังไม่มีคู่ว่าง → ย้ายช่วงหนึ่งของครูคนนั้นไปวันอื่น (วันนั้นต้องไม่เสียคู่ว่างแทน)
+  function fixPairs(st) {
+    for (const t of pairList) for (let d = 1; d <= ND; d++) {
+      if (pairOK(st, t, d, [])) continue;
+      const xs = new Set();
+      for (let q = 1; q <= NPS; q++) st.at[sidx(d, q)].forEach(e => { if (e.sess && e.l.teacher_ids.includes(t)) xs.add(e.sess); });
+      let done = false;
+      for (const X of [...xs].sort(() => Math.random() - 0.5)) {
+        if (!pairOK(st, t, d, [], [st.pos.get(X)[1], X.len])) continue;      // ย้ายตัวนี้ออกแล้ววันนี้ต้องมีคู่ว่าง
+        for (let d2 = 1; d2 <= ND && !done; d2++) for (let p2 = 1; d2 !== d && p2 <= NPS && !done; p2++) {
+          if (X.l.teacher_ids.some(u => pairAllow[u] !== undefined && killsPair(st, u, d2, p2, X.len))) continue;
+          if (tryMove(st, X, d2, p2)) done = true;
+        }
+        if (done) break;
+      }
+    }
+  }
   // คุณภาพผลลัพธ์: คาบที่ขาด (หลัก) + ช่องที่บางสายเรียนแต่สายอื่นว่าง + วิชาเดียวกันวันติดกัน
   function evaluate(st) {
     const unplaced = sessions.filter(s => !st.pos.has(s)).reduce((a, s) => a + s.len, 0);
@@ -274,27 +319,30 @@ function ttSolve(opts) {
     let holes = 0;                                // ช่องที่นักเรียนห้ามว่างแต่ยังว่าง
     if (REQ.size) for (const c of IDX.classes) for (let d = 1; d <= ND; d++) for (const q of REQ)
       if (q <= NPS && missingRoots(c, hereOf(st, c, sidx(d, q)), rootsOf(c)).length) holes++;
-    return { unplaced, misaligned: mis, over, holes, score: -unplaced * 100 - mis * 3 - over * 4 - holes * 6 };
+    let pairMiss = 0;                             // วันที่ครูที่ขอคาบว่างติดกันไม่มีคู่ว่าง
+    for (const t of pairList) for (let d = 1; d <= ND; d++) if (!pairOK(st, t, d, [])) pairMiss++;
+    return { unplaced, misaligned: mis, over, holes, pairMiss, score: -unplaced * 100 - mis * 3 - over * 4 - holes * 6 - pairMiss * 4 };
   }
 
   return {
-    sessions, skipped, fixed, runRaised,
+    sessions, skipped, fixed, runRaised, pairList, pairT,
     async run(restarts, onProgress) {
       let best = null;
       const tLoad = {}; T.teachers.forEach(t => { tLoad[t.id] = maxRun[t.id] < 99 ? teachLoad(t.id) : 0; });
       const base = sessions.map(s => ({ s, k: s.len * 3 + s.l.classes.length * 2 + s.l.teacher_ids.length + (tracksOf(s.l).length ? 4 : 0)
-        + s.l.teacher_ids.reduce((a, t) => a + unav[t].size / 5 + (tLoad[t] || 0) / 8, 0) + avoidOf(s.l).length }));
+        + s.l.teacher_ids.reduce((a, t) => a + unav[t].size / 5 + (tLoad[t] || 0) / 8 + (pairAllow[t] !== undefined ? 3 : 0), 0) + avoidOf(s.l).length }));
       let lastYield = performance.now();
       for (let r = 0; r < restarts; r++) {
         const st = newState();
         base.map(x => ({ s: x.s, k: x.k + Math.random() * 3 })).sort((a, b) => b.k - a.k).forEach(x => placeBest(st, x.s));
         repair(st, 300);
         fillHoles(st);
+        if (pairList.length) { fixPairs(st); fixPairs(st); }
         const ev = evaluate(st);
         if (!best || ev.score > best.ev.score) best = { ev, pos: new Map(st.pos), st };
         if (onProgress) onProgress(r + 1, restarts, best.ev);
         if (performance.now() - lastYield > 30) { await yieldUI(); lastYield = performance.now(); }
-        if (best.ev.unplaced === 0 && best.ev.misaligned === 0 && !best.ev.holes && !best.ev.over) break;
+        if (best.ev.unplaced === 0 && best.ev.misaligned === 0 && !best.ev.holes && !best.ev.over && !best.ev.pairMiss) break;
       }
       // ช่วงที่ยังเหลือ: ซ่อม + วางแบบผ่อนกฎที่ตั้งได้ (ไม่ผ่อนครูซ้อน/ห้องชน/ครูไม่ว่าง)
       const pending = sessions.filter(s => !best.st.pos.has(s));
@@ -324,7 +372,8 @@ function openSolveModal() {
     <select id="svRounds" class="form-select form-select-sm w-auto mb-2"><option value="40">ปกติ (40 รอบ)</option><option value="150">ละเอียด (150 รอบ)</option></select>
     <div class="small text-muted">กฎที่ใช้: ครูไม่สอนซ้อน · ห้อง/สายไม่ชน · ครูไม่ว่าง · คาบคู่ · วิชาไม่ซ้ำวัน · เลี่ยงคาบ · ครูสอนไม่เกินวันละ N คาบ
       · ${T.term.config.max_run ? `<b>ครูสอนติดกันไม่เกิน ${T.term.config.max_run} คาบ</b>` : 'ครูสอนติดกัน: ไม่จำกัด'}
-      · ${classBusyPeriods().length ? `<b>นักเรียนไม่ว่างคาบ ${classBusyPeriods().join(', ')}</b>` : 'คาบว่างนักเรียน: ไม่กำหนด'} <span class="text-nowrap">(แก้ที่ เครื่องมือ → กฎการจัดตาราง)</span>
+      · ${classBusyPeriods().length ? `<b>นักเรียนไม่ว่างคาบ ${classBusyPeriods().join(', ')}</b>` : 'คาบว่างนักเรียน: ไม่กำหนด'}
+      · ครูที่ขอคาบว่างติดกัน 2 คาบ / ไม่สอนคาบคู่ (ตั้งที่ เงื่อนไขครู) <span class="text-nowrap">(แก้ที่ เครื่องมือ → กฎการจัดตาราง)</span>
       · พยายามให้วิชาต่างสายเรียนพร้อมกัน</div>
     <div class="progress mt-3" style="height:20px;display:none" id="svProg"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div></div>
     <div id="svResult" class="mt-2"></div>`;
@@ -358,6 +407,8 @@ async function runSolve() {
       <button class="btn btn-sm btn-warning" onclick="splitLeftAndRerun(this)">✂ แยกคาบคู่แล้วจัดใหม่</button></div>` : '',
     solver.runRaised.length ? `<div class="small mb-1">ℹ คาบสอนมากเกินกว่าจะทำตามกฎสอนติดกันได้ทุกวัน จึงผ่อนเฉพาะ: ${solver.runRaised.map(x => esc(`${teacherShort(x.t.id)} (${x.load} คาบ/สัปดาห์) ${x.from}→${x.to} คาบติด`)).join(', ')}</div>` : '',
     solver.skipped.length ? `<div class="small mb-1">⏭ ข้าม (ยังไม่กำหนดครู): ${solver.skipped.map(x => esc(lessonName(x.l) + ' ' + classLabel(x.l))).join(', ')}</div>` : '',
+    solver.pairList.length ? `<div class="small mb-1 ${res.ev.pairMiss ? 'text-warning-emphasis' : 'text-success'}">${res.ev.pairMiss ? '⚠' : '✓'} ครูที่ขอคาบว่างติดกัน 2 คาบทุกวัน (${solver.pairList.map(t => esc(teacherShort(t))).join(', ')}): ขาด ${res.ev.pairMiss} วัน${
+      solver.pairList.some(t => solver.pairT[t] === 'soft') ? ` · คาบมากเกินกว่าจะได้ทุกวัน: ${solver.pairList.filter(t => solver.pairT[t] === 'soft').map(t => esc(`${teacherShort(t)} (ได้มากสุด ${freePairMaxDays(t)} วัน)`)).join(', ')}` : ''}</div>` : '',
     classBusyPeriods().length ? `<div class="small mb-1 ${res.ev.holes ? 'text-danger' : 'text-success'}">${res.ev.holes ? '✖' : '✓'} นักเรียนว่างในคาบที่ห้ามว่าง (คาบ ${classBusyPeriods().join(', ')}): ${res.ev.holes} ช่อง</div>` : '',
     `<div class="small text-muted">สายที่ต้องมีคาบว่างเพราะสายอื่นเรียน: ${res.ev.misaligned} ช่อง</div>`,
   ];
