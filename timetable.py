@@ -588,7 +588,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.put('/api/tt/teachers/<int:tid>')
     @tt_edit_required
     def tt_teacher_update(tid):
-        """แก้ชื่อ / เงื่อนไข {unavailable:[[d,p]], max_per_day:n, note} / ผูกบัญชีผู้ใช้"""
+        """แก้ชื่อ / เงื่อนไข {unavailable:[[d,p]], max_per_day:n, note, no_double} / ผูกบัญชีผู้ใช้"""
         b = request.get_json(silent=True) or {}
         cons = None
         if 'constraints' in b:                   # ตรวจก่อนเขียนอะไรลงฐานข้อมูล
@@ -606,6 +606,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             note = re.sub(r'\s+', ' ', str(c.get('note') or '')).strip()[:100]
             if note:
                 cons['note'] = note              # เหตุผลที่ไม่ว่าง เช่น ไปธนาคาร — แสดงในคำเตือน
+            if c.get('no_double'):
+                cons['no_double'] = True         # ไม่สอนคาบคู่ — วิชาของครูคนนี้วางทีละคาบ
         with get_db() as con:
             t = con.execute('SELECT * FROM tt_teachers WHERE id=?', (tid,)).fetchone()
             if not t:

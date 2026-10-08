@@ -24,6 +24,9 @@ const lockedAt = (l, d, p) => l.slots.some(s => s[0] === d && s[1] === p && s[2]
 // ครูตั้งไว้ว่าไม่ว่าง (เช่น ไปธนาคารบ่ายวันศุกร์) — วิชาสอน = ชน / กิจกรรม (ประชุม ชุมนุม) = แค่เตือน
 const isUnavailable = (tid, d, p) => (((IDX.teachers[tid] || {}).constraints || {}).unavailable || []).some(([a, b]) => a === d && b === p);
 const unavReason = tid => ((IDX.teachers[tid] || {}).constraints || {}).note || 'เงื่อนไขครู';
+// ครูบางคนไม่สอนคาบคู่ (เงื่อนไขครู) → วิชาของครูคนนั้นวางทีละคาบ แม้รายการจะติ๊กคาบคู่ไว้
+const noDoubleTeacher = l => l.teacher_ids.find(t => ((IDX.teachers[t] || {}).constraints || {}).no_double);
+const wantsDouble = l => !!(l.options || {}).double && !noDoubleTeacher(l);
 
 // สายย่อย: config.track_parents[ห้อง][สาย] = สายแม่ เช่น ม.5 "กลุ่ม 2" อยู่ใน "BEP" (เด็กชุดเดียวกัน)
 const trackParents = cls => ((T.term.config.track_parents || {})[cls]) || {};
@@ -62,8 +65,9 @@ function conflictsAt(l, d, p) {
   if (((l.options || {}).avoid || []).includes(p)) out.push({ hard: false, msg: `วิชานี้ตั้งให้เลี่ยงคาบ ${p}` });
   if (!(l.options || {}).allow_same_day && l.kind === 'subject') {
     const same = l.slots.filter(s => s[0] === d && !(ED.picked && ED.picked.from && ED.picked.from[0] === s[0] && ED.picked.from[1] === s[1]));
-    if (same.length && !same.some(s => Math.abs(s[1] - p) === 1 && Math.min(s[1], p) !== lunchAfter()))
-      out.push({ hard: false, msg: 'วิชานี้มีในวันเดียวกันแล้ว' });
+    const adj = same.some(s => Math.abs(s[1] - p) === 1 && Math.min(s[1], p) !== lunchAfter());
+    if (same.length && adj && noDoubleTeacher(l)) out.push({ hard: false, msg: `${teacherShort(noDoubleTeacher(l))} ไม่สอนคาบคู่` });
+    else if (same.length && !adj) out.push({ hard: false, msg: 'วิชานี้มีในวันเดียวกันแล้ว' });
   }
   return out;
 }
@@ -126,8 +130,10 @@ function allIssues() {
         soft.push({ type, key, lid: l.id, msg: `${name}: รหัสวิชาเป็นของ ม.${want} แต่เรียนที่ ${got.map(g => 'ม.' + g).join(', ')} — ตรวจรหัสวิชา` });
     }
     const ss = sessionsOf(l), o = l.options || {};
-    if (o.double && n >= 2 && ss.filter(s => s.ps.length === 1).length > pw % 2)
+    if (wantsDouble(l) && n >= 2 && ss.filter(s => s.ps.length === 1).length > pw % 2)
       soft.push({ type, key, lid: l.id, msg: `${name} ต้องเรียนติดกัน 2 คาบ แต่วางแยก` });
+    if (noDoubleTeacher(l) && ss.some(s => s.ps.length > 1))
+      soft.push({ type, key, lid: l.id, msg: `${name} วางติดกัน แต่${teacherShort(noDoubleTeacher(l))}ไม่สอนคาบคู่` });
     if (!o.allow_same_day) {
       const days = ss.map(s => s.d);
       if (new Set(days).size < days.length) soft.push({ type, key, lid: l.id, msg: `${name} มีวันเดียวกันมากกว่า 1 ครั้ง` });
@@ -193,9 +199,9 @@ function renderEditor() {
     <div class="ed-card" draggable="true" data-lid="${l.id}" style="background:${colorOf(l)}" title="ลากไปวาง หรือแตะแล้วแตะช่อง">
       <b>${esc(lessonName(l))}</b> ${esc(ED.by === 'class' ? l.teacher_ids.map(teacherShort).join(', ') : classLabel(l))}
       ${tracksOf(l).length ? `<span class="badge text-bg-light border">${esc(l.track)}</span>` : ''}
-      ${(l.options || {}).double ? '<span class="badge bg-secondary" title="เรียนติดกัน 2 คาบ">คู่</span>' : ''}
+      ${wantsDouble(l) ? '<span class="badge bg-secondary" title="เรียนติดกัน 2 คาบ">คู่</span>' : ''}
       <span class="float-end badge bg-warning text-dark">เหลือ ${l.per_week - l.slots.length}</span>
-      ${(l.options || {}).double ? `<div class="mt-1"><button type="button" class="btn btn-sm btn-light border py-0 px-2 ed-split"
+      ${wantsDouble(l) ? `<div class="mt-1"><button type="button" class="btn btn-sm btn-light border py-0 px-2 ed-split"
         title="ยกเลิกคาบคู่ของวิชานี้ → ลากวางทีละคาบ หรือให้จัดอัตโนมัติวางแยกได้">✂ แยกคาบคู่</button></div>` : ''}
     </div>`).join('') || '<div class="text-muted small p-2">✓ วางครบทุกรายการแล้ว</div>';
 
@@ -206,7 +212,7 @@ function renderEditor() {
       <td>${esc(l.teacher_ids.map(teacherShort).join(', '))}</td>
       <td class="text-center">${l.per_week}</td>
       <td class="text-center ${l.slots.length !== l.per_week ? 'text-danger fw-bold' : ''}">${l.slots.length}</td>
-      <td class="small">${[(l.options || {}).double ? 'คาบคู่' : '', (l.options || {}).avoid ? 'เลี่ยงคาบ ' + l.options.avoid.join(',') : '', (l.options || {}).allow_same_day ? 'ซ้ำวันได้' : ''].filter(Boolean).join(' · ')}</td>
+      <td class="small">${[wantsDouble(l) ? 'คาบคู่' : (l.options || {}).double ? 'ทีละคาบ (ครูไม่สอนคาบคู่)' : '', (l.options || {}).avoid ? 'เลี่ยงคาบ ' + l.options.avoid.join(',') : '', (l.options || {}).allow_same_day ? 'ซ้ำวันได้' : ''].filter(Boolean).join(' · ')}</td>
       <td class="text-end"><button class="btn btn-sm btn-outline-primary py-0" onclick="openLessonModal(${l.id})"><i class="bi bi-pencil"></i></button></td></tr>`).join('');
 
   const act = (fn, icon, label) => `<li><a class="dropdown-item" href="#" onclick="${fn}; return false;"><i class="bi bi-${icon} me-1"></i>${label}</a></li>`;
@@ -357,7 +363,7 @@ async function doPlace(d, p) {
   if (slotHas(l, d, p)) { toastEd('วิชานี้อยู่ในช่องนั้นแล้ว'); return; }
   const add = [[d, p]];
   // วางจากกล่อง "ยังไม่ได้วาง" + วิชาคาบคู่ + เหลือ ≥ 2 คาบ → วางคาบถัดไปให้ด้วยถ้าว่าง
-  if (!pk.from && (l.options || {}).double && l.per_week - l.slots.length >= 2 && p < nPeriods() && p !== lunchAfter()
+  if (!pk.from && wantsDouble(l) && l.per_week - l.slots.length >= 2 && p < nPeriods() && p !== lunchAfter()
       && !slotHas(l, d, p + 1) && !conflictsAt(l, d, p + 1).some(c => c.hard)) add.push([d, p + 1]);
   const hard = conflictsAt(l, d, p).filter(c => c.hard);
   if (hard.length && !confirm(`วางแล้วจะชนกัน:\n• ${hard.map(c => c.msg).join('\n• ')}\n\nวางต่อหรือไม่?`)) return;
@@ -550,7 +556,7 @@ function openLessonModal(id, prefill) {
     <div class="row g-2 mt-1">
       <div class="col-4"><label class="form-label small mb-0">คาบ/สัปดาห์</label><input id="lfPw" type="number" min="0" max="35" class="form-control form-control-sm" value="${l.per_week}"></div>
       <div class="col-8 small pt-3">
-        <label class="d-block"><input type="checkbox" id="lfDouble" ${o.double ? 'checked' : ''}> เรียนติดกัน 2 คาบ (คาบคู่)</label>
+        <label class="d-block"><input type="checkbox" id="lfDouble" ${o.double ? 'checked' : ''}> เรียนติดกัน 2 คาบ (คาบคู่)${id && noDoubleTeacher(l) ? ` <span class="text-muted">— ${esc(teacherShort(noDoubleTeacher(l)))}ตั้ง "ไม่สอนคาบคู่" ระบบวางทีละคาบ</span>` : ''}</label>
         <label class="d-block"><input type="checkbox" id="lfSameDay" ${o.allow_same_day ? 'checked' : ''}> ให้มีวันเดียวกันได้มากกว่า 1 ครั้ง</label>
       </div>
     </div>
@@ -669,6 +675,8 @@ async function openTeacherModal(tid) {
     <input id="tcNote" class="form-control form-control-sm mb-2" maxlength="100" value="${esc(c.note || '')}" placeholder="เหตุผลที่ไม่ว่าง เช่น ไปธนาคารบ่ายวันศุกร์ (ขึ้นในคำเตือน)">
     <div class="row g-2 align-items-center"><div class="col-auto small">สอนไม่เกินวันละ</div>
       <div class="col-3"><input id="tcMax" type="number" min="0" max="7" class="form-control form-control-sm" value="${c.max_per_day || ''}" placeholder="ไม่จำกัด"></div><div class="col-auto small">คาบ</div></div>
+    <label class="d-block small mt-2"><input type="checkbox" id="tcNoDbl" ${c.no_double ? 'checked' : ''}> <b>ไม่สอนคาบคู่</b>
+      <span class="text-muted">— วิชาของครูคนนี้วางทีละคาบ ไม่เรียนติดกัน 2 คาบ (จัดอัตโนมัติจะแยกให้เอง)</span></label>
     ${transfer}`;
   showModal(`เงื่อนไขครู${esc(t.name)}`, body,
     `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button><button class="btn btn-primary btn-sm" onclick="saveTeacher(${tid})"><i class="bi bi-save"></i> บันทึก</button>`);
@@ -706,7 +714,7 @@ async function transferTeacher(tid) {
 async function saveTeacher(tid) {
   const unavailable = [...document.querySelectorAll('.tc-grid td.tc.off')].map(td => td.dataset.k.split('-').map(Number));
   const body = { name: el('tcName').value,
-                 constraints: { unavailable, max_per_day: +el('tcMax').value || 0, note: el('tcNote').value.trim() } };
+                 constraints: { unavailable, max_per_day: +el('tcMax').value || 0, note: el('tcNote').value.trim(), no_double: el('tcNoDbl').checked } };
   if (el('tcUser')) body.user_id = +el('tcUser').value || null;          // ผูกบัญชี = แอดมินเท่านั้น
   try {
     const r = await apiFetch(`/api/tt/teachers/${tid}`, { method: 'PUT', body: JSON.stringify(body) });

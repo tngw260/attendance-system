@@ -10,7 +10,8 @@ function ttSolve(opts) {
   const NP = nPeriods(), ND = DAYS.length, LA = lunchAfter(), NS = ND * NP;
   const sidx = (d, p) => (d - 1) * NP + (p - 1);
   const isSub = l => l.kind === 'subject';
-  const sameDayOk = l => (l.options || {}).allow_same_day || !isSub(l);
+  // ครูไม่สอนคาบคู่ → ทีละคาบ และไม่ให้วิชาเดียวกันอยู่วันเดียวกัน (กันวางติดกันเป็นคาบคู่โดยปริยาย)
+  const sameDayOk = l => !isSub(l) || ((l.options || {}).allow_same_day && !noDoubleTeacher(l));
   const avoidOf = l => (l.options || {}).avoid || [];
   const unav = {}, maxDay = {};
   T.teachers.forEach(t => {
@@ -30,7 +31,7 @@ function ttSolve(opts) {
     if (need <= 0) return;
     if (!l.teacher_ids.length && !l.classes.length) return;
     if (isSub(l) && !l.teacher_ids.length) { skipped.push({ l, n: need, why: 'ยังไม่กำหนดครู' }); return; }
-    const dbl = (l.options || {}).double;
+    const dbl = wantsDouble(l);
     while (need > 0) { const len = dbl && need >= 2 ? 2 : 1; sessions.push({ l, len }); need -= len; }
   });
   // วิชาของนักเรียนวางได้ถึงคาบสุดท้ายของนักเรียน (คาบของครูหลังเลิกเรียน เช่น PLC ไม่ใช้)
