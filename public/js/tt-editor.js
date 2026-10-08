@@ -27,6 +27,45 @@ const unavReason = tid => ((IDX.teachers[tid] || {}).constraints || {}).note || 
 // ครูบางคนไม่สอนคาบคู่ (เงื่อนไขครู) → วิชาของครูคนนั้นวางทีละคาบ แม้รายการจะติ๊กคาบคู่ไว้
 const noDoubleTeacher = l => l.teacher_ids.find(t => ((IDX.teachers[t] || {}).constraints || {}).no_double);
 const wantsDouble = l => !!(l.options || {}).double && !noDoubleTeacher(l);
+// สอนติดกันไม่เกิน N คาบ: เงื่อนไขรายครู > กฎของครูทุกคน (config.max_run) · 0 = ไม่จำกัด
+// นับเฉพาะคาบที่มีนักเรียน (รายการที่มีชั้น) · พักกลางวันตัดช่วง (เช้า 1..lunch / บ่าย lunch+1..คาบสุดท้ายของนักเรียน)
+const maxRunOf = tid => +((((IDX.teachers[tid] || {}).constraints || {}).max_run) || T.term.config.max_run || 0);
+const runSegments = () => [[1, lunchAfter()], [lunchAfter() + 1, periodsFor('class').length]];
+// คาบที่อยู่กับนักเรียนต่อสัปดาห์ (รายการที่มีชั้น ตามจำนวนคาบ/สัปดาห์)
+const teachLoad = tid => T.lessons.filter(l => l.classes.length && l.teacher_ids.includes(tid)).reduce((a, l) => a + l.per_week, 0);
+// สอนได้สูงสุดกี่คาบ/สัปดาห์ ถ้าห้ามติดกันเกิน m: ช่วงว่างยาว k คาบ สอนได้ k − ⌊k/(m+1)⌋ (คาบไม่ว่าง/ประชุม/PLC ตัดช่วง)
+function runCapacity(tid, m) {
+  const map = IDX.byTeacher[tid] || {}, un = new Set((((IDX.teachers[tid] || {}).constraints || {}).unavailable || []).map(([d, p]) => `${d}-${p}`));
+  let cap = 0;
+  for (let d = 1; d <= DAYS.length; d++) for (const [a, b] of runSegments()) {
+    let k = 0;
+    for (let p = a; p <= b + 1; p++) {
+      if (p <= b && !un.has(`${d}-${p}`) && !(map[`${d}-${p}`] || []).some(x => !x.classes.length)) { k++; continue; }
+      cap += k - Math.floor(k / (m + 1)); k = 0;
+    }
+  }
+  return cap;
+}
+// กฎที่ทำได้จริงของครูคนนี้: ถ้าคาบสอนรวมเกินที่กฎรองรับ → ผ่อนทีละ 1 คาบจนพอ (0 = ไม่จำกัด)
+function effectiveMaxRun(tid, m = maxRunOf(tid)) {
+  if (!m) return 0;
+  const load = teachLoad(tid);
+  let e = m;
+  while (e < 7 && runCapacity(tid, e) < load) e++;
+  return e;
+}
+function teacherRuns(tid) {                       // [{d, s, e}] ช่วงที่ครูสอนต่อเนื่อง
+  const map = IDX.byTeacher[tid] || {}, out = [];
+  for (let d = 1; d <= DAYS.length; d++) for (const [a, b] of runSegments()) {
+    let s = 0;
+    for (let p = a; p <= b + 1; p++) {
+      const on = p <= b && (map[`${d}-${p}`] || []).some(x => x.classes.length);
+      if (on && !s) s = p;
+      if (!on && s) { out.push({ d, s, e: p - 1 }); s = 0; }
+    }
+  }
+  return out;
+}
 
 // สายย่อย: config.track_parents[ห้อง][สาย] = สายแม่ เช่น ม.5 "กลุ่ม 2" อยู่ใน "BEP" (เด็กชุดเดียวกัน)
 const trackParents = cls => ((T.term.config.track_parents || {})[cls]) || {};
@@ -62,6 +101,19 @@ function conflictsAt(l, d, p) {
       out.push({ hard: l.kind === 'subject', msg: `${teacherShort(tid)} ไม่ว่างคาบนี้ (${unavReason(tid)})` });
   });
   if (l.classes.length && isStaffPeriod(p)) out.push({ hard: true, msg: `คาบ ${p} เป็นคาบของครูหลังเลิกเรียน นักเรียนไม่มีเรียน` });
+  if (l.classes.length && !isStaffPeriod(p)) l.teacher_ids.forEach(tid => {      // วางแล้วครูสอนติดกันเกินกฎไหม
+    const mx = maxRunOf(tid);
+    if (!mx) return;
+    const from = ED.picked && ED.picked.lid === l.id && ED.picked.from && ED.picked.from[0] === d ? ED.picked.from[1] : 0;
+    const on = q => q === p || (q !== from && ((IDX.byTeacher[tid] || {})[`${d}-${q}`] || []).some(x => x.classes.length));
+    const seg = runSegments().find(([a, b]) => p >= a && p <= b);
+    if (!seg) return;
+    const [a, b] = seg;
+    let s = p, e = p;
+    while (s - 1 >= a && on(s - 1)) s--;
+    while (e + 1 <= b && on(e + 1)) e++;
+    if (e - s + 1 > mx) out.push({ hard: false, msg: `${teacherShort(tid)} จะสอนติดกัน ${e - s + 1} คาบ (กฎไม่เกิน ${mx})` });
+  });
   if (((l.options || {}).avoid || []).includes(p)) out.push({ hard: false, msg: `วิชานี้ตั้งให้เลี่ยงคาบ ${p}` });
   if (!(l.options || {}).allow_same_day && l.kind === 'subject') {
     const same = l.slots.filter(s => s[0] === d && !(ED.picked && ED.picked.from && ED.picked.from[0] === s[0] && ED.picked.from[1] === s[1]));
@@ -141,6 +193,13 @@ function allIssues() {
     (o.avoid || []).forEach(p => {
       if (l.slots.some(s => s[1] === p)) soft.push({ type, key, lid: l.id, msg: `${name} อยู่คาบ ${p} (ตั้งให้เลี่ยง)` });
     });
+  });
+  T.teachers.forEach(t => {
+    const mx = maxRunOf(t.id);
+    if (!mx || !IDX.byTeacher[t.id]) return;
+    const over = effectiveMaxRun(t.id, mx) > mx ? ` · คาบสอน ${teachLoad(t.id)} คาบ/สัปดาห์ เกินที่กฎรองรับ (${runCapacity(t.id, mx)})` : '';
+    teacherRuns(t.id).filter(r => r.e - r.s + 1 > mx).forEach(r => soft.push({ d: r.d, p: r.s, type: 'teacher', key: String(t.id),
+      msg: `${teacherShort(t.id)} สอนติดกัน ${r.e - r.s + 1} คาบ (คาบ ${r.s}-${r.e}) — กฎไม่เกิน ${mx} คาบ${over}` }));
   });
   T.teachers.forEach(t => {
     const mx = (t.constraints || {}).max_per_day;
@@ -238,6 +297,7 @@ function renderEditor() {
           ${act('applyTracks()', 'magic', 'ตั้งสายการเรียนจากโครงสร้างหลักสูตร')}
           ${act('applySuggestedTracks()', 'lightbulb', 'แนะนำสายจากตารางปัจจุบัน')}
           ${act('openImportModal()', 'file-earmark-spreadsheet', 'นำเข้ารายวิชาจาก Excel (แบบสำรวจภาระงานสอน)')}
+          ${act('openRulesModal()', 'sliders', 'กฎของครูทุกคน (สอนติดกันไม่เกิน…)')}
           ${act('openStaffModal()', 'people', 'คาบของครูหลังเลิกเรียน (PLC)')}
           ${draftReport() ? act('showDraftReport(draftReport())', 'clipboard-check', 'รายงานการร่างภาคเรียน') : ''}
           <li><hr class="dropdown-divider"></li>
@@ -675,6 +735,9 @@ async function openTeacherModal(tid) {
     <input id="tcNote" class="form-control form-control-sm mb-2" maxlength="100" value="${esc(c.note || '')}" placeholder="เหตุผลที่ไม่ว่าง เช่น ไปธนาคารบ่ายวันศุกร์ (ขึ้นในคำเตือน)">
     <div class="row g-2 align-items-center"><div class="col-auto small">สอนไม่เกินวันละ</div>
       <div class="col-3"><input id="tcMax" type="number" min="0" max="7" class="form-control form-control-sm" value="${c.max_per_day || ''}" placeholder="ไม่จำกัด"></div><div class="col-auto small">คาบ</div></div>
+    <div class="row g-2 align-items-center mt-1"><div class="col-auto small">สอนติดกันไม่เกิน</div>
+      <div class="col-3"><input id="tcRun" type="number" min="2" max="7" class="form-control form-control-sm" value="${c.max_run || ''}" placeholder="${T.term.config.max_run ? 'ตามกฎ ' + T.term.config.max_run : 'ไม่จำกัด'}"></div>
+      <div class="col-auto small">คาบ <span class="text-muted">(ว่าง = ตามกฎของครูทุกคน${T.term.config.max_run ? ' ' + T.term.config.max_run + ' คาบ' : ''})</span></div></div>
     <label class="d-block small mt-2"><input type="checkbox" id="tcNoDbl" ${c.no_double ? 'checked' : ''}> <b>ไม่สอนคาบคู่</b>
       <span class="text-muted">— วิชาของครูคนนี้วางทีละคาบ ไม่เรียนติดกัน 2 คาบ (จัดอัตโนมัติจะแยกให้เอง)</span></label>
     ${transfer}`;
@@ -714,7 +777,7 @@ async function transferTeacher(tid) {
 async function saveTeacher(tid) {
   const unavailable = [...document.querySelectorAll('.tc-grid td.tc.off')].map(td => td.dataset.k.split('-').map(Number));
   const body = { name: el('tcName').value,
-                 constraints: { unavailable, max_per_day: +el('tcMax').value || 0, note: el('tcNote').value.trim(), no_double: el('tcNoDbl').checked } };
+                 constraints: { unavailable, max_per_day: +el('tcMax').value || 0, note: el('tcNote').value.trim(), no_double: el('tcNoDbl').checked, max_run: +el('tcRun').value || 0 } };
   if (el('tcUser')) body.user_id = +el('tcUser').value || null;          // ผูกบัญชี = แอดมินเท่านั้น
   try {
     const r = await apiFetch(`/api/tt/teachers/${tid}`, { method: 'PUT', body: JSON.stringify(body) });
@@ -1018,6 +1081,61 @@ async function importApply() {
         <li>กด <b>จัดอัตโนมัติ</b> → เลือก <b>วางเฉพาะคาบที่ยังไม่ได้วาง</b> (ยังวางไม่ครบ ${left} รายการ)</li>
       </ol>`, '<button class="btn btn-primary btn-sm" data-bs-dismiss="modal">ตกลง</button>');
   } catch (e) { el('impGo').disabled = false; alert(e.message); }
+}
+
+/* ── กฎของครูทุกคน: สอนติดกันไม่เกิน N คาบ (config.max_run ของภาคเรียน · ร่างเทอมถัดไปคัดลอกไปด้วย) ── */
+function openRulesModal() {
+  if (previewGuard()) return;
+  const cur = +(T.term.config.max_run || 0), la = lunchAfter(), nps = periodsFor('class').length;
+  const opts = [[0, 'ไม่จำกัด'], [2, '2 คาบ'], [3, '3 คาบ'], [4, '4 คาบ'], [5, '5 คาบ']];
+  const body = `
+    <div class="d-flex align-items-center gap-2"><span>ครูสอนติดกันไม่เกิน</span>
+      <select id="ruRun" class="form-select form-select-sm w-auto" onchange="rulesPreview()">${opts.map(([v, t]) => `<option value="${v}" ${v === (cur || 3) ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div class="small text-muted mt-2">นับเฉพาะคาบที่มีนักเรียน (รายวิชาและกิจกรรมที่มีชั้นเรียน) · ประชุมครูและ PLC ไม่นับ ·
+      พักกลางวันตัดช่วง (เช้า คาบ 1–${la} / บ่าย คาบ ${la + 1}–${nps}) · จัดอัตโนมัติจะไม่วางให้เกิน ·
+      ครูบางคนต้องการต่างจากนี้ ตั้งรายคนได้ที่ รายครู → เงื่อนไขครู</div>
+    <div id="ruNow" class="small mt-2"></div>`;
+  showModal('<i class="bi bi-sliders"></i> กฎของครูทุกคน', body, `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+    <button class="btn btn-primary btn-sm" onclick="saveRules()"><i class="bi bi-save"></i> บันทึก</button>`);
+  rulesPreview();
+}
+// จุดที่เกินถ้าใช้กฎ n (เงื่อนไขรายครูยังมีผลเหนือกว่า)
+function runViolations(n) {
+  const out = [];
+  T.teachers.forEach(t => {
+    const mx = +((t.constraints || {}).max_run || n || 0);
+    if (mx) teacherRuns(t.id).forEach(r => { if (r.e - r.s + 1 > mx) out.push(`${teacherShort(t.id)} วัน${DAYS[r.d - 1]} คาบ ${r.s}-${r.e}`); });
+  });
+  return out;
+}
+// ครูที่คาบสอนรวมเกินที่กฎ n รองรับ (ทำตามกฎไม่ได้ทุกวัน)
+function runOverloaded(n) {
+  return T.teachers.map(t => {
+    const m = +((t.constraints || {}).max_run || n || 0);
+    return m && IDX.byTeacher[t.id] ? { t, m, load: teachLoad(t.id), cap: runCapacity(t.id, m), eff: effectiveMaxRun(t.id, m) } : null;
+  }).filter(x => x && x.eff > x.m);
+}
+function rulesPreview() {
+  const n = +el('ruRun').value, v = runViolations(n), ov = n ? runOverloaded(n) : [];
+  el('ruNow').innerHTML = (!n ? '' : v.length
+    ? `<div class="alert alert-warning py-2 mb-0">ตารางตอนนี้มี <b>${v.length}</b> จุดที่สอนติดกันเกิน ${n} คาบ<div class="text-muted">${esc(v.slice(0, 8).join(' · '))}${v.length > 8 ? ' …' : ''}</div></div>`
+    : `<div class="text-success"><i class="bi bi-check-circle"></i> ตารางตอนนี้ไม่มีครูสอนติดกันเกิน ${n} คาบ</div>`)
+    + (ov.length ? `<div class="alert alert-info py-2 mt-2 mb-0"><b>ครูที่คาบสอนมากเกินกว่าจะทำตามกฎได้ทุกวัน</b> — จัดอัตโนมัติจะยอมให้ติดกันได้มากขึ้นเฉพาะครูคนนั้น:
+        <ul class="mb-0 ps-3">${ov.map(x => `<li>${esc(teacherShort(x.t.id))} สอน ${x.load} คาบ/สัปดาห์ แต่ถ้าไม่เกิน ${x.m} คาบติด สอนได้สูงสุด ${x.cap} คาบ → ยอมให้ <b>${x.eff} คาบติด</b></li>`).join('')}</ul>
+        <div class="text-muted">ถ้าต้องการให้ได้ตามกฎ: ลดคาบ/ย้ายบางวิชาให้ครูคนอื่น หรือปลดคาบไม่ว่าง</div></div>` : '');
+}
+async function saveRules() {
+  const n = +el('ruRun').value;
+  try {
+    await apiFetch(`/api/tt/terms/${T.term.id}`, { method: 'PUT', body: JSON.stringify({ config: { max_run: n } }) });
+    if (n) T.term.config.max_run = n; else delete T.term.config.max_run;
+    edModal.hide(); renderEditor();
+    const v = n ? runViolations(n).length : 0;
+    if (v) showModal('<i class="bi bi-sliders"></i> บันทึกกฎแล้ว', `<div class="alert alert-warning py-2">ตารางตอนนี้มี <b>${v}</b> จุดที่ครูสอนติดกันเกิน ${n} คาบ (ขึ้นในปุ่ม เตือน)</div>
+      กด <b>จัดอัตโนมัติ → จัดใหม่ทั้งหมด</b> ระบบจะจัดให้ไม่เกิน ${n} คาบ (ช่องที่ล็อก 🔒 อยู่ที่เดิม)`,
+      `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ไว้ทีหลัง</button><button class="btn btn-primary btn-sm" onclick="openSolveModal()"><i class="bi bi-cpu"></i> จัดอัตโนมัติ</button>`);
+    else toastEd(n ? `ตั้งกฎแล้ว: ครูสอนติดกันไม่เกิน ${n} คาบ` : 'ยกเลิกกฎสอนติดกันแล้ว');
+  } catch (e) { alert(e.message); }
 }
 
 /* ── คาบของครูหลังเลิกเรียน (PLC) — ต่อท้ายคาบเรียน ขึ้นเฉพาะตารางครู ── */

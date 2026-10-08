@@ -588,7 +588,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.put('/api/tt/teachers/<int:tid>')
     @tt_edit_required
     def tt_teacher_update(tid):
-        """แก้ชื่อ / เงื่อนไข {unavailable:[[d,p]], max_per_day:n, note, no_double} / ผูกบัญชีผู้ใช้"""
+        """แก้ชื่อ / เงื่อนไข {unavailable:[[d,p]], max_per_day:n, note, no_double, max_run} / ผูกบัญชีผู้ใช้"""
         b = request.get_json(silent=True) or {}
         cons = None
         if 'constraints' in b:                   # ตรวจก่อนเขียนอะไรลงฐานข้อมูล
@@ -608,6 +608,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 cons['note'] = note              # เหตุผลที่ไม่ว่าง เช่น ไปธนาคาร — แสดงในคำเตือน
             if c.get('no_double'):
                 cons['no_double'] = True         # ไม่สอนคาบคู่ — วิชาของครูคนนี้วางทีละคาบ
+            if str(c.get('max_run') or '').isdigit() and 2 <= int(c['max_run']) <= 7:
+                cons['max_run'] = int(c['max_run'])   # สอนติดกันไม่เกิน N คาบ (เหนือกว่ากฎของครูทุกคน)
         with get_db() as con:
             t = con.execute('SELECT * FROM tt_teachers WHERE id=?', (tid,)).fetchone()
             if not t:
@@ -678,8 +680,16 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.put('/api/tt/terms/<int:term_id>')
     @tt_edit_required
     def tt_term_update(term_id):
-        """แก้ค่าภาคเรียน: ชื่อ, เผยแพร่, config (คาบเวลา / สายการเรียนของแต่ละห้อง / ผู้ลงนาม)"""
+        """แก้ค่าภาคเรียน: ชื่อ, เผยแพร่, config (คาบเวลา / สายการเรียนของแต่ละห้อง / ผู้ลงนาม / max_run กฎสอนติดกัน)"""
         b = request.get_json() or {}
+        max_run = None
+        if isinstance(b.get('config'), dict) and 'max_run' in b['config']:      # ครูสอนติดกันไม่เกิน N คาบ (0 = ไม่จำกัด)
+            try:
+                max_run = int(b['config']['max_run'] or 0)
+            except (TypeError, ValueError):
+                max_run = -1
+            if not (max_run == 0 or 2 <= max_run <= 7):
+                return jsonify(success=False, message='สอนติดกันไม่เกิน 2-7 คาบ (0 = ไม่จำกัด)'), 400
         with get_db() as con:
             row = con.execute('SELECT * FROM tt_terms WHERE id=?', (term_id,)).fetchone()
             if not row:
@@ -698,6 +708,11 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 for k in ('periods', 'pre', 'lunch', 'lunch_after', 'classes', 'signers', 'tracks', 'days'):
                     if k in b['config']:
                         cfg[k] = b['config'][k]
+                if max_run is not None:
+                    if max_run:
+                        cfg['max_run'] = max_run
+                    else:
+                        cfg.pop('max_run', None)
                 con.execute('UPDATE tt_terms SET config=? WHERE id=?', (json.dumps(cfg, ensure_ascii=False), term_id))
         return jsonify(success=True)
 

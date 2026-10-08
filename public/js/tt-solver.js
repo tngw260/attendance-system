@@ -3,7 +3,7 @@
    2) วางทีละช่วง เริ่มจากช่วงที่ยากสุด เลือกช่องคะแนนดีสุด (+ สุ่มนิด ๆ)
    3) ช่วงที่วางไม่ลง → ย้ายช่วงที่ขวาง 1-2 ช่วงไปที่อื่น (ซ่อม)
    4) ทำหลายรอบ เก็บผลที่วางได้ครบที่สุด / สายเรียนพร้อมกันมากสุด
-   กฎตายตัว: ครูไม่สอนซ้อน, ห้อง/สายไม่ชน, ครูไม่ว่าง · กฎที่ตั้งได้: คาบคู่, ไม่ซ้ำวัน, เลี่ยงคาบ, สอนไม่เกินวันละ N */
+   กฎตายตัว: ครูไม่สอนซ้อน, ห้อง/สายไม่ชน, ครูไม่ว่าง · กฎที่ตั้งได้: คาบคู่, ไม่ซ้ำวัน, เลี่ยงคาบ, สอนไม่เกินวันละ N, สอนติดกันไม่เกิน N */
 
 function ttSolve(opts) {
   const mode = opts.mode || 'fresh';                  // fresh = จัดใหม่ (คงที่ล็อก) / fill = เติมเฉพาะที่ยังขาด
@@ -13,12 +13,15 @@ function ttSolve(opts) {
   // ครูไม่สอนคาบคู่ → ทีละคาบ และไม่ให้วิชาเดียวกันอยู่วันเดียวกัน (กันวางติดกันเป็นคาบคู่โดยปริยาย)
   const sameDayOk = l => !isSub(l) || ((l.options || {}).allow_same_day && !noDoubleTeacher(l));
   const avoidOf = l => (l.options || {}).avoid || [];
-  const unav = {}, maxDay = {};
+  const unav = {}, maxDay = {}, maxRun = {};
   T.teachers.forEach(t => {
     const c = t.constraints || {};
     unav[t.id] = new Set((c.unavailable || []).map(([d, p]) => sidx(d, p)));
     maxDay[t.id] = c.max_per_day || 99;
+    maxRun[t.id] = effectiveMaxRun(t.id) || 99;        // คาบสอนรวมเกินที่กฎรองรับ → ผ่อนเฉพาะครูคนนั้น
   });
+  const runRaised = T.teachers.filter(t => maxRunOf(t.id) && maxRun[t.id] > maxRunOf(t.id))
+    .map(t => ({ t, from: maxRunOf(t.id), to: maxRun[t.id], load: teachLoad(t.id) }));
   const classTracks = T.term.config.tracks || {};
 
   // ── เตรียม: ช่องคงที่ + ช่วงที่ต้องวาง ──
@@ -37,10 +40,25 @@ function ttSolve(opts) {
   // วิชาของนักเรียนวางได้ถึงคาบสุดท้ายของนักเรียน (คาบของครูหลังเลิกเรียน เช่น PLC ไม่ใช้)
   const NPS = T.term.config.periods.filter(x => !x.teacher_only).length || NP;
   const fits = (l, d, p, len) => p + len - 1 <= (l.classes.length ? NPS : NP) && !(len === 2 && p === LA);
+  // สอนติดกัน: นับคาบที่ครูอยู่กับนักเรียน (tTeach) ต่อจากช่วงที่จะวาง ทั้งซ้าย-ขวา ภายในช่วงเช้า/บ่าย
+  function runAround(st, t, d, p, len) {
+    const tt = st.tTeach[t], [a, b] = p <= LA ? [1, LA] : [LA + 1, NPS];
+    let L = 0, R = 0;
+    if (tt) {
+      for (let q = p - 1; q >= a && tt[sidx(d, q)]; q--) L++;
+      for (let q = p + len; q <= b && tt[sidx(d, q)]; q++) R++;
+    }
+    return [L, R];
+  }
+  const runOk = (st, l, d, p, len) => !l.classes.length || l.teacher_ids.every(t => {
+    if (maxRun[t] >= 99) return true;
+    const [L, R] = runAround(st, t, d, p, len);
+    return L + len + R <= maxRun[t];
+  });
 
   // ── สถานะของรอบค้นหา ──
   function newState() {
-    const st = { at: Array.from({ length: NS }, () => []), tBusy: {}, tDay: {}, dayUse: {}, fixedDay: {}, pos: new Map(), byLesson: new Map() };
+    const st = { at: Array.from({ length: NS }, () => []), tBusy: {}, tTeach: {}, tDay: {}, dayUse: {}, fixedDay: {}, pos: new Map(), byLesson: new Map() };
     fixed.forEach(f => occupy(st, f.l, f.d, f.p, 1, null));
     return st;
   }
@@ -49,7 +67,7 @@ function ttSolve(opts) {
     for (let q = p; q < p + len; q++) {
       const s = sidx(d, q);
       st.at[s].push({ l, sess });
-      l.teacher_ids.forEach(t => { arr(st.tBusy, t, NS)[s]++; if (isSub(l)) arr(st.tDay, t, ND + 1)[d]++; });
+      l.teacher_ids.forEach(t => { arr(st.tBusy, t, NS)[s]++; if (isSub(l)) arr(st.tDay, t, ND + 1)[d]++; if (l.classes.length) arr(st.tTeach, t, NS)[s]++; });
     }
     arr(st.dayUse, l.id, ND + 1)[d] += len;
     if (!sess) arr(st.fixedDay, l.id, ND + 1)[d] += len;
@@ -60,7 +78,7 @@ function ttSolve(opts) {
     for (let q = p; q < p + sess.len; q++) {
       const s = sidx(d, q), a = st.at[s];
       a.splice(a.findIndex(e => e.sess === sess), 1);
-      l.teacher_ids.forEach(t => { st.tBusy[t][s]--; if (isSub(l)) st.tDay[t][d]--; });
+      l.teacher_ids.forEach(t => { st.tBusy[t][s]--; if (isSub(l)) st.tDay[t][d]--; if (l.classes.length) st.tTeach[t][s]--; });
     }
     st.dayUse[l.id][d] -= sess.len;
     st.pos.delete(sess);
@@ -77,6 +95,7 @@ function ttSolve(opts) {
     }
     if (!relax && !sameDayOk(l) && st.dayUse[l.id] && st.dayUse[l.id][d] > 0) return false;
     if (!relax && isSub(l)) for (const t of l.teacher_ids) if (((st.tDay[t] && st.tDay[t][d]) || 0) + len > maxDay[t]) return false;
+    if (!relax && !runOk(st, l, d, p, len)) return false;
     return true;
   }
   // คะแนนตำแหน่ง (มาก = ดี)
@@ -90,6 +109,10 @@ function ttSolve(opts) {
     l.teacher_ids.forEach(t => { sc -= 0.5 * ((st.tDay[t] && st.tDay[t][d]) || 0); });              // กระจายภาระครู
     if (st.dayUse[l.id]) for (let dd = 1; dd <= ND; dd++) if (st.dayUse[l.id][dd] && Math.abs(dd - d) === 1) sc -= 0.6; // เว้นวัน
     if (len === 2 && p <= LA) sc += 0.3;                                                               // คาบคู่ชอบช่วงเช้า
+    if (l.classes.length) for (const x of runRaised) if (l.teacher_ids.includes(x.t.id)) {            // ครูที่ผ่อนกฎ: เกินกฎเดิมให้น้อยวันที่สุด
+      const [L, R] = runAround(st, x.t.id, d, p, len);
+      if (L + len + R > x.from) sc -= 1.5;
+    }
     return sc;
   }
   function placeBest(st, sess, relax) {
@@ -104,41 +127,55 @@ function ttSolve(opts) {
     return true;
   }
   // ช่วงที่ขวางตำแหน่ง (null = ขวางด้วยของคงที่/ครูไม่ว่าง แก้ไม่ได้)
-  function blockers(st, S, d, p) {
+  function blockers(st, S, d, p, relax) {
     const l = S.l;
     if (!fits(l, d, p, S.len)) return null;
     const set = new Set();
     for (let q = p; q < p + S.len; q++) {
       const s = sidx(d, q);
-      if (l.teacher_ids.some(t => unav[t].has(s)) || avoidOf(l).includes(q)) return null;
+      if (l.teacher_ids.some(t => unav[t].has(s)) || (!relax && avoidOf(l).includes(q))) return null;
       for (const e of st.at[s]) {
         const hit = e.l.teacher_ids.some(t => l.teacher_ids.includes(t)) || (e.l.classes.some(c => l.classes.includes(c)) && classOverlap(l, e.l));
         if (hit) { if (!e.sess) return null; set.add(e.sess); }
       }
     }
+    if (relax) return [...set];                   // ผ่อนกฎที่ตั้งได้: เหลือแค่ครูซ้อน/ห้องชน/ครูไม่ว่าง
     if (!sameDayOk(l)) {
       if (st.fixedDay[l.id] && st.fixedDay[l.id][d]) return null;
       for (const x of (st.byLesson.get(l.id) || [])) if (x !== S && st.pos.get(x)[0] === d) set.add(x);
     }
+    // สอนติดกันเกินกฎ → ย้ายช่วงที่อยู่ติดกันของครูคนนั้นออก (ข้างเดียวถ้าพอ ไม่งั้นทั้งสองข้าง)
+    if (l.classes.length) for (const t of l.teacher_ids) {
+      const mx = maxRun[t];
+      if (mx >= 99) continue;
+      const [L, R] = runAround(st, t, d, p, S.len);
+      if (L + S.len + R <= mx) continue;
+      const nb = q => st.at[sidx(d, q)].find(e => e.l.classes.length && e.l.teacher_ids.includes(t));
+      const left = L ? nb(p - 1) : null, right = R ? nb(p + S.len) : null;
+      if (left && left.sess && S.len + R <= mx) set.add(left.sess);
+      else if (right && right.sess && L + S.len <= mx) set.add(right.sess);
+      else if ((!L || (left && left.sess)) && (!R || (right && right.sess))) { if (left) set.add(left.sess); if (right) set.add(right.sess); }
+      else return null;
+    }
     return [...set];
   }
-  function repair(st, iters) {
+  function repair(st, iters, relax) {
     for (let it = 0; it < iters; it++) {
       const un = sessions.filter(s => !st.pos.has(s));
       if (!un.length) return;
       const S = un[Math.floor(Math.random() * un.length)];
       const cands = [];
       for (let d = 1; d <= ND; d++) for (let p = 1; p <= NP; p++) {
-        const b = blockers(st, S, d, p);
+        const b = blockers(st, S, d, p, relax);
         if (b && b.length <= 2) cands.push({ d, p, b, k: b.length + Math.random() * 1.5 });
       }
       cands.sort((a, b) => a.k - b.k);
       for (const c of cands.slice(0, 5)) {
         const saved = c.b.map(x => [x, st.pos.get(x)]);
         saved.forEach(([x]) => vacate(st, x));
-        if (!canPlace(st, S.l, c.d, c.p, S.len)) { saved.forEach(([x, pos]) => occupy(st, x.l, pos[0], pos[1], x.len, x)); continue; }
+        if (!canPlace(st, S.l, c.d, c.p, S.len, relax)) { saved.forEach(([x, pos]) => occupy(st, x.l, pos[0], pos[1], x.len, x)); continue; }
         occupy(st, S.l, c.d, c.p, S.len, S);
-        const failed = saved.filter(([x]) => !placeBest(st, x));
+        const failed = saved.filter(([x]) => !placeBest(st, x) && !(relax && placeBest(st, x, true)));
         if (failed.length === 0 || (failed.length === 1 && Math.random() < 0.35)) break;   // สำเร็จ / เดินข้าง (หนีทางตัน)
         // ย้อนกลับ
         vacate(st, S);
@@ -162,15 +199,24 @@ function ttSolve(opts) {
         if (roots.some(t => !cov.has(t))) mis++;
       }
     });
-    return { unplaced, misaligned: mis, score: -unplaced * 100 - mis * 3 };
+    let over = 0;                                 // ครูที่ผ่อนกฎ: จำนวนช่วงที่ติดกันเกินกฎเดิม (ยิ่งน้อยยิ่งดี)
+    for (const x of runRaised) {
+      const tt = st.tTeach[x.t.id];
+      if (tt) for (let d = 1; d <= ND; d++) for (const [a, b] of [[1, LA], [LA + 1, NPS]]) {
+        let k = 0;
+        for (let p = a; p <= b + 1; p++) { if (p <= b && tt[sidx(d, p)]) k++; else { if (k > x.from) over++; k = 0; } }
+      }
+    }
+    return { unplaced, misaligned: mis, over, score: -unplaced * 100 - mis * 3 - over * 4 };
   }
 
   return {
-    sessions, skipped, fixed,
+    sessions, skipped, fixed, runRaised,
     async run(restarts, onProgress) {
       let best = null;
+      const tLoad = {}; T.teachers.forEach(t => { tLoad[t.id] = maxRun[t.id] < 99 ? teachLoad(t.id) : 0; });
       const base = sessions.map(s => ({ s, k: s.len * 3 + s.l.classes.length * 2 + s.l.teacher_ids.length + (tracksOf(s.l).length ? 4 : 0)
-        + s.l.teacher_ids.reduce((a, t) => a + unav[t].size / 5, 0) + avoidOf(s.l).length }));
+        + s.l.teacher_ids.reduce((a, t) => a + unav[t].size / 5 + (tLoad[t] || 0) / 8, 0) + avoidOf(s.l).length }));
       let lastYield = performance.now();
       for (let r = 0; r < restarts; r++) {
         const st = newState();
@@ -182,9 +228,11 @@ function ttSolve(opts) {
         if (performance.now() - lastYield > 30) { await yieldUI(); lastYield = performance.now(); }
         if (best.ev.unplaced === 0 && best.ev.misaligned === 0) break;
       }
-      // ช่วงที่ยังเหลือ: ลองวางแบบผ่อนกฎที่ตั้งได้ (ไม่ผ่อนครูซ้อน/ห้องชน/ครูไม่ว่าง)
-      const relaxed = [];
-      sessions.filter(s => !best.st.pos.has(s)).forEach(s => { if (placeBest(best.st, s, true)) relaxed.push(s); });
+      // ช่วงที่ยังเหลือ: ซ่อม + วางแบบผ่อนกฎที่ตั้งได้ (ไม่ผ่อนครูซ้อน/ห้องชน/ครูไม่ว่าง)
+      const pending = sessions.filter(s => !best.st.pos.has(s));
+      if (pending.length) repair(best.st, 400, true);
+      sessions.filter(s => !best.st.pos.has(s)).forEach(s => placeBest(best.st, s, true));
+      const relaxed = pending.filter(s => best.st.pos.has(s));
       const left = sessions.filter(s => !best.st.pos.has(s));
       return { ev: evaluate(best.st), st: best.st, relaxed, left };
     },
@@ -205,7 +253,9 @@ function openSolveModal() {
     <label class="d-block mb-2"><input type="radio" name="svMode" value="fill"> วางเฉพาะคาบที่ยังไม่ได้วาง <span class="text-muted small">(ของเดิมอยู่ที่เดิม)</span></label>
     <label class="form-label small mb-0">ความละเอียดการค้นหา</label>
     <select id="svRounds" class="form-select form-select-sm w-auto mb-2"><option value="40">ปกติ (40 รอบ)</option><option value="150">ละเอียด (150 รอบ)</option></select>
-    <div class="small text-muted">กฎที่ใช้: ครูไม่สอนซ้อน · ห้อง/สายไม่ชน · ครูไม่ว่าง · คาบคู่ · วิชาไม่ซ้ำวัน · เลี่ยงคาบ · ครูสอนไม่เกินวันละ N คาบ · พยายามให้วิชาต่างสายเรียนพร้อมกัน</div>
+    <div class="small text-muted">กฎที่ใช้: ครูไม่สอนซ้อน · ห้อง/สายไม่ชน · ครูไม่ว่าง · คาบคู่ · วิชาไม่ซ้ำวัน · เลี่ยงคาบ · ครูสอนไม่เกินวันละ N คาบ
+      · ${T.term.config.max_run ? `<b>ครูสอนติดกันไม่เกิน ${T.term.config.max_run} คาบ</b>` : 'ครูสอนติดกัน: ไม่จำกัด'} <span class="text-nowrap">(แก้ที่ เครื่องมือ → กฎของครูทุกคน)</span>
+      · พยายามให้วิชาต่างสายเรียนพร้อมกัน</div>
     <div class="progress mt-3" style="height:20px;display:none" id="svProg"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div></div>
     <div id="svResult" class="mt-2"></div>`;
   showModal('<i class="bi bi-cpu"></i> จัดตารางอัตโนมัติ', body,
@@ -231,11 +281,12 @@ async function runSolve() {
   const left = res.left.reduce((a, s) => a + s.len, 0), placed = need - left;
   const lines = [
     `<div class="alert ${left ? 'alert-warning' : 'alert-success'} py-2 mb-2">วางได้ <b>${placed}/${need}</b> คาบ ${left ? `· ยังวางไม่ได้ <b>${left}</b> คาบ` : '✓ ครบ'} · ใช้เวลา ${((performance.now() - t0) / 1000).toFixed(1)} วินาที</div>`,
-    res.relaxed.length ? `<div class="small mb-1">⚠ ผ่อนกฎที่ตั้งไว้ (ซ้ำวัน/เลี่ยงคาบ/เกินวันละ N) เพื่อวาง ${res.relaxed.length} ช่วง: ${res.relaxed.map(s => esc(lessonName(s.l) + ' ' + classLabel(s.l))).join(', ')}</div>` : '',
+    res.relaxed.length ? `<div class="small mb-1">⚠ ผ่อนกฎที่ตั้งไว้ (ซ้ำวัน/เลี่ยงคาบ/เกินวันละ N/สอนติดกันเกิน N) เพื่อวาง ${res.relaxed.length} ช่วง: ${res.relaxed.map(s => esc(lessonName(s.l) + ' ' + classLabel(s.l))).join(', ')}</div>` : '',
     res.left.length ? `<div class="small mb-1 text-danger">✖ วางไม่ได้ (ครูหรือห้องไม่มีช่องว่างตรงกัน): ${res.left.map(s => esc(lessonName(s.l) + ' ' + classLabel(s.l) + ' (' + s.l.teacher_ids.map(teacherShort).join(',') + ')' + (s.len === 2 ? ' [คาบคู่]' : ''))).join(', ')}</div>` : '',
     leftDbl.length ? `<div class="alert alert-warning py-2 px-2 small mb-2 d-flex flex-wrap align-items-center gap-2">
       <div class="me-auto">คาบคู่ <b>${leftDbl.length}</b> วิชาหาช่องติดกัน 2 คาบไม่ได้ — แยกเป็นคาบเดี่ยวแล้วให้ระบบจัดใหม่ได้เลย</div>
       <button class="btn btn-sm btn-warning" onclick="splitLeftAndRerun(this)">✂ แยกคาบคู่แล้วจัดใหม่</button></div>` : '',
+    solver.runRaised.length ? `<div class="small mb-1">ℹ คาบสอนมากเกินกว่าจะทำตามกฎสอนติดกันได้ทุกวัน จึงผ่อนเฉพาะ: ${solver.runRaised.map(x => esc(`${teacherShort(x.t.id)} (${x.load} คาบ/สัปดาห์) ${x.from}→${x.to} คาบติด`)).join(', ')}</div>` : '',
     solver.skipped.length ? `<div class="small mb-1">⏭ ข้าม (ยังไม่กำหนดครู): ${solver.skipped.map(x => esc(lessonName(x.l) + ' ' + classLabel(x.l))).join(', ')}</div>` : '',
     `<div class="small text-muted">สายที่ต้องมีคาบว่างเพราะสายอื่นเรียน: ${res.ev.misaligned} ช่อง</div>`,
   ];
