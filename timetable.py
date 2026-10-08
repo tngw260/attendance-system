@@ -953,7 +953,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     members.setdefault(g, {})[t['abbr']] = codes
             for cls in cfg.get('classes', []):
                 g = cls.split('/')[0]
-                if len(members.get(g, {})) > 1:
+                if len(members.get(g, {})) > 1 and not tracks_cfg.get(cls):   # ห้องที่ตั้งสายไว้แล้ว (เช่น ม.4 มีแค่ 3 สาย) ไม่ทับ
                     tracks_cfg[cls] = list(members[g].keys())
             assigned, unknown = 0, []
             for l in con.execute('SELECT * FROM tt_lessons WHERE term_id=?', (term_id,)).fetchall():
@@ -963,10 +963,12 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 trs = members.get(classes[0].split('/')[0], {})
                 if len(trs) < 2:
                     continue
-                inside = [abbr for abbr, codes in trs.items() if l['code'] in codes]
-                if not inside:
+                conf = [a for a in (tracks_cfg.get(classes[0]) or trs) if a in trs]      # สายตามหลักสูตรที่ห้องนี้เปิดจริง
+                found = [abbr for abbr, codes in trs.items() if l['code'] in codes]
+                inside = [a for a in found if a in conf]
+                if not found:
                     unknown.append(f"{l['code']} (ม.{classes[0].split('/')[0]})")
-                elif len(inside) < len(trs):
+                elif inside and len(inside) < len(conf):
                     con.execute('UPDATE tt_lessons SET track=? WHERE id=?', (','.join(inside), l['id']))
                     assigned += 1
             cfg['tracks'] = tracks_cfg
@@ -1138,8 +1140,9 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 elif not o and it['code'] and len(it['classes']) == 1 and 'ทั้งห้อง' not in it['note']:
                     g = it['classes'][0].split('/')[0]
                     trs = members.get(g, {})
-                    inside = [a for a, codes in trs.items() if it['code'] in codes]
-                    if 0 < len(inside) < len(trs) and all(a in ctracks.get(it['classes'][0], []) for a in inside):
+                    conf = [a for a in ctracks.get(it['classes'][0], []) if a in trs]      # สายที่ห้องเปิดจริง (เช่น ม.4 ไม่มี SPP)
+                    inside = [a for a, codes in trs.items() if it['code'] in codes and a in conf]
+                    if 0 < len(inside) < len(conf):
                         track = ','.join(inside)
                 it['track'] = track
                 note = it['note'] if it['note'] or not o else (o['note'] if o['note'] != 'ยังไม่กำหนดครู' else '')
