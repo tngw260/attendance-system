@@ -589,10 +589,12 @@ async function removeChip(lid, d, p) {
   await applySlots({ lesson_id: lid, add: [], remove: [[d, p]] }, true);
 }
 
+// ล็อก/ปลดล็อกทั้งช่วงที่ติดกัน (คาบคู่ = 2 ช่องพร้อมกัน) — ล็อกครึ่งเดียว จัดอัตโนมัติจะย้ายอีกครึ่งไปวันอื่นจนคู่แตก
 async function toggleLock(lid, d, p) {
   const l = lessonById(lid), lk = lockedAt(l, d, p) ? 0 : 1;
-  await applySlots({ lesson_id: lid, lock: [[d, p, lk]] }, false);
-  toastEd(lk ? '🔒 ล็อกช่องนี้แล้ว (จัดอัตโนมัติจะไม่ย้าย)' : 'ปลดล็อกแล้ว');
+  const ps = (sessionsOf(l).find(s => s.d === d && s.ps.includes(p)) || { ps: [p] }).ps;
+  await applySlots({ lesson_id: lid, lock: ps.map(q => [d, q, lk]) }, false);
+  toastEd(lk ? `🔒 ล็อกแล้ว${ps.length > 1 ? ` (คาบคู่ ${ps.length} ช่อง)` : ''} — จัดอัตโนมัติจะไม่ย้าย` : `ปลดล็อกแล้ว${ps.length > 1 ? ` (${ps.length} ช่อง)` : ''}`);
 }
 
 async function applySlots(body, pushUndo) {

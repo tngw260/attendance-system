@@ -34,6 +34,8 @@ function ttSolve(opts) {
   const rootsOf = c => (rootsCache[c] = rootsCache[c] || classRoots(c));
   const hereOf = (st, c, s) => st.at[s].filter(e => e.l.classes.includes(c)).map(e => e.l);
 
+  // วิชาของนักเรียนวางได้ถึงคาบสุดท้ายของนักเรียน (คาบของครูหลังเลิกเรียน เช่น PLC ไม่ใช้)
+  const NPS = T.term.config.periods.filter(x => !x.teacher_only).length || NP;
   // ── เตรียม: ช่องคงที่ + ช่วงที่ต้องวาง ──
   const fixed = [], sessions = [], skipped = [];
   T.lessons.forEach(l => {
@@ -45,10 +47,17 @@ function ttSolve(opts) {
     if (!l.teacher_ids.length && !l.classes.length) return;
     if (isSub(l) && !l.teacher_ids.length) { skipped.push({ l, n: need, why: 'ยังไม่กำหนดครู' }); return; }
     const dbl = wantsDouble(l);
+    // คาบคู่ที่ล็อกไว้ช่องเดียว → อีกคาบต้องอยู่ติดกันวันเดียวกัน (anchor) ไม่งั้นคู่แตก
+    if (dbl && mode !== 'fill') {
+      const lk = new Set(keep.map(s => `${s[0]}-${s[1]}`));
+      keep.forEach(([d, p]) => {
+        if (need <= 0 || [p - 1, p + 1].some(q => lk.has(`${d}-${q}`) && Math.min(p, q) !== LA)) return;
+        const ps = [p - 1, p + 1].filter(q => q >= 1 && q <= NPS && Math.min(p, q) !== LA && !lk.has(`${d}-${q}`));
+        if (ps.length) { sessions.push({ l, len: 1, anchor: { d, ps } }); need--; }
+      });
+    }
     while (need > 0) { const len = dbl && need >= 2 ? 2 : 1; sessions.push({ l, len }); need -= len; }
   });
-  // วิชาของนักเรียนวางได้ถึงคาบสุดท้ายของนักเรียน (คาบของครูหลังเลิกเรียน เช่น PLC ไม่ใช้)
-  const NPS = T.term.config.periods.filter(x => !x.teacher_only).length || NP;
   const fits = (l, d, p, len) => p + len - 1 <= (l.classes.length ? NPS : NP) && !(len === 2 && p === LA);
   // สอนติดกัน: นับคาบที่ครูอยู่กับนักเรียน (tTeach) ต่อจากช่วงที่จะวาง ทั้งซ้าย-ขวา ภายในช่วงเช้า/บ่าย
   function runAround(st, t, d, p, len) {
@@ -123,15 +132,16 @@ function ttSolve(opts) {
     st.byLesson.get(l.id).delete(sess);
   }
   // วางได้ไหม (relax = ข้ามกฎที่ตั้งได้ ใช้ตอนสุดท้ายถ้าวางไม่ลงจริง ๆ)
-  function canPlace(st, l, d, p, len, relax) {
+  function canPlace(st, l, d, p, len, relax, sess) {
     if (!fits(l, d, p, len)) return false;
+    if (sess && sess.anchor && !relax && (d !== sess.anchor.d || !sess.anchor.ps.includes(p))) return false;   // ครบคู่กับช่องที่ล็อก
     for (let q = p; q < p + len; q++) {
       const s = sidx(d, q);
       for (const t of l.teacher_ids) if ((st.tBusy[t] && st.tBusy[t][s]) || unav[t].has(s)) return false;
       for (const e of st.at[s]) if (e.l.classes.some(c => l.classes.includes(c)) && classOverlap(l, e.l)) return false;
       if (!relax && avoidOf(l).includes(q)) return false;
     }
-    if (!relax && !sameDayOk(l) && st.dayUse[l.id] && st.dayUse[l.id][d] > 0) return false;
+    if (!relax && !(sess && sess.anchor) && !sameDayOk(l) && st.dayUse[l.id] && st.dayUse[l.id][d] > 0) return false;
     if (!relax && isSub(l)) for (const t of l.teacher_ids) if (((st.tDay[t] && st.tDay[t][d]) || 0) + len > maxDay[t]) return false;
     if (!relax && !runOk(st, l, d, p, len)) return false;
     if (!relax) for (const t of l.teacher_ids) if (pairBlocked(st, t, d, p, len)) return false;
@@ -160,7 +170,7 @@ function ttSolve(opts) {
   function placeBest(st, sess, relax) {
     let best = null, bs = -1e9;
     for (let d = 1; d <= ND; d++) for (let p = 1; p <= NP; p++) {
-      if (!canPlace(st, sess.l, d, p, sess.len, relax)) continue;
+      if (!canPlace(st, sess.l, d, p, sess.len, relax, sess)) continue;
       const sc = score(st, sess.l, d, p, sess.len);
       if (sc > bs) { bs = sc; best = [d, p]; }
     }
@@ -172,6 +182,7 @@ function ttSolve(opts) {
   function blockers(st, S, d, p, relax) {
     const l = S.l;
     if (!fits(l, d, p, S.len)) return null;
+    if (S.anchor && !relax && (d !== S.anchor.d || !S.anchor.ps.includes(p))) return null;
     const set = new Set();
     for (let q = p; q < p + S.len; q++) {
       const s = sidx(d, q);
@@ -182,7 +193,7 @@ function ttSolve(opts) {
       }
     }
     if (relax) return [...set];                   // ผ่อนกฎที่ตั้งได้: เหลือแค่ครูซ้อน/ห้องชน/ครูไม่ว่าง
-    if (!sameDayOk(l)) {
+    if (!sameDayOk(l) && !S.anchor) {
       if (st.fixedDay[l.id] && st.fixedDay[l.id][d]) return null;
       for (const x of (st.byLesson.get(l.id) || [])) if (x !== S && st.pos.get(x)[0] === d) set.add(x);
     }
@@ -224,7 +235,7 @@ function ttSolve(opts) {
       for (const c of cands.slice(0, 5)) {
         const saved = c.b.map(x => [x, st.pos.get(x)]);
         saved.forEach(([x]) => vacate(st, x));
-        if (!canPlace(st, S.l, c.d, c.p, S.len, relax)) { saved.forEach(([x, pos]) => occupy(st, x.l, pos[0], pos[1], x.len, x)); continue; }
+        if (!canPlace(st, S.l, c.d, c.p, S.len, relax, S)) { saved.forEach(([x, pos]) => occupy(st, x.l, pos[0], pos[1], x.len, x)); continue; }
         occupy(st, S.l, c.d, c.p, S.len, S);
         const failed = saved.filter(([x]) => !placeBest(st, x) && !(relax && placeBest(st, x, true)));
         if (failed.length === 0 || (failed.length === 1 && Math.random() < 0.35)) break;   // สำเร็จ / เดินข้าง (หนีทางตัน)
@@ -241,7 +252,7 @@ function ttSolve(opts) {
   function tryMove(st, S, d, p1) {
     const [d0, p0] = st.pos.get(S);
     vacate(st, S);
-    let ok = p1 >= 1 && canPlace(st, S.l, d, p1, S.len);
+    let ok = p1 >= 1 && canPlace(st, S.l, d, p1, S.len, false, S);
     for (let r = p0; ok && r < p0 + S.len; r++) if (REQ.has(r) && S.l.classes.some(c2 => isHole(st, c2, d0, r))) ok = false;
     occupy(st, S.l, ok ? d : d0, ok ? p1 : p0, S.len, S);
     return ok;
@@ -266,8 +277,8 @@ function ttSolve(opts) {
       for (const W of whole) {
         const [d2, p2] = st.pos.get(W), xs = occ.map(e => e.sess);
         vacate(st, W); xs.forEach(x => vacate(st, x));
-        let ok = canPlace(st, W.l, d, q, 1);
-        if (ok) { occupy(st, W.l, d, q, 1, W); ok = xs.every(x => { if (!canPlace(st, x.l, d2, p2, 1)) return false; occupy(st, x.l, d2, p2, 1, x); return true; }); }
+        let ok = canPlace(st, W.l, d, q, 1, false, W);
+        if (ok) { occupy(st, W.l, d, q, 1, W); ok = xs.every(x => { if (!canPlace(st, x.l, d2, p2, 1, false, x)) return false; occupy(st, x.l, d2, p2, 1, x); return true; }); }
         if (ok) break;
         // คืนที่เดิมทั้งหมด
         xs.forEach(x => { if (st.pos.has(x)) vacate(st, x); });
@@ -345,7 +356,7 @@ function ttSolve(opts) {
             if (!b || b.length > 2 || b.includes(X)) continue;
             const moved = [X, ...b].map(Y => [Y, st.pos.get(Y)]);
             moved.forEach(([Y]) => vacate(st, Y));
-            let ok = canPlace(st, X.l, d2, p2, X.len);
+            let ok = canPlace(st, X.l, d2, p2, X.len, false, X);
             if (ok) { occupy(st, X.l, d2, p2, X.len, X); ok = b.every(Y => placeBest(st, Y)); }
             const sc = ok ? evaluate(st).score : -Infinity;
             if (sc > base) { base = sc; improved = true; break; }
