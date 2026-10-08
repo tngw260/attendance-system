@@ -482,7 +482,7 @@ function mobileHTML(mode, key) {
       const cur = d === today && hhmm >= x.start && hhmm < x.end;
       const txt = ls.length ? ls.map(l => mode === 'teacher'
           ? `<b>${esc(lessonName(l))}</b> ${esc(classLabel(l))}`
-          : `<b>${esc(lessonName(l))}</b> ${esc(l.teacher_ids.map(teacherShort).join(', '))}`).join('<br>') : 'ว่าง';
+          : `<b>${esc(lessonName(l))}</b> ${esc(l.teacher_ids.length > 2 ? `ครู ${l.teacher_ids.length} ท่าน` : l.teacher_ids.map(teacherShort).join(', '))}`).join('<br>') : 'ว่าง';
       const cls = !ls.length ? ' free' : ls.every(l => l.kind === 'activity') ? ' act' : '';
       html += `<div class="row1${cur ? ' now' : ''}${cls}"><div class="t"><b>คาบ ${x.no}</b><br>${esc(x.start)}-${esc(x.end)}</div><div class="s">${txt}</div></div>`;
     });
@@ -570,8 +570,8 @@ async function printDoc(all) {
   if (all) setTimeout(render, 500);
 }
 </script>
-<script src="/js/tt-editor.js?v=23"></script>
-<script src="/js/tt-solver.js?v=8"></script>
+<script src="/js/tt-editor.js?v=24"></script>
+<script src="/js/tt-solver.js?v=9"></script>
 <script src="/js/tt-subs.js?v=4"></script>
 </body>
 </html>

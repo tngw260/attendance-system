@@ -32,7 +32,9 @@ const wantsDouble = l => !!(l.options || {}).double && !noDoubleTeacher(l);
 const maxRunOf = tid => +((((IDX.teachers[tid] || {}).constraints || {}).max_run) || T.term.config.max_run || 0);
 const runSegments = () => [[1, lunchAfter()], [lunchAfter() + 1, periodsFor('class').length]];
 // คาบที่อยู่กับนักเรียนต่อสัปดาห์ (รายการที่มีชั้น ตามจำนวนคาบ/สัปดาห์)
-const teachLoad = tid => T.lessons.filter(l => l.classes.length && l.teacher_ids.includes(tid)).reduce((a, l) => a + l.per_week, 0);
+// คาบสอน = อยู่กับนักเรียน (รายการที่มีชั้น) ยกเว้นประชุม (เช่น ประชุมสุดสัปดาห์ที่นักเรียนเข้าร่วม) — ใช้กับกฎสอนติดกัน
+const teachesStudents = l => l.classes.length > 0 && !isMeeting(l);
+const teachLoad = tid => T.lessons.filter(l => teachesStudents(l) && l.teacher_ids.includes(tid)).reduce((a, l) => a + l.per_week, 0);
 // สอนได้สูงสุดกี่คาบ/สัปดาห์ ถ้าห้ามติดกันเกิน m: ช่วงว่างยาว k คาบ สอนได้ k − ⌊k/(m+1)⌋ (คาบไม่ว่าง/ประชุม/PLC ตัดช่วง)
 function runCapacity(tid, m) {
   const map = IDX.byTeacher[tid] || {}, un = new Set((((IDX.teachers[tid] || {}).constraints || {}).unavailable || []).map(([d, p]) => `${d}-${p}`));
@@ -40,7 +42,7 @@ function runCapacity(tid, m) {
   for (let d = 1; d <= DAYS.length; d++) for (const [a, b] of runSegments()) {
     let k = 0;
     for (let p = a; p <= b + 1; p++) {
-      if (p <= b && !un.has(`${d}-${p}`) && !(map[`${d}-${p}`] || []).some(x => !x.classes.length)) { k++; continue; }
+      if (p <= b && !un.has(`${d}-${p}`) && !(map[`${d}-${p}`] || []).some(x => !teachesStudents(x))) { k++; continue; }
       cap += k - Math.floor(k / (m + 1)); k = 0;
     }
   }
@@ -59,7 +61,7 @@ function teacherRuns(tid) {                       // [{d, s, e}] ช่วงท
   for (let d = 1; d <= DAYS.length; d++) for (const [a, b] of runSegments()) {
     let s = 0;
     for (let p = a; p <= b + 1; p++) {
-      const on = p <= b && (map[`${d}-${p}`] || []).some(x => x.classes.length);
+      const on = p <= b && (map[`${d}-${p}`] || []).some(teachesStudents);
       if (on && !s) s = p;
       if (!on && s) { out.push({ d, s, e: p - 1 }); s = 0; }
     }
@@ -126,11 +128,11 @@ function conflictsAt(l, d, p) {
       out.push({ hard: l.kind === 'subject', msg: `${teacherShort(tid)} ไม่ว่างคาบนี้ (${unavReason(tid)})` });
   });
   if (l.classes.length && isStaffPeriod(p)) out.push({ hard: true, msg: `คาบ ${p} เป็นคาบของครูหลังเลิกเรียน นักเรียนไม่มีเรียน` });
-  if (l.classes.length && !isStaffPeriod(p)) l.teacher_ids.forEach(tid => {      // วางแล้วครูสอนติดกันเกินกฎไหม
+  if (teachesStudents(l) && !isStaffPeriod(p)) l.teacher_ids.forEach(tid => {      // วางแล้วครูสอนติดกันเกินกฎไหม
     const mx = maxRunOf(tid);
     if (!mx) return;
     const from = ED.picked && ED.picked.lid === l.id && ED.picked.from && ED.picked.from[0] === d ? ED.picked.from[1] : 0;
-    const on = q => q === p || (q !== from && ((IDX.byTeacher[tid] || {})[`${d}-${q}`] || []).some(x => x.classes.length));
+    const on = q => q === p || (q !== from && ((IDX.byTeacher[tid] || {})[`${d}-${q}`] || []).some(teachesStudents));
     const seg = runSegments().find(([a, b]) => p >= a && p <= b);
     if (!seg) return;
     const [a, b] = seg;
@@ -634,7 +636,7 @@ function openLessonModal(id, prefill) {
       <div class="col-5"><label class="form-label small mb-0">รหัสวิชา</label><input id="lfCode" class="form-control form-control-sm" value="${esc(l.code)}" placeholder="เช่น ค21102"></div>
       <div class="col-7"><label class="form-label small mb-0">ชื่อวิชา / ชื่อกิจกรรม</label><input id="lfName" class="form-control form-control-sm" value="${esc(l.code ? (T.subjects[l.code]?.name || '') : l.title)}" placeholder="เช่น คณิตศาสตร์ 2 / ชุมนุม"></div>
     </div>
-    <label class="form-label small mb-0 mt-2">ชั้น</label>
+    <label class="form-label small mb-0 mt-2">ชั้น <a href="#" class="ms-2" onclick="document.querySelectorAll('.lfCls').forEach(x => x.checked = true); return false;">เลือกทุกชั้น</a></label>
     <div>${IDX.classes.map(c => `<label class="me-3"><input type="checkbox" class="lfCls" value="${c}" ${l.classes.includes(c) ? 'checked' : ''}> ${classShort(c)}</label>`).join('')}</div>
     <label class="form-label small mb-0 mt-2">สาย/กลุ่มผู้เรียน <span class="text-muted">(ไม่เลือก = ทั้งห้อง · วิชาต่างสายเรียนพร้อมกันได้)</span></label>
     <div id="lfTracks">${trackNames.length ? trackNames.map(t => `<label class="me-3"><input type="checkbox" class="lfTrk" value="${esc(t)}" ${tracksOf(l).includes(t) ? 'checked' : ''}> ${esc(t)}</label>`).join('')

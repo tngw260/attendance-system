@@ -72,7 +72,7 @@ function ttSolve(opts) {
     }
     return g;
   }
-  const runOk = (st, l, d, p, len) => !l.classes.length || l.teacher_ids.every(t => {
+  const runOk = (st, l, d, p, len) => !teachesStudents(l) || l.teacher_ids.every(t => {
     if (maxRun[t] >= 99) return true;
     const [L, R] = runAround(st, t, d, p, len);
     return L + len + R <= maxRun[t];
@@ -89,7 +89,7 @@ function ttSolve(opts) {
     for (let q = p; q < p + len; q++) {
       const s = sidx(d, q);
       st.at[s].push({ l, sess });
-      l.teacher_ids.forEach(t => { arr(st.tBusy, t, NS)[s]++; if (isSub(l)) arr(st.tDay, t, ND + 1)[d]++; if (l.classes.length) arr(st.tTeach, t, NS)[s]++; });
+      l.teacher_ids.forEach(t => { arr(st.tBusy, t, NS)[s]++; if (isSub(l)) arr(st.tDay, t, ND + 1)[d]++; if (teachesStudents(l)) arr(st.tTeach, t, NS)[s]++; });
     }
     arr(st.dayUse, l.id, ND + 1)[d] += len;
     if (!sess) arr(st.fixedDay, l.id, ND + 1)[d] += len;
@@ -100,7 +100,7 @@ function ttSolve(opts) {
     for (let q = p; q < p + sess.len; q++) {
       const s = sidx(d, q), a = st.at[s];
       a.splice(a.findIndex(e => e.sess === sess), 1);
-      l.teacher_ids.forEach(t => { st.tBusy[t][s]--; if (isSub(l)) st.tDay[t][d]--; if (l.classes.length) st.tTeach[t][s]--; });
+      l.teacher_ids.forEach(t => { st.tBusy[t][s]--; if (isSub(l)) st.tDay[t][d]--; if (teachesStudents(l)) st.tTeach[t][s]--; });
     }
     st.dayUse[l.id][d] -= sess.len;
     st.pos.delete(sess);
@@ -132,7 +132,7 @@ function ttSolve(opts) {
     if (st.dayUse[l.id]) for (let dd = 1; dd <= ND; dd++) if (st.dayUse[l.id][dd] && Math.abs(dd - d) === 1) sc -= 0.6; // เว้นวัน
     if (len === 2 && p <= LA) sc += 0.3;                                                               // คาบคู่ชอบช่วงเช้า
     sc += 5 * holeGain(st, l, d, p, len);                                                              // เติมคาบที่นักเรียนห้ามว่าง
-    if (l.classes.length) for (const x of runRaised) if (l.teacher_ids.includes(x.t.id)) {            // ครูที่ผ่อนกฎ: เกินกฎเดิมให้น้อยวันที่สุด
+    if (teachesStudents(l)) for (const x of runRaised) if (l.teacher_ids.includes(x.t.id)) {            // ครูที่ผ่อนกฎ: เกินกฎเดิมให้น้อยวันที่สุด
       const [L, R] = runAround(st, x.t.id, d, p, len);
       if (L + len + R > x.from) sc -= 1.5;
     }
@@ -168,12 +168,12 @@ function ttSolve(opts) {
       for (const x of (st.byLesson.get(l.id) || [])) if (x !== S && st.pos.get(x)[0] === d) set.add(x);
     }
     // สอนติดกันเกินกฎ → ย้ายช่วงที่อยู่ติดกันของครูคนนั้นออก (ข้างเดียวถ้าพอ ไม่งั้นทั้งสองข้าง)
-    if (l.classes.length) for (const t of l.teacher_ids) {
+    if (teachesStudents(l)) for (const t of l.teacher_ids) {
       const mx = maxRun[t];
       if (mx >= 99) continue;
       const [L, R] = runAround(st, t, d, p, S.len);
       if (L + S.len + R <= mx) continue;
-      const nb = q => st.at[sidx(d, q)].find(e => e.l.classes.length && e.l.teacher_ids.includes(t));
+      const nb = q => st.at[sidx(d, q)].find(e => teachesStudents(e.l) && e.l.teacher_ids.includes(t));
       const left = L ? nb(p - 1) : null, right = R ? nb(p + S.len) : null;
       if (left && left.sess && S.len + R <= mx) set.add(left.sess);
       else if (right && right.sess && L + S.len <= mx) set.add(right.sess);
