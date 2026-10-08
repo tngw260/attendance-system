@@ -187,7 +187,7 @@
       </div>
       <div class="col-7 col-md-3 order-1 order-md-2" id="pickWrap">
         <label class="form-label small fw-600 mb-1" id="pickLabel">ครู</label>
-        <select id="selPick" class="form-select form-select-sm" onchange="view.key=this.value; render()"></select>
+        <select id="selPick" class="form-select form-select-sm" onchange="pickChanged(this.value)"></select>
       </div>
       <div class="col-12 col-md-2 d-flex gap-1 order-3">
         <button class="btn btn-success btn-sm flex-fill text-nowrap" onclick="printDoc(false)" id="btnPrint"><i class="bi bi-printer-fill me-1"></i>พิมพ์</button>
@@ -323,9 +323,16 @@ function fillPicker() {
     sel.innerHTML = list.map(t => `<option value="${t.id}">ครู${esc(t.name)}${t.id === T.me ? ' (ฉัน)' : ''}</option>`).join('');
     if (!list.some(t => String(t.id) === view.key)) view.key = String((list[0] || {}).id || '');
   } else if (view.mode === 'class') {
-    el('pickLabel').textContent = 'ห้อง'; el('allLabel').textContent = 'ห้อง';
-    sel.innerHTML = IDX.classes.map(c => `<option value="${c}">${classFull(c)}</option>`).join('');
-    if (!IDX.classes.includes(view.key)) view.key = IDX.classes[0] || '';
+    el('pickLabel').textContent = 'ห้อง / สาย';
+    // ห้องที่แยกสาย: ตารางรวมทุกสาย + ตารางของแต่ละสาย (คีย์ "4/1|SMTP")
+    const opts = IDX.classes.flatMap(c => {
+      const roots = classRoots(c);
+      if (roots.length < 2) return [[c, classFull(c)]];
+      return [[c, `${classFull(c)} (รวมทุกสาย)`], ...roots.map(r => [`${c}|${r}`, `\u00a0\u00a0\u00a0${classShort(c)} ${trackLabel(r)}`])];
+    });
+    sel.innerHTML = opts.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('');
+    if (!opts.some(([v]) => v === view.key)) view.key = IDX.classes[0] || '';
+    el('allLabel').textContent = view.key.includes('|') ? 'ห้อง แยกสาย' : 'ห้อง';
   }
   sel.value = view.key;
   const noPick = ['load', 'edit', 'sub'].includes(view.mode);
@@ -335,12 +342,18 @@ function fillPicker() {
   el('mEditLbl').style.display = T.can_edit ? '' : 'none';
 }
 
+function pickChanged(v) {
+  view.key = v;
+  if (view.mode === 'class') el('allLabel').textContent = v.includes('|') ? 'ห้อง แยกสาย' : 'ห้อง';
+  render();
+}
+
 function setMode(m) {
   if (ED.preview && m !== 'edit') {                   // ออกจากหน้าจัดตารางระหว่างดูผลจัดอัตโนมัติที่ยังไม่บันทึก
     if (!confirm('ยังไม่ได้บันทึกผลจัดอัตโนมัติ — ออกจากหน้านี้แล้วผลนี้จะหายไป\nออกเลยหรือไม่?')) { el('mEdit').checked = true; return; }
     discardSolved();
   }
-  if (m === 'edit' && view.mode === 'class' && view.key) { ED.by = 'class'; ED.key = view.key; }
+  if (m === 'edit' && view.mode === 'class' && view.key) { ED.by = 'class'; ED.key = splitKey(view.key).cls; }
   if (m === 'edit' && view.mode === 'teacher' && view.key) { ED.by = 'teacher'; ED.key = view.key; }
   view.mode = m;
   el('pageRule').textContent = m === 'sub' ? '@page { size: A4 portrait; margin: 12mm 0 12mm 0; }'   // ใบสอนแทน
@@ -379,9 +392,13 @@ const periodsFor = mode => T.term.config.periods.filter(x => mode === 'teacher' 
 const staffLabel = () => T.term.config.staff_label || 'PLC';
 
 /* ===== ข้อมูลในช่อง (วัน, คาบ) ของมุมมองปัจจุบัน ===== */
+// คีย์มุมมองห้อง: "4/1" = รวมทุกสาย · "4/1|SMTP" = ตารางของสาย SMTP (วิชาทั้งห้อง + วิชาของสายนั้นและกลุ่มย่อยในสาย)
+const splitKey = key => { const [cls, tr] = String(key || '').split('|'); return { cls, tr: tr || '' }; };
+const trackLabel = t => /^กลุ่ม/.test(t) ? t : `สาย ${t}`;
 function cellLessons(mode, key, d, p) {
-  const map = mode === 'teacher' ? IDX.byTeacher[key] : IDX.byClass[key];
-  return (map && map[`${d}-${p}`]) || [];
+  if (mode === 'teacher') return ((IDX.byTeacher[key] || {})[`${d}-${p}`]) || [];
+  const { cls, tr } = splitKey(key), ls = ((IDX.byClass[cls] || {})[`${d}-${p}`]) || [];
+  return tr ? ls.filter(l => !tracksOf(l).length || tracksOf(l).some(t => trackChain(cls, t).includes(tr))) : ls;
 }
 function cellHTML(mode, ls) {
   if (!ls.length) return '';
@@ -439,7 +456,8 @@ function pageHTML(mode, key) {
     const c = teacherCounts(+key);
     box = `<div class="tt-box">คาบสอน <u>${c.teach}</u> คาบ<br>กิจกรรม <u>${c.act}</u> คาบ<br>${c.staff ? `${esc(staffLabel())} <u>${c.staff}</u> คาบ<br>` : ''}รวม <u>${c.teach + c.act + c.staff}</u> คาบ</div>`;
   } else {
-    title = `ตารางเรียนชั้น${esc(classFull(key))} ภาคเรียนที่ ${esc(termName)} ${esc(school)}`;
+    const { cls, tr } = splitKey(key);
+    title = `ตารางเรียนชั้น${esc(classFull(cls))}${tr ? ' ' + esc(trackLabel(tr)) : ''} ภาคเรียนที่ ${esc(termName)} ${esc(school)}`;
   }
   const signers = (cfg.signers || []).slice(0, 1);
   const dirTitle = (T.school.director_title || 'ผู้อำนวยการ');
@@ -562,7 +580,9 @@ async function printDoc(all) {
     window.print(); return;
   }
   if (all) {
-    const keys = view.mode === 'teacher' ? T.teachers.filter(t => IDX.byTeacher[t.id]).map(t => String(t.id)) : IDX.classes;
+    const perTrack = view.key.includes('|');            // กำลังดูตารางรายสาย → พิมพ์ทุกห้องแบบแยกสาย
+    const keys = view.mode === 'teacher' ? T.teachers.filter(t => IDX.byTeacher[t.id]).map(t => String(t.id))
+      : IDX.classes.flatMap(c => { const roots = classRoots(c); return perTrack && roots.length >= 2 ? roots.map(r => `${c}|${r}`) : [c]; });
     el('content').innerHTML = `<div class="tt-desktop-only">${keys.map(k => pageHTML(view.mode, k)).join('')}</div>`;
   }
   try { await document.fonts.ready; } catch (e) {}
