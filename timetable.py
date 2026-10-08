@@ -1370,6 +1370,28 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                         n += 1
         return jsonify(success=True, placed=n)
 
+    @app.post('/api/tt/terms/<int:term_id>/lesson-options')
+    @tt_edit_required
+    def tt_lesson_options(term_id):
+        """ตั้งคาบคู่หลายรายการพร้อมกัน {lessons: {lesson_id: {double: true|false}}} (เช่น แลปวิทยาศาสตร์)"""
+        data = (request.get_json(silent=True) or {}).get('lessons')
+        try:
+            data = {int(k): bool((v or {}).get('double')) for k, v in (data or {}).items()}
+        except (TypeError, ValueError, AttributeError):
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        with get_db() as con:
+            own = {r['id']: jl(r['options'], {}) for r in con.execute('SELECT id, options FROM tt_lessons WHERE term_id=?', (term_id,))}
+            if any(lid not in own for lid in data):
+                return jsonify(success=False, message='มีรายการที่ไม่ได้อยู่ในภาคเรียนนี้'), 400
+            for lid, dbl in data.items():
+                o = dict(own[lid] or {})
+                if dbl:
+                    o['double'] = True
+                else:
+                    o.pop('double', None)
+                con.execute('UPDATE tt_lessons SET options=? WHERE id=?', (json.dumps(o, ensure_ascii=False), lid))
+        return jsonify(success=True, updated=len(data))
+
     @app.post('/api/tt/terms/<int:term_id>/set-slots')
     @tt_edit_required
     def tt_set_slots(term_id):

@@ -413,6 +413,7 @@ function renderEditor() {
           ${act('applySuggestedTracks()', 'lightbulb', 'แนะนำสายจากตารางปัจจุบัน')}
           ${act('openImportModal()', 'file-earmark-spreadsheet', 'นำเข้ารายวิชาจาก Excel (แบบสำรวจภาระงานสอน)')}
           ${act('openClearModal()', 'eraser', 'ล้างตาราง (เอาวิชาออกจากช่อง)')}
+          ${act('openDoublesModal()', 'layout-split', 'ตั้งคาบคู่หลายวิชา (เช่น แลปวิทยาศาสตร์)')}
           ${act('openRulesModal()', 'sliders', 'กฎการจัดตาราง (สอนติดกัน · นักเรียนไม่ว่างคาบแรก)')}
           ${act('openStaffModal()', 'people', 'คาบของครูหลังเลิกเรียน (PLC)')}
           ${draftReport() ? act('showDraftReport(draftReport())', 'clipboard-check', 'รายงานการร่างภาคเรียน') : ''}
@@ -619,6 +620,61 @@ async function setSlotsBulk(map) {
   await apiFetch(`/api/tt/terms/${T.term.id}/set-slots`, { method: 'POST', body: JSON.stringify({ lessons: map }) });
   Object.entries(map).forEach(([lid, slots]) => { const L = lessonById(+lid); if (L) L.slots = slots.map(s => [s[0], s[1], s[2] ? 1 : 0]); });
   buildIndex(); renderEditor();
+}
+
+/* ── ตั้งคาบคู่หลายวิชาพร้อมกัน (เช่น แลปวิทยาศาสตร์): 3 คาบ = คู่ 1 + เดี่ยว 1 · 2 คาบ = คู่ 1 ── */
+const AREA_NAME = { 'ท': 'ภาษาไทย', 'ค': 'คณิตศาสตร์', 'ว': 'วิทยาศาสตร์และเทคโนโลยี', 'ส': 'สังคมศึกษาฯ', 'พ': 'สุขศึกษาและพลศึกษา',
+                    'ศ': 'ศิลปะ', 'ง': 'การงานอาชีพ', 'อ': 'ภาษาอังกฤษ', 'จ': 'ภาษาจีน', 'I': 'IS' };
+let DBL = null;   // ค่าที่ติ๊กในหน้าต่าง: lesson_id → true/false
+const splitLabel = (pw, dbl) => !dbl || pw < 2 ? `เดี่ยว ${pw}` : `คู่ ${Math.floor(pw / 2)}${pw % 2 ? ' + เดี่ยว 1' : ''}`;
+function openDoublesModal() {
+  if (previewGuard()) return;
+  DBL = new Map(T.lessons.map(l => [l.id, !!(l.options || {}).double]));
+  const areas = [...new Set(T.lessons.filter(l => l.kind === 'subject' && l.code).map(l => l.code[0]))].sort();
+  const body = `
+    <div class="small text-muted mb-2">ติ๊ก = เรียนติดกัน 2 คาบ (3 คาบ/สัปดาห์ → คู่ 1 + เดี่ยว 1) · จัดอัตโนมัติจะวางคาบคู่ในช่วงเช้าหรือบ่ายช่วงเดียว ไม่คร่อมพักกลางวัน</div>
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+      <select id="dbArea" class="form-select form-select-sm w-auto" onchange="drawDoubles()">
+        <option value="">ทุกกลุ่มสาระ</option>${areas.map(a => `<option value="${a}" ${a === 'ว' ? 'selected' : ''}>${esc(AREA_NAME[a] || a)}</option>`).join('')}</select>
+      <label class="small"><input type="checkbox" id="dbMulti" checked onchange="drawDoubles()"> เฉพาะวิชา 2 คาบขึ้นไป</label>
+      <button class="btn btn-sm btn-outline-secondary py-0" onclick="dblAll(true)">ติ๊กทั้งหมดที่แสดง</button>
+      <button class="btn btn-sm btn-outline-secondary py-0" onclick="dblAll(false)">ไม่ติ๊ก</button>
+    </div>
+    <div id="dbList"></div>`;
+  showModal('<i class="bi bi-layout-split"></i> ตั้งคาบคู่หลายวิชา', body, `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+    <button class="btn btn-primary btn-sm" onclick="saveDoubles()"><i class="bi bi-save"></i> บันทึก</button>`);
+  drawDoubles();
+}
+const dblShown = () => T.lessons.filter(l => l.kind === 'subject' && (!el('dbArea').value || (l.code || '')[0] === el('dbArea').value) && (!el('dbMulti').checked || l.per_week >= 2))
+  .sort((a, b) => lessonName(a).localeCompare(lessonName(b), 'th'));
+function drawDoubles() {
+  const ls = dblShown();
+  el('dbList').innerHTML = ls.length ? `<div class="table-responsive" style="max-height:55vh"><table class="table table-sm table-hover align-middle mb-0">
+    <thead class="table-light sticky-top"><tr><th class="text-center">คาบคู่</th><th>วิชา</th><th>ชั้น/สาย</th><th>ครู</th><th class="text-center">คาบ/สัปดาห์</th><th>แบ่งเป็น</th></tr></thead>
+    <tbody>${ls.map(l => { const on = DBL.get(l.id), nd = noDoubleTeacher(l); return `<tr>
+      <td class="text-center"><input type="checkbox" class="form-check-input" ${on ? 'checked' : ''} onchange="DBL.set(${l.id}, this.checked); this.closest('tr').querySelector('.db-split').textContent = splitLabel(${l.per_week}, this.checked)"></td>
+      <td><b>${esc(lessonName(l))}</b> <span class="small text-muted">${esc(T.subjects[l.code]?.name || '')}</span></td>
+      <td class="small">${esc(classLabel(l))}</td>
+      <td class="small">${esc(l.teacher_ids.map(teacherShort).join(', '))}${nd ? ` <span class="badge text-bg-warning" title="ครูตั้งเงื่อนไขไม่สอนคาบคู่ — ระบบวางทีละคาบ">ครูไม่สอนคาบคู่</span>` : ''}</td>
+      <td class="text-center">${l.per_week}</td><td class="small db-split">${splitLabel(l.per_week, on)}</td></tr>`; }).join('')}</tbody></table></div>`
+    : '<div class="text-muted small py-2">ไม่มีวิชาตามเงื่อนไขที่เลือก</div>';
+}
+function dblAll(v) { dblShown().forEach(l => DBL.set(l.id, v)); drawDoubles(); }
+async function saveDoubles() {
+  const changes = {};
+  T.lessons.forEach(l => { if (DBL.get(l.id) !== !!(l.options || {}).double) changes[l.id] = { double: DBL.get(l.id) }; });
+  const n = Object.keys(changes).length;
+  if (!n) { edModal.hide(); return; }
+  try {
+    await apiFetch(`/api/tt/terms/${T.term.id}/lesson-options`, { method: 'POST', body: JSON.stringify({ lessons: changes }) });
+    Object.entries(changes).forEach(([lid, o]) => {
+      const L = lessonById(+lid), opt = Object.assign({}, L.options || {});
+      if (o.double) opt.double = true; else delete opt.double;
+      L.options = opt;
+    });
+    edModal.hide(); buildIndex(); renderEditor();
+    toastEd(`ตั้งคาบคู่แล้ว ${n} วิชา — กด จัดอัตโนมัติ → จัดใหม่ทั้งหมด เพื่อจัดตามเงื่อนไขใหม่`);
+  } catch (e) { alert(e.message); }
 }
 
 /* ── ล้างตาราง: เอาวิชาออกจากช่อง (รายการสอนยังอยู่ครบ) ทั้งภาคเรียน / เฉพาะห้อง / เฉพาะครู · ย้อนกลับได้ ── */
