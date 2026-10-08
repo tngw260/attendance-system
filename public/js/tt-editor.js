@@ -1297,20 +1297,27 @@ function openImportModal() {
   IMP = null;
   const body = `
     <div class="small text-muted mb-2">ไฟล์แบบสำรวจภาระงานสอนจากหัวหน้ากลุ่มสาระ (ชีตละสาระ มีคอลัมน์ รหัสวิชา · รายวิชา · ชั้น · คาบ/สัปดาห์ · ครูผู้สอน · หมายเหตุ)
-      → <b>แทนรายวิชาเดิมของภาคเรียน ${esc(T.term.name)}</b> · กิจกรรม (ชุมนุม ลูกเสือ ประชุม PLC ฯลฯ) คงเดิม ·
-      วิชาที่ตรงกับของเดิมอยู่ที่เดิมในตาราง · แถวที่หมายเหตุ "นอกตาราง" ไม่นำเข้า · แถวที่ไม่มีชื่อครูใช้ครูเดิมในร่าง</div>
+      ภาคเรียน ${esc(T.term.name)} · กิจกรรม (ชุมนุม ลูกเสือ ประชุม PLC ฯลฯ) คงเดิม · วิชาที่ตรงกับของเดิมอยู่ที่เดิมในตาราง ·
+      หมายเหตุ "นอกตาราง" ไม่นำเข้า · "2 คาบคู่" / "1 คาบเดี่ยว, 2 คาบคู่" = ตั้งคาบคู่ให้ · แถวที่ไม่มีชื่อครูใช้ครูเดิมในร่าง</div>
+    <div class="mb-2">
+      <label class="d-block"><input type="radio" name="impMode" value="replace" checked onchange="importModeChanged()"> <b>แทนรายวิชาเดิมทั้งหมด</b> <span class="small text-muted">(ไฟล์แบบสำรวจครบทุกกลุ่มสาระ — วิชาเดิมที่ไม่มีในไฟล์จะถูกลบ)</span></label>
+      <label class="d-block"><input type="radio" name="impMode" value="update" onchange="importModeChanged()"> <b>อัปเดตเฉพาะวิชาที่อยู่ในไฟล์</b> <span class="small text-muted">(ไม่ลบวิชาอื่น — เช่น ไฟล์ของกลุ่มสาระเดียว)</span></label>
+    </div>
     <div class="d-flex gap-2 align-items-center">
       <input type="file" id="impFile" accept=".xlsx" class="form-control form-control-sm">
       <button class="btn btn-sm btn-primary text-nowrap" onclick="importCheck()"><i class="bi bi-search"></i> ตรวจไฟล์</button>
     </div>
     <div id="impOut" class="mt-3"></div>`;
   const foot = `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
-    <button id="impGo" class="btn btn-success btn-sm" onclick="importApply()" disabled><i class="bi bi-box-arrow-in-down"></i> นำเข้า (แทนรายวิชาเดิม)</button>`;
+    <button id="impGo" class="btn btn-success btn-sm" onclick="importApply()" disabled><i class="bi bi-box-arrow-in-down"></i> นำเข้า</button>`;
   showModal('<i class="bi bi-file-earmark-spreadsheet"></i> นำเข้ารายวิชาจาก Excel', body, foot);
 }
+const importMode = () => (document.querySelector('input[name="impMode"]:checked') || {}).value || 'replace';
+function importModeChanged() { if (el('impFile') && el('impFile').files[0]) importCheck(); }
+function importSetMode(m) { const r = document.querySelector(`input[name="impMode"][value="${m}"]`); if (r) { r.checked = true; importCheck(); } }
 async function importPost(file, apply) {
   const fd = new FormData();
-  fd.append('file', file); fd.append('apply', apply ? '1' : '0');
+  fd.append('file', file); fd.append('apply', apply ? '1' : '0'); fd.append('mode', importMode());
   const res = await fetch(`/api/tt/terms/${T.term.id}/import-load`, { method: 'POST', body: fd, credentials: 'same-origin' });
   if (res.status === 401) { location.href = '/login.html?next=' + encodeURIComponent(location.pathname + location.search); throw new Error('unauthorized'); }
   if (res.status === 403) throw new Error('สิทธิ์ไม่เพียงพอ');
@@ -1334,8 +1341,13 @@ function importPlanHTML(p, rows) {
   const changed = p.update.filter(x => x.changes.length);
   const sec = (icon, title, n, inner, open) => n ? `<details class="mb-2" ${open ? 'open' : ''}><summary class="fw-bold">${icon} ${title} (${n})</summary><div class="small mt-1">${inner}</div></details>` : '';
   const li = arr => `<ul class="mb-0 ps-3">${arr.map(x => `<li>${x}</li>`).join('')}</ul>`;
-  const lesson = x => `<b>${esc(x.label)}</b> · ${x.per_week} คาบ · ครู${esc(x.teachers)}${x.track ? ` · <span class="badge text-bg-light border">${esc(x.track)}</span>` : ''}${x.note ? ` <span class="text-muted">(${esc(x.note)})</span>` : ''}`;
-  return `
+  const lesson = x => `<b>${esc(x.label)}</b> · ${x.per_week} คาบ${x.double ? ' <span class="badge bg-secondary">คู่</span>' : ''} · ครู${esc(x.teachers)}${x.track ? ` · <span class="badge text-bg-light border">${esc(x.track)}</span>` : ''}${x.note ? ` <span class="text-muted">(${esc(x.note)})</span>` : ''}`;
+  const missing = (p.term_areas || []).filter(a => !(p.file_areas || []).includes(a));
+  const partialWarn = p.mode === 'replace' && missing.length ? `<div class="alert alert-danger py-2 small">
+      ⚠ ไฟล์นี้มีแค่กลุ่มสาระ <b>${esc((p.file_areas || []).map(a => AREA_NAME[a] || a).join(', '))}</b> — ถ้า "แทนรายวิชาเดิมทั้งหมด" วิชาของกลุ่มสาระอื่น
+      (${esc(missing.map(a => AREA_NAME[a] || a).join(', '))}) จะถูกลบ
+      <div class="mt-1"><button class="btn btn-sm btn-danger py-0" onclick="importSetMode('update')">เปลี่ยนเป็น อัปเดตเฉพาะวิชาที่อยู่ในไฟล์</button></div></div>` : '';
+  return `${partialWarn}
     <div class="mb-2">อ่านได้ ${rows} แถว →
       <span class="badge bg-success">เพิ่ม ${p.add.length}</span>
       <span class="badge bg-primary">แก้ ${changed.length}</span>
@@ -1353,7 +1365,7 @@ function importPlanHTML(p, rows) {
 async function importApply() {
   if (!IMP) return;
   const p = IMP.plan;
-  if (!confirm(`นำเข้ารายวิชาแทนของเดิมใน ${T.term.name}?\n• เพิ่ม ${p.add.length} · แก้ ${p.update.filter(x => x.changes.length).length} · ลบ ${p.remove.length} รายวิชา\n• กิจกรรมคงเดิม · วิชาเดิมอยู่ที่เดิมในตาราง`
+  if (!confirm(`${p.mode === 'update' ? 'อัปเดตเฉพาะวิชาที่อยู่ในไฟล์' : 'นำเข้ารายวิชาแทนของเดิม'} ใน ${T.term.name}?\n• เพิ่ม ${p.add.length} · แก้ ${p.update.filter(x => x.changes.length).length} · ลบ ${p.remove.length} รายวิชา\n• กิจกรรมคงเดิม · วิชาเดิมอยู่ที่เดิมในตาราง`
     + (T.term.published ? '\n\n⚠ ภาคเรียนนี้เผยแพร่แล้ว ครูเห็นการเปลี่ยนแปลงทันที' : ''))) return;
   el('impGo').disabled = true;
   try {

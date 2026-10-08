@@ -1039,8 +1039,15 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         want = ('2', str(g)) if g <= 3 else ('3', str(g - 3))
         return code if (m.group(2), m.group(3)) == want else f'{m.group(1)}{want[0]}{want[1]}{m.group(4)}'
 
-    def plan_load_import(con, term_id, rows):
-        """เทียบแถวจาก Excel กับรายวิชาเดิม → แผน (เพิ่ม/แก้/ลบ/ข้าม) + คำเตือน · ยังไม่เขียนอะไร"""
+    def double_from_note(note):
+        """หมายเหตุบอกรูปแบบคาบ: "2 คาบคู่" / "1 คาบเดี่ยว, 2 คาบคู่" → คาบคู่ · มีแต่ "คาบเดี่ยว" → ไม่คู่ · ไม่บอก → None (คงเดิม)"""
+        if 'คาบคู่' in note:
+            return True
+        return False if 'คาบเดี่ยว' in note else None
+
+    def plan_load_import(con, term_id, rows, mode='replace'):
+        """เทียบแถวจาก Excel กับรายวิชาเดิม → แผน (เพิ่ม/แก้/ลบ/ข้าม) + คำเตือน · ยังไม่เขียนอะไร
+        mode = replace (แทนรายวิชาเดิมทั้งหมด) | update (อัปเดตเฉพาะวิชาในไฟล์ ไม่ลบวิชาอื่น — ไฟล์ของกลุ่มสาระเดียว)"""
         term = term_payload(con, term_id)
         cfg = term['term']['config']
         classes_of = lambda g: [c for c in cfg.get('classes', []) if c.split('/')[0] == str(g)]
@@ -1098,7 +1105,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             if not cls:
                 plan['warnings'].append(f"ข้าม {label}: ภาคเรียนนี้ไม่มีชั้นนี้"); continue
             items.append(dict(code=code, title='' if code else r['name'], classes=cls, pw=r['pw'], teacher=r['teacher'],
-                              note=r['note'], name=r['name'], raw=r))
+                              note=r['note'], name=r['name'], raw=r, double=double_from_note(r['note'])))
 
         # 2) ครู + กลุ่ม (วิชาเดียวกัน ชั้นเดียวกัน หลายครู = นักเรียนแยกกลุ่มเรียนพร้อมกัน)
         key = lambda code, title, classes: (code or '#' + title, tuple(sorted(classes)))
@@ -1150,7 +1157,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     note = (note + ' · ' if note else '') + 'ยังไม่กำหนดครู'
                 lab = f"{it['code'] or it['title']} {it['name'] if it['code'] else ''} {', '.join('ม.' + c.split('/')[0] for c in it['classes'])}".replace('  ', ' ')
                 new = dict(code=it['code'], title=it['title'], classes=it['classes'], track=track, teacher_ids=tids,
-                           per_week=it['pw'], note=note, name=it['name'], label=lab,
+                           per_week=it['pw'], note=note, name=it['name'], label=lab, double=it.get('double'),
                            teachers=', '.join(tname.get(t, '?').split(' ')[0] for t in tids) or '-')
                 if not tids:
                     plan['warnings'].append(f'{lab}: ยังไม่มีครูผู้สอน (จัดอัตโนมัติจะข้ามวิชานี้)')
@@ -1166,19 +1173,24 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                         ch.append(f"ครู {', '.join(tname.get(t, '?').split(' ')[0] for t in o['teacher_ids']) or '-'}→{new['teachers']}")
                     if (o['track'] or '') != track:
                         ch.append(f"สาย → {track or 'ทั้งห้อง'}")
+                    if new['double'] is not None and new['double'] != bool((o['options'] or {}).get('double')):
+                        ch.append('→ คาบคู่' if new['double'] else '→ คาบเดี่ยว')
                     new.update(id=o['id'], changes=ch, slots=len(o['slots']))
                     plan['update'].append(new)
                 else:
                     plan['add'].append(new)
-            for l in cands:
+            for l in (cands if mode == 'replace' else []):
                 plan['remove'].append(dict(id=l['id'], label=f"{l['code'] or l['title']} {', '.join('ม.' + c.split('/')[0] for c in l['classes'])}",
                                            teachers=', '.join(tname.get(t, '?').split(' ')[0] for t in l['teacher_ids']) or '-', slots=len(l['slots'])))
             pool.pop(k, None)
-        for ls in pool.values():                                  # รายวิชาเดิมที่ไม่มีในไฟล์
+        for ls in (pool.values() if mode == 'replace' else []):   # รายวิชาเดิมที่ไม่มีในไฟล์
             for l in ls:
                 plan['remove'].append(dict(id=l['id'], label=f"{l['code'] or l['title']} {', '.join('ม.' + c.split('/')[0] for c in l['classes'])}",
                                            teachers=', '.join(tname.get(t, '?').split(' ')[0] for t in l['teacher_ids']) or '-', slots=len(l['slots'])))
         plan['tracks'] = {c: v for c, v in ctracks.items() if v != (cfg.get('tracks') or {}).get(c)}
+        plan['file_areas'] = sorted({r['code'][0] for r in rows if r['code']})                 # กลุ่มสาระที่มีในไฟล์ (อักษรนำรหัส)
+        plan['term_areas'] = sorted({l['code'][0] for l in old if l['code']})
+        plan['mode'] = mode
         return plan
 
     @app.post('/api/tt/terms/<int:term_id>/import-load')
@@ -1197,7 +1209,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         with get_db() as con:
             if not con.execute('SELECT 1 FROM tt_terms WHERE id=?', (term_id,)).fetchone():
                 return jsonify(success=False, message='ไม่พบภาคเรียน'), 404
-            plan = plan_load_import(con, term_id, rows)
+            mode = 'update' if request.form.get('mode') == 'update' else 'replace'
+            plan = plan_load_import(con, term_id, rows, mode)
             if request.form.get('apply') != '1':
                 return jsonify(success=True, plan=plan, rows=len(rows))
             for x in plan['remove']:
@@ -1208,13 +1221,19 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     save_subject_name(con, x['code'], x['name'])
                 vals = (x['code'], x['title'], json.dumps(x['classes']), x['track'], json.dumps(x['teacher_ids']), x['per_week'], x['note'])
                 if x.get('id'):
-                    con.execute('UPDATE tt_lessons SET code=?, title=?, classes=?, track=?, teacher_ids=?, per_week=?, note=? WHERE id=?', (*vals, x['id']))
+                    opts = jl(con.execute('SELECT options FROM tt_lessons WHERE id=?', (x['id'],)).fetchone()['options'], {}) or {}
+                    if x.get('double') is True:                    # หมายเหตุ "คาบคู่" / "คาบเดี่ยว" → ตั้งตาม · ไม่บอก → คงเดิม
+                        opts['double'] = True
+                    elif x.get('double') is False:
+                        opts.pop('double', None)
+                    con.execute('UPDATE tt_lessons SET code=?, title=?, classes=?, track=?, teacher_ids=?, per_week=?, note=?, options=? WHERE id=?',
+                                (*vals, json.dumps(opts, ensure_ascii=False), x['id']))
                     extra = con.execute('SELECT id FROM tt_slots WHERE lesson_id=? ORDER BY locked, day DESC, period DESC', (x['id'],)).fetchall()
                     for s in extra[:max(0, len(extra) - x['per_week'])]:     # คาบลด → ตัดช่องส่วนเกิน (ไม่ล็อกก่อน)
                         con.execute('DELETE FROM tt_slots WHERE id=?', (s['id'],))
                 else:
-                    con.execute("""INSERT INTO tt_lessons (term_id, code, title, kind, classes, track, teacher_ids, per_week, options, note)
-                                   VALUES (?,?,?,'subject',?,?,?,?,'{}',?)""", (term_id, *vals))
+                    con.execute("""INSERT INTO tt_lessons (term_id, code, title, kind, classes, track, teacher_ids, per_week, note, options)
+                                   VALUES (?,?,?,'subject',?,?,?,?,?,?)""", (term_id, *vals, json.dumps({'double': True} if x.get('double') else {})))
             if plan['tracks']:
                 row = con.execute('SELECT config FROM tt_terms WHERE id=?', (term_id,)).fetchone()
                 cfg = jl(row['config'], {})
