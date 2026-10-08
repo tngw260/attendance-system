@@ -69,6 +69,7 @@
     .ed-grid .ed-dayh { width: 70px; text-align: left; }
     .ed-cell { background: var(--surface,#fff); border: 1px dashed #c9d1d9; border-radius: 8px; height: 74px; vertical-align: top;
       padding: 3px; min-width: 96px; cursor: pointer; transition: background .12s; }
+    .ed-cell.track-gap { box-shadow: inset 0 0 0 2px #6f42c1; }   /* บางสายเรียน บางสายว่าง */
     .ed-cell.has-bad { box-shadow: inset 0 0 0 2px #dc3545; }
     .ed-cell.must-fill { background: #fff8e6; border: 2px dashed #f0ad4e; }   /* คาบที่นักเรียนห้ามว่าง แต่ยังว่าง */
     .ed-cell.ok { background: #e3f7e8; border-color: #4caf50; }
@@ -571,8 +572,8 @@ async function printDoc(all) {
   if (all) setTimeout(render, 500);
 }
 </script>
-<script src="/js/tt-editor.js?v=26"></script>
-<script src="/js/tt-solver.js?v=10"></script>
+<script src="/js/tt-editor.js?v=27"></script>
+<script src="/js/tt-solver.js?v=11"></script>
 <script src="/js/tt-subs.js?v=4"></script>
 </body>
 </html>

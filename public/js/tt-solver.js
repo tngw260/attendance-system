@@ -143,7 +143,7 @@ function ttSolve(opts) {
     const tr = tracksOf(l);
     for (let q = p; q < p + len; q++) {
       const s = sidx(d, q);
-      if (tr.length) sc += st.at[s].some(e => e.l.classes.some(c => l.classes.includes(c))) ? 3 : 0;   // เรียนพร้อมกับสายอื่น
+      if (tr.length) sc += st.at[s].some(e => e.l.classes.some(c => l.classes.includes(c))) ? 5 : 0;   // เรียนพร้อมกับสายอื่น
     }
     l.teacher_ids.forEach(t => { sc -= 0.5 * ((st.tDay[t] && st.tDay[t][d]) || 0); });              // กระจายภาระครู
     if (st.dayUse[l.id]) for (let dd = 1; dd <= ND; dd++) if (st.dayUse[l.id][dd] && Math.abs(dd - d) === 1) sc -= 0.6; // เว้นวัน
@@ -293,6 +293,69 @@ function ttSolve(opts) {
       }
     }
   }
+  // ทุกสายในห้องเรียนพร้อมกัน: ช่องที่บางสายว่าง → ดึงวิชาของสายที่ว่างจากช่องอื่นที่ "บางสายว่าง" เหมือนกันมาเติม (ช่องที่ครบแล้วไม่แตะ)
+  const partial = (st, c, s) => { const h = hereOf(st, c, s); return h.length > 0 && missingRoots(c, h, rootsOf(c)).length > 0; };
+  function alignTracks(st) {
+    for (const c of IDX.classes) {
+      if (rootsOf(c).length < 2) continue;
+      for (let d = 1; d <= ND; d++) for (let p = 1; p <= NPS; p++) {
+        if (!partial(st, c, sidx(d, p))) continue;
+        const miss = missingRoots(c, hereOf(st, c, sidx(d, p)), rootsOf(c));
+        const cands = [...st.pos.keys()].filter(X => X.l.classes.length === 1 && X.l.classes[0] === c && tracksOf(X.l).length
+          && tracksOf(X.l).every(t => miss.includes(trackRoot(c, t)))).sort(() => Math.random() - 0.5);
+        let moved = false;
+        for (const X of cands) {
+          const [d0, p0] = st.pos.get(X), oldS = Array.from({ length: X.len }, (_, i) => sidx(d0, p0 + i));
+          if (oldS.some(x => !partial(st, c, x))) continue;
+          for (const q of X.len === 2 ? [p, p - 1] : [p]) {
+            const newS = Array.from({ length: X.len }, (_, i) => sidx(d, q + i));
+            if (q < 1 || newS.some(x => oldS.includes(x))) continue;
+            const aff = [...oldS, ...newS], cnt = () => aff.reduce((a, x) => a + (partial(st, c, x) ? 1 : 0), 0), before = cnt();
+            if (!tryMove(st, X, d, q)) continue;
+            if (cnt() < before) { moved = true; break; }
+            tryMove(st, X, d0, p0);                                    // ไม่ดีขึ้น → กลับที่เดิม
+          }
+          if (moved) break;
+        }
+      }
+    }
+  }
+  // ซ่อมให้สายเรียนพร้อมกัน (แรงกว่า alignTracks): ย้ายวิชาเฉพาะสายจากช่องที่บางสายว่าง ไปลงอีกช่องที่สายนั้นว่างอยู่
+  // ถ้าปลายทางติดครู/วิชาอื่น → ย้ายตัวที่ขวาง (ไม่เกิน 2) ไปที่อื่น · รับเฉพาะเมื่อคะแนนรวมดีขึ้น ไม่งั้นคืนทั้งหมด
+  function alignRepair(st) {
+    let base = evaluate(st).score;
+    for (const c of IDX.classes) {
+      if (rootsOf(c).length < 2) continue;
+      for (let d = 1; d <= ND; d++) for (let p = 1; p <= NPS; p++) {
+        if (!partial(st, c, sidx(d, p))) continue;
+        const xs = st.at[sidx(d, p)].filter(e => e.sess && e.l.classes.length === 1 && e.l.classes[0] === c && tracksOf(e.l).length).map(e => e.sess);
+        let improved = false;
+        for (const X of xs) {
+          if (improved || !st.pos.has(X)) break;
+          const [dx, px] = st.pos.get(X), mine = tracksOf(X.l).map(t => trackRoot(c, t));
+          for (let d2 = 1; d2 <= ND && !improved; d2++) for (let p2 = 1; p2 + X.len - 1 <= NPS && !improved; p2++) {
+            if (d2 === dx && Math.abs(p2 - px) < X.len) continue;
+            let okT = true;                                    // ปลายทางทุกคาบ: บางสายเรียนอยู่ และสายของ X ว่าง
+            for (let q = p2; q < p2 + X.len && okT; q++) {
+              const s2 = sidx(d2, q);
+              okT = partial(st, c, s2) && mine.every(r => missingRoots(c, hereOf(st, c, s2), rootsOf(c)).includes(r));
+            }
+            if (!okT) continue;
+            const b = blockers(st, X, d2, p2);
+            if (!b || b.length > 2 || b.includes(X)) continue;
+            const moved = [X, ...b].map(Y => [Y, st.pos.get(Y)]);
+            moved.forEach(([Y]) => vacate(st, Y));
+            let ok = canPlace(st, X.l, d2, p2, X.len);
+            if (ok) { occupy(st, X.l, d2, p2, X.len, X); ok = b.every(Y => placeBest(st, Y)); }
+            const sc = ok ? evaluate(st).score : -Infinity;
+            if (sc > base) { base = sc; improved = true; break; }
+            moved.forEach(([Y]) => { if (st.pos.has(Y)) vacate(st, Y); });      // คืนที่เดิมทั้งหมด
+            moved.forEach(([Y, pos]) => occupy(st, Y.l, pos[0], pos[1], Y.len, Y));
+          }
+        }
+      }
+    }
+  }
   // คุณภาพผลลัพธ์: คาบที่ขาด (หลัก) + ช่องที่บางสายเรียนแต่สายอื่นว่าง + วิชาเดียวกันวันติดกัน
   function evaluate(st) {
     const unplaced = sessions.filter(s => !st.pos.has(s)).reduce((a, s) => a + s.len, 0);
@@ -321,7 +384,7 @@ function ttSolve(opts) {
       if (q <= NPS && missingRoots(c, hereOf(st, c, sidx(d, q)), rootsOf(c)).length) holes++;
     let pairMiss = 0;                             // วันที่ครูที่ขอคาบว่างติดกันไม่มีคู่ว่าง
     for (const t of pairList) for (let d = 1; d <= ND; d++) if (!pairOK(st, t, d, [])) pairMiss++;
-    return { unplaced, misaligned: mis, over, holes, pairMiss, score: -unplaced * 100 - mis * 3 - over * 4 - holes * 6 - pairMiss * 4 };
+    return { unplaced, misaligned: mis, over, holes, pairMiss, score: -unplaced * 100 - mis * 8 - over * 4 - holes * 6 - pairMiss * 4 };
   }
 
   return {
@@ -337,6 +400,7 @@ function ttSolve(opts) {
         base.map(x => ({ s: x.s, k: x.k + Math.random() * 3 })).sort((a, b) => b.k - a.k).forEach(x => placeBest(st, x.s));
         repair(st, 300);
         fillHoles(st);
+        alignTracks(st); alignRepair(st); alignTracks(st);
         if (pairList.length) { fixPairs(st); fixPairs(st); }
         const ev = evaluate(st);
         if (!best || ev.score > best.ev.score) best = { ev, pos: new Map(st.pos), st };
@@ -410,7 +474,7 @@ async function runSolve() {
     solver.pairList.length ? `<div class="small mb-1 ${res.ev.pairMiss ? 'text-warning-emphasis' : 'text-success'}">${res.ev.pairMiss ? '⚠' : '✓'} ครูที่ขอคาบว่างติดกัน 2 คาบทุกวัน (${solver.pairList.map(t => esc(teacherShort(t))).join(', ')}): ขาด ${res.ev.pairMiss} วัน${
       solver.pairList.some(t => solver.pairT[t] === 'soft') ? ` · คาบมากเกินกว่าจะได้ทุกวัน: ${solver.pairList.filter(t => solver.pairT[t] === 'soft').map(t => esc(`${teacherShort(t)} (ได้มากสุด ${freePairMaxDays(t)} วัน)`)).join(', ')}` : ''}</div>` : '',
     classBusyPeriods().length ? `<div class="small mb-1 ${res.ev.holes ? 'text-danger' : 'text-success'}">${res.ev.holes ? '✖' : '✓'} นักเรียนว่างในคาบที่ห้ามว่าง (คาบ ${classBusyPeriods().join(', ')}): ${res.ev.holes} ช่อง</div>` : '',
-    `<div class="small text-muted">สายที่ต้องมีคาบว่างเพราะสายอื่นเรียน: ${res.ev.misaligned} ช่อง</div>`,
+    `<div class="small mb-1 ${res.ev.misaligned ? 'text-warning-emphasis' : 'text-success'}">${res.ev.misaligned ? '⚠' : '✓'} ช่องที่บางสายเรียนแต่บางสายว่าง: ${res.ev.misaligned} ช่อง${res.ev.misaligned ? ' (ถ้าคาบเฉพาะสายไม่เท่ากัน จะเหลือแบบนี้เสมอ — ดูปุ่ม สายการเรียน)' : ''}</div>`,
   ];
   el('svResult').innerHTML = lines.join('');
   el('edModalFoot').innerHTML = `<button class="btn btn-outline-secondary btn-sm me-auto" onclick="runSolve()"><i class="bi bi-arrow-repeat"></i> จัดใหม่อีกรอบ</button>

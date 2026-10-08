@@ -135,6 +135,31 @@ function classHoles(periods = classBusyPeriods()) {      // [{cls, d, p, miss}] 
 }
 const holeLabel = h => `${classShort(h.cls)} วัน${DAYS[h.d - 1]} คาบ ${h.p}${h.miss[0] === '*' ? '' : ' (สาย ' + h.miss.join(', ') + ')'}`;
 
+// นักเรียนทุกสายในห้องต้องเรียนพร้อมกัน: ช่องที่บางสายเรียน แต่บางสายว่าง → [{cls, d, p, busy, idle}]
+function trackGaps() {
+  const out = [], n = periodsFor('class').length;
+  IDX.classes.forEach(cls => {
+    const roots = classRoots(cls);
+    if (roots.length < 2) return;
+    for (let d = 1; d <= DAYS.length; d++) for (let p = 1; p <= n; p++) {
+      const here = (IDX.byClass[cls] || {})[`${d}-${p}`] || [];
+      const idle = here.length ? missingRoots(cls, here, roots) : [];
+      if (idle.length && idle.length < roots.length) out.push({ cls, d, p, idle, busy: roots.filter(r => !idle.includes(r)) });
+    }
+  });
+  return out;
+}
+// คาบต่อสัปดาห์: เรียนทั้งห้อง + เฉพาะแต่ละสายหลัก — สายต่าง ๆ ควรมีคาบเฉพาะสายเท่ากัน ถึงจะเรียนพร้อมกันได้ทุกคาบ
+function trackBalance(cls) {
+  const roots = classRoots(cls), per = Object.fromEntries(roots.map(r => [r, 0]));
+  let whole = 0;
+  T.lessons.filter(l => l.classes.includes(cls)).forEach(l => {
+    const rs = [...new Set(tracksOf(l).map(t => trackRoot(cls, t)))].filter(r => r in per);
+    if (rs.length) rs.forEach(r => { per[r] += l.per_week; }); else whole += l.per_week;
+  });
+  return { roots, per, whole, slots: DAYS.length * periodsFor('class').length };
+}
+
 // สองรายการในห้องเดียวกันเรียนพร้อมกันไม่ได้ ถ้ามีฝั่งใดเรียนทั้งห้อง หรือสายซ้อนกัน
 // (สายเดียวกัน หรือสายย่อยกับสายแม่ของมัน · สายย่อยต่างสายแม่ / กลุ่มย่อยคนละกลุ่ม = คนละคน เรียนพร้อมกันได้)
 function classOverlap(a, b) {
@@ -267,6 +292,16 @@ function allIssues() {
     for (let d = 1; d <= DAYS.length; d++) if (!hasFreePair(dayBusy(t.id, d)))
       soft.push({ type: 'teacher', key: String(t.id), msg: `${teacherShort(t.id)} วัน${DAYS[d - 1]} ไม่มีคาบว่างติดกัน 2 คาบ${note}` });
   });
+  trackGaps().forEach(g => soft.push({ d: g.d, p: g.p, type: 'class', key: g.cls,
+    msg: `${classShort(g.cls)} สาย ${g.busy.join(', ')} เรียน แต่สาย ${g.idle.join(', ')} ว่าง (ทุกสายควรเรียนพร้อมกัน)` }));
+  IDX.classes.forEach(cls => {
+    const b = trackBalance(cls);
+    if (b.roots.length < 2) return;
+    const vals = b.roots.map(r => b.per[r]), mx = Math.max(...vals), mn = Math.min(...vals);
+    if (mx !== mn) soft.push({ type: 'class', key: cls, msg: `${classShort(cls)}: คาบเฉพาะสายไม่เท่ากัน (${b.roots.map(r => `${r} ${b.per[r]}`).join(' · ')}) — จะมีอย่างน้อย ${mx - mn} ช่องที่บางสายว่าง · ตรวจว่าวิชาเลือกตั้งสายครบไหม (ปุ่ม สายการเรียน)` });
+    const over = b.roots.filter(r => b.whole + b.per[r] > b.slots);
+    if (over.length) soft.push({ type: 'class', key: cls, msg: `${classShort(cls)}: สาย ${over.join(', ')} มีคาบเรียน ${Math.max(...over.map(r => b.whole + b.per[r]))} คาบ เกิน ${b.slots} ช่อง — วิชาที่ "เรียนทั้งห้อง" บางวิชาน่าจะเป็นวิชาเฉพาะสาย` });
+  });
   const busyP = classBusyPeriods();
   classHoles(busyP).forEach(h => soft.push({ d: h.d, p: h.p, type: 'class', key: h.cls,
     msg: `${holeLabel(h)} นักเรียนว่าง — กฎนักเรียนไม่ว่างคาบ ${busyP.join(', ')}` }));
@@ -312,6 +347,7 @@ function renderEditor() {
                   || (ED.by === 'teacher' && x.lid && lessonById(x.lid)?.teacher_ids.includes(+ED.key));
   const hardHere = issues.hard.filter(mine), softHere = issues.soft.filter(mine);
   const holesHere = new Set(ED.by === 'class' ? classHoles().filter(h => h.cls === ED.key).map(h => `${h.d}-${h.p}`) : []);
+  const gapsHere = new Map(ED.by === 'class' ? trackGaps().filter(g => g.cls === ED.key).map(g => [`${g.d}-${g.p}`, g]) : []);
 
   let head = '<tr><th class="ed-dayh"></th>';
   P.forEach(x => { head += `<th>${x.no}<div class="small fw-normal text-muted">${esc(x.start)}-${esc(x.end)}</div></th>`; if (x.no === lunchAfter()) head += '<th class="ed-lunch"></th>'; });
@@ -323,8 +359,9 @@ function renderEditor() {
     P.forEach(x => {
       const p = x.no, ls = lessonsInCell(d, p);
       const bad = hardHere.some(h => h.d === d && h.p === p);
-      const hole = holesHere.has(`${d}-${p}`);
-      body += `<td class="ed-cell${bad ? ' has-bad' : ''}${hole ? ' must-fill' : ''}" data-d="${d}" data-p="${p}"${hole ? ' title="คาบนี้นักเรียนห้ามว่าง (กฎการจัดตาราง)"' : ''}>${ls.map(l => chipHTML(l, d, p)).join('')}</td>`;
+      const hole = holesHere.has(`${d}-${p}`), gap = gapsHere.get(`${d}-${p}`);
+      const tip = hole ? 'คาบนี้นักเรียนห้ามว่าง (กฎการจัดตาราง)' : gap ? `สาย ${gap.busy.join(', ')} เรียน แต่สาย ${gap.idle.join(', ')} ว่าง` : '';
+      body += `<td class="ed-cell${bad ? ' has-bad' : ''}${hole ? ' must-fill' : ''}${gap ? ' track-gap' : ''}" data-d="${d}" data-p="${p}"${tip ? ` title="${esc(tip)}"` : ''}>${ls.map(l => chipHTML(l, d, p)).join('')}</td>`;
       if (p === lunchAfter()) body += di === 0 ? `<td class="ed-lunch" rowspan="${DAYS.length}"><div>พักกลางวัน</div></td>` : '';
     });
     body += '</tr>';
@@ -1019,6 +1056,7 @@ function drawTracks() {
     ${sug.length ? `<div class="alert alert-info py-1 px-2 small d-flex flex-wrap align-items-center gap-2">
       <span>💡 แนะนำจากตาราง: ${sug.map(([a, b]) => `<b>${esc(a.name)}</b> อยู่ใน <b>${esc(b.name)}</b>`).join(' · ')} (ไม่เคยเรียนพร้อมกัน)</span>
       <button class="btn btn-sm btn-info py-0" onclick="trkUseSuggest()">ใช้คำแนะนำ</button></div>` : ''}
+    <div id="trkBal">${trkBalanceHTML()}</div>
     ${R.length ? `<div class="table-responsive" style="max-height:55vh">
       <table class="table table-sm table-hover align-middle mb-0">
         <thead class="table-light sticky-top"><tr><th>วิชา / กิจกรรม</th><th>ครู</th>
@@ -1032,7 +1070,30 @@ function trkRename(id, v) {
   const h = el('trkH' + id); if (h) h.innerHTML = esc(trkClean(v)) || '<span class="text-danger">(ไม่มีชื่อ)</span>';
   document.querySelectorAll(`.trk-par option[value="${id}"]`).forEach(o => { o.textContent = 'อยู่ใน ' + (trkClean(v) || '(ไม่มีชื่อ)'); });
 }
-function trkParent(id, v) { TRK.rows.find(x => x.id === id).parent = v ? +v : null; }
+function trkParent(id, v) { TRK.rows.find(x => x.id === id).parent = v ? +v : null; trkBalanceUpdate(); }
+// คาบเฉพาะสายต่อสัปดาห์ของแต่ละสายหลัก ตามที่ติ๊กอยู่ (กลุ่มย่อยนับรวมสายแม่) — ควรเท่ากัน ทุกสายจึงเรียนพร้อมกันได้ทุกคาบ
+function trkBalanceHTML() {
+  const R = TRK.rows, rootOf = id => { let r = R.find(x => x.id === id), k = 0; while (r && r.parent && k++ < 6) r = R.find(x => x.id === r.parent) || r; return r ? r.id : id; };
+  const roots = R.filter(r => !r.parent);
+  if (roots.length < 2) return '';
+  const per = Object.fromEntries(roots.map(r => [r.id, 0]));
+  let whole = 0;
+  TRK.ls.forEach(l => {
+    const rs = [...new Set([...TRK.ticks.get(l.id)].map(rootOf))].filter(id => id in per);
+    if (rs.length) rs.forEach(id => { per[id] += l.per_week; }); else whole += l.per_week;
+  });
+  const slots = DAYS.length * periodsFor('class').length, vals = roots.map(r => per[r.id]), mx = Math.max(...vals), mn = Math.min(...vals);
+  const tot = r => whole + per[r.id], over = roots.filter(r => tot(r) > slots);
+  const chips = roots.map(r => `<span class="badge ${per[r.id] < mx ? 'text-bg-warning' : 'text-bg-light border'} me-1">${esc(trkClean(r.name) || '(ไม่มีชื่อ)')} ${per[r.id]} คาบ</span>`).join('');
+  const status = over.length
+    ? `<span class="text-danger">✖ สาย ${over.map(r => esc(trkClean(r.name))).join(', ')} มีคาบเรียน ${Math.max(...over.map(tot))} คาบ เกิน ${slots} ช่อง — วิชาที่เรียนทั้งห้องบางวิชาน่าจะเป็นวิชาเฉพาะสาย</span>`
+    : mx === mn ? '<span class="text-success">✓ ทุกสายมีคาบเฉพาะสายเท่ากัน — จัดให้ทุกสายเรียนพร้อมกันได้ทุกคาบ</span>'
+    : `<span class="text-warning-emphasis">⚠ ไม่เท่ากัน — จะมีอย่างน้อย ${mx - mn} ช่องที่บางสายเรียนแต่บางสายว่าง · ตรวจว่าวิชาเลือกของสายที่น้อยกว่า (สีเหลือง) ติ๊กครบไหม</span>`;
+  const subs = roots.filter(r => /^กลุ่ม/.test(trkClean(r.name))), mains = roots.filter(r => !/^กลุ่ม/.test(trkClean(r.name)));
+  const hint = subs.length && mains.length ? `<br><span class="text-muted">💡 ${subs.map(r => esc(trkClean(r.name))).join(', ')} ยังนับเป็นสายแยก — ถ้าเป็นกลุ่มย่อยของสายไหน เลือก "อยู่ใน …" ก่อน (หรือกด ใช้คำแนะนำ) ตัวเลขจะถูกต้อง</span>` : '';
+  return `<div class="small mb-2 p-2 border rounded"><b>คาบเฉพาะสายต่อสัปดาห์</b> (ควรเท่ากัน): ${chips} · เรียนทั้งห้อง ${whole} คาบ<br>${status}${hint}</div>`;
+}
+const trkBalanceUpdate = () => { const b = el('trkBal'); if (b) b.innerHTML = trkBalanceHTML(); };
 function trkUseSuggest() {
   Object.entries(TRK.suggest || {}).forEach(([id, p]) => { const r = TRK.rows.find(x => x.id === +id); if (r && !r.parent && TRK.rows.some(x => x.id === p)) r.parent = p; });
   drawTracks();
@@ -1074,6 +1135,7 @@ function trkTick(lid, id, on) {
   if (on) tk.add(id); else tk.delete(id);
   const b = el('trkAll' + lid);
   b.className = `btn btn-sm py-0 ${tk.size ? 'btn-outline-secondary' : 'btn-success'}`; b.textContent = tk.size ? 'ทั้งห้อง' : '✓ ทั้งห้อง';
+  trkBalanceUpdate();
 }
 function trkWhole(lid) { TRK.ticks.get(lid).clear(); drawTracks(); }
 async function saveTracks() {
