@@ -231,6 +231,7 @@ function renderEditor() {
         <ul class="dropdown-menu">
           ${act('applyTracks()', 'magic', 'ตั้งสายการเรียนจากโครงสร้างหลักสูตร')}
           ${act('applySuggestedTracks()', 'lightbulb', 'แนะนำสายจากตารางปัจจุบัน')}
+          ${act('openImportModal()', 'file-earmark-spreadsheet', 'นำเข้ารายวิชาจาก Excel (แบบสำรวจภาระงานสอน)')}
           ${act('openStaffModal()', 'people', 'คาบของครูหลังเลิกเรียน (PLC)')}
           ${draftReport() ? act('showDraftReport(draftReport())', 'clipboard-check', 'รายงานการร่างภาคเรียน') : ''}
           <li><hr class="dropdown-divider"></li>
@@ -928,6 +929,89 @@ function nextTermName(n) {
 function draftReport() {
   try { const n = JSON.parse(T.term.note || '{}'); return n.report ? Object.assign({ from: n.draft_from }, n.report) : null; } catch (e) { return null; }
 }
+/* ── นำเข้ารายวิชาจาก Excel "แบบสำรวจภาระงานสอน" (ชีตละกลุ่มสาระ) → แทนรายวิชาเดิม ── */
+let IMP = null;   // { file, plan }
+function openImportModal() {
+  if (previewGuard()) return;
+  IMP = null;
+  const body = `
+    <div class="small text-muted mb-2">ไฟล์แบบสำรวจภาระงานสอนจากหัวหน้ากลุ่มสาระ (ชีตละสาระ มีคอลัมน์ รหัสวิชา · รายวิชา · ชั้น · คาบ/สัปดาห์ · ครูผู้สอน · หมายเหตุ)
+      → <b>แทนรายวิชาเดิมของภาคเรียน ${esc(T.term.name)}</b> · กิจกรรม (ชุมนุม ลูกเสือ ประชุม PLC ฯลฯ) คงเดิม ·
+      วิชาที่ตรงกับของเดิมอยู่ที่เดิมในตาราง · แถวที่หมายเหตุ "นอกตาราง" ไม่นำเข้า · แถวที่ไม่มีชื่อครูใช้ครูเดิมในร่าง</div>
+    <div class="d-flex gap-2 align-items-center">
+      <input type="file" id="impFile" accept=".xlsx" class="form-control form-control-sm">
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="importCheck()"><i class="bi bi-search"></i> ตรวจไฟล์</button>
+    </div>
+    <div id="impOut" class="mt-3"></div>`;
+  const foot = `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+    <button id="impGo" class="btn btn-success btn-sm" onclick="importApply()" disabled><i class="bi bi-box-arrow-in-down"></i> นำเข้า (แทนรายวิชาเดิม)</button>`;
+  showModal('<i class="bi bi-file-earmark-spreadsheet"></i> นำเข้ารายวิชาจาก Excel', body, foot);
+}
+async function importPost(file, apply) {
+  const fd = new FormData();
+  fd.append('file', file); fd.append('apply', apply ? '1' : '0');
+  const res = await fetch(`/api/tt/terms/${T.term.id}/import-load`, { method: 'POST', body: fd, credentials: 'same-origin' });
+  if (res.status === 401) { location.href = '/login.html?next=' + encodeURIComponent(location.pathname + location.search); throw new Error('unauthorized'); }
+  if (res.status === 403) throw new Error('สิทธิ์ไม่เพียงพอ');
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || res.statusText);
+  return data;
+}
+async function importCheck() {
+  const file = el('impFile').files[0];
+  if (!file) { alert('เลือกไฟล์ Excel ก่อน'); return; }
+  el('impOut').innerHTML = '<div class="text-muted small"><span class="spinner-border spinner-border-sm"></span> กำลังอ่านไฟล์…</div>';
+  el('impGo').disabled = true;
+  try {
+    const r = await importPost(file, false);
+    IMP = { file, plan: r.plan };
+    el('impOut').innerHTML = importPlanHTML(r.plan, r.rows);
+    el('impGo').disabled = false;
+  } catch (e) { el('impOut').innerHTML = `<div class="alert alert-danger py-2 small">${esc(e.message)}</div>`; }
+}
+function importPlanHTML(p, rows) {
+  const changed = p.update.filter(x => x.changes.length);
+  const sec = (icon, title, n, inner, open) => n ? `<details class="mb-2" ${open ? 'open' : ''}><summary class="fw-bold">${icon} ${title} (${n})</summary><div class="small mt-1">${inner}</div></details>` : '';
+  const li = arr => `<ul class="mb-0 ps-3">${arr.map(x => `<li>${x}</li>`).join('')}</ul>`;
+  const lesson = x => `<b>${esc(x.label)}</b> · ${x.per_week} คาบ · ครู${esc(x.teachers)}${x.track ? ` · <span class="badge text-bg-light border">${esc(x.track)}</span>` : ''}${x.note ? ` <span class="text-muted">(${esc(x.note)})</span>` : ''}`;
+  return `
+    <div class="mb-2">อ่านได้ ${rows} แถว →
+      <span class="badge bg-success">เพิ่ม ${p.add.length}</span>
+      <span class="badge bg-primary">แก้ ${changed.length}</span>
+      <span class="badge bg-secondary">เหมือนเดิม ${p.update.length - changed.length}</span>
+      <span class="badge bg-danger">ลบ ${p.remove.length}</span>
+      <span class="badge text-bg-light border">นอกตาราง ${p.skip.length}</span></div>
+    ${sec('⚠', 'ต้องตรวจ', p.warnings.length, li(p.warnings.map(esc)), true)}
+    ${sec('🔧', 'แก้รหัสวิชาให้ตรงชั้น', p.fixes.length, li(p.fixes.map(esc)), true)}
+    ${sec('➕', 'วิชาใหม่ (รอจัดลงตาราง)', p.add.length, li(p.add.map(lesson)))}
+    ${sec('✏️', 'วิชาเดิมที่เปลี่ยน (คงช่องในตาราง)', changed.length, li(changed.map(x => `<b>${esc(x.label)}</b> · ${esc(x.changes.join(' · '))}`)))}
+    ${sec('➖', 'รายวิชาเดิมที่ไม่มีในไฟล์ (จะลบ)', p.remove.length, li(p.remove.map(x => `${esc(x.label)} · ครู${esc(x.teachers)}${x.slots ? ` · วางแล้ว ${x.slots} คาบ` : ''}`)))}
+    ${sec('ℹ', 'วิชาเลือก/เพิ่มเติมที่ยังเรียนทั้งห้อง — ถ้าเรียนบางสาย ตั้งที่ปุ่ม "สายการเรียน" หลังนำเข้า', p.notrack.length, li(p.notrack.map(esc)))}
+    ${sec('⏭', 'ไม่นำเข้า (นอกตาราง)', p.skip.length, li(p.skip.map(esc)))}`;
+}
+async function importApply() {
+  if (!IMP) return;
+  const p = IMP.plan;
+  if (!confirm(`นำเข้ารายวิชาแทนของเดิมใน ${T.term.name}?\n• เพิ่ม ${p.add.length} · แก้ ${p.update.filter(x => x.changes.length).length} · ลบ ${p.remove.length} รายวิชา\n• กิจกรรมคงเดิม · วิชาเดิมอยู่ที่เดิมในตาราง`
+    + (T.term.published ? '\n\n⚠ ภาคเรียนนี้เผยแพร่แล้ว ครูเห็นการเปลี่ยนแปลงทันที' : ''))) return;
+  el('impGo').disabled = true;
+  try {
+    const r = await importPost(IMP.file, true);
+    IMP = null;
+    edModal.hide();
+    await loadTerm(T.term.id);
+    const left = T.lessons.filter(l => l.slots.length < l.per_week).length;
+    showModal('<i class="bi bi-check-circle text-success"></i> นำเข้าแล้ว', `
+      <div class="alert alert-success py-2">${esc(r.message)}</div>
+      <div class="fw-bold mb-1">ขั้นต่อไป</div>
+      <ol class="small mb-0">
+        <li>วิชาที่ยังไม่มีครู → กด ✏️ ที่รายการนั้นแล้วเลือกครู</li>
+        <li>วิชาเลือกที่เรียนบางสาย → รายห้อง → ปุ่ม <b>สายการเรียน</b> ติ๊กสายให้ถูก</li>
+        <li>กด <b>จัดอัตโนมัติ</b> → เลือก <b>วางเฉพาะคาบที่ยังไม่ได้วาง</b> (ยังวางไม่ครบ ${left} รายการ)</li>
+      </ol>`, '<button class="btn btn-primary btn-sm" data-bs-dismiss="modal">ตกลง</button>');
+  } catch (e) { el('impGo').disabled = false; alert(e.message); }
+}
+
 /* ── คาบของครูหลังเลิกเรียน (PLC) — ต่อท้ายคาบเรียน ขึ้นเฉพาะตารางครู ── */
 function openStaffModal() {
   if (previewGuard()) return;

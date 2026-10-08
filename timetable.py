@@ -949,6 +949,243 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         return jsonify(success=True, assigned=assigned, unknown=sorted(set(unknown)),
                        message=f'ตั้งสายการเรียนให้ {assigned} รายการ' + (f' · ไม่พบในโครงสร้างหลักสูตร {len(set(unknown))} รหัส' if unknown else ''))
 
+    # ── นำเข้ารายวิชาจาก "แบบสำรวจภาระงานสอน" (Excel ของหัวหน้ากลุ่มสาระ ชีตละสาระ) ──
+    # แทนรายวิชาเดิมของภาคเรียน · กิจกรรมคงเดิม · วิชาที่ตรงกับของเดิมคงช่องในตาราง
+    THAI_DUP = re.compile(r'([\u0e31\u0e34-\u0e3a\u0e47-\u0e4e]{1,3})\1+')   # สระ/วรรณยุกต์พิมพ์ซ้ำ เช่น คณิิต, เปี่ี่ยม
+
+    def tidy(s):
+        return THAI_DUP.sub(r'\1', re.sub(r'\s+', ' ', str(s if s is not None else '')).strip())
+
+    def read_load_xlsx(f):
+        """→ แถวจากทุกชีต: หาแถวหัวตารางจากคำว่า "รหัส" + "ชั้น" แล้วอ่านคอลัมน์ตามชื่อหัว (ไม่ยึดตำแหน่ง)"""
+        import openpyxl
+        wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
+        out = []
+        for ws in wb.worksheets:
+            rows = list(ws.iter_rows(values_only=True))
+            head = next((i for i, r in enumerate(rows[:20])
+                         if any('รหัส' in tidy(c) for c in r) and any(tidy(c).startswith('ชั้น') for c in r)), None)
+            if head is None:
+                continue
+            cells = [tidy(c) for c in rows[head]]
+
+            def col(*keys):
+                return next((j for j, c in enumerate(cells) if any(k in c for k in keys)), None)
+            ci = dict(code=col('รหัส'), name=col('รายวิชา', 'ชื่อวิชา'), cls=col('ชั้น'), credit=col('หน่วยกิต'),
+                      pw=col('คาบ'), teacher=col('ครู'), note=col('หมายเหตุ'))
+            for n, r in enumerate(rows[head + 1:], start=head + 2):
+                def get(k):
+                    j = ci[k]
+                    return r[j] if j is not None and j < len(r) else None
+                code, name = re.sub(r'\s+', '', str(get('code') or '')), tidy(get('name'))
+                if not code and not name:
+                    continue
+                cls = tidy(get('cls'))
+                m = re.search(r'(\d)\s*[-–]\s*(\d)', cls)
+                grades = list(range(int(m.group(1)), int(m.group(2)) + 1)) if m else sorted({int(x) for x in re.findall(r'[1-6]', cls)})
+                try:
+                    pw = round(float(get('pw')))
+                except (TypeError, ValueError):
+                    try:
+                        pw = round(float(get('credit')) * 2)
+                    except (TypeError, ValueError):
+                        pw = 0
+                out.append(dict(sheet=ws.title, row=n, code=code, name=name, grades=grades, pw=pw,
+                                teacher=tidy(get('teacher')), note=tidy(get('note'))))
+        wb.close()
+        return out
+
+    def fix_code(code, g):
+        """รหัสพื้นฐาน/เพิ่มเติมบอกชั้นในหลักที่ 2-3 (ส32102 = ม.5) — ถ้าไม่ตรงชั้นที่สอน แก้ให้ตรง (หลักที่ 3 = 0 วิชาเลือกหลายชั้น ไม่แตะ)"""
+        m = re.fullmatch(r'([ก-ฮ]|I)([23])([1-3])(\d{3})', code or '')
+        if not m:
+            return code
+        want = ('2', str(g)) if g <= 3 else ('3', str(g - 3))
+        return code if (m.group(2), m.group(3)) == want else f'{m.group(1)}{want[0]}{want[1]}{m.group(4)}'
+
+    def plan_load_import(con, term_id, rows):
+        """เทียบแถวจาก Excel กับรายวิชาเดิม → แผน (เพิ่ม/แก้/ลบ/ข้าม) + คำเตือน · ยังไม่เขียนอะไร"""
+        term = term_payload(con, term_id)
+        cfg = term['term']['config']
+        classes_of = lambda g: [c for c in cfg.get('classes', []) if c.split('/')[0] == str(g)]
+        teachers = term['teachers']
+        tname = {t['id']: t['name'] for t in teachers}
+        plan = dict(add=[], update=[], remove=[], skip=[], fixes=[], warnings=[], notrack=[])
+
+        def find_teacher(raw):
+            b = THAI_DUP.sub(r'\1', bare_name(raw))
+            if not b:
+                return None
+            for t in sorted(teachers, key=lambda t: -t['active']):
+                if THAI_DUP.sub(r'\1', bare_name(t['name'])) == b:
+                    return t['id']
+            first = [t for t in teachers if bare_name(t['name']).split(' ')[0] == b.split(' ')[0]]
+            return first[0]['id'] if len(first) == 1 else None
+
+        # 1) แถว → รายการ (ข้ามนอกตาราง · รวมแถว "เรียนรวม ม.1-3" เป็นรายการเดียว)
+        items, used = [], set()
+        for i, r in enumerate(rows):
+            if i in used:
+                continue
+            label = f"{r['code']} {r['name']} ม.{','.join(map(str, r['grades']))}".strip()
+            if 'นอกตาราง' in r['note']:
+                plan['skip'].append(label); continue
+            if not r['grades'] or r['pw'] <= 0:
+                plan['warnings'].append(f"ข้าม {label} (ชีต {r['sheet']} แถว {r['row']}): ไม่มีชั้นหรือจำนวนคาบ"); continue
+            m = re.search(r'เรียนรวม\s*ม\.?\s*(\d)\s*[-–]\s*(\d)', r['note'])
+            if m:
+                lo, hi = int(m.group(1)), int(m.group(2))
+                base = re.sub(r'[\s\d]+$', '', r['name'])
+                grp = [i] + [j for j in range(i + 1, len(rows)) if rows[j]['sheet'] == r['sheet'] and j not in used
+                             and re.sub(r'[\s\d]+$', '', rows[j]['name']) == base and all(lo <= g <= hi for g in rows[j]['grades'])
+                             and 'นอกตาราง' not in rows[j]['note']]
+                used.update(grp)
+                rs = [rows[j] for j in grp]
+                codes = []
+                for x in rs:
+                    fc = fix_code(x['code'], x['grades'][0]) if x['code'] and len(x['grades']) == 1 else x['code']
+                    if fc != x['code']:
+                        plan['fixes'].append(f"{x['code']} {x['name']} ม.{x['grades'][0]} → {fc}")
+                    if fc:
+                        codes.append(fc)
+                items.append(dict(code='', title=base, classes=[c for g in range(lo, hi + 1) for c in classes_of(g)],
+                                  pw=max(x['pw'] for x in rs), teacher=next((x['teacher'] for x in rs if x['teacher']), ''),
+                                  note=f"เรียนรวม ม.{lo}-{hi} ({', '.join(codes)})", name=base, raw=r))
+                continue
+            code = r['code']
+            if code and len(r['grades']) == 1:
+                fc = fix_code(code, r['grades'][0])
+                if fc != code:
+                    plan['fixes'].append(f"{code} {r['name']} ม.{r['grades'][0]} → {fc}")
+                    code = fc
+            cls = [c for g in r['grades'] for c in classes_of(g)]
+            if not cls:
+                plan['warnings'].append(f"ข้าม {label}: ภาคเรียนนี้ไม่มีชั้นนี้"); continue
+            items.append(dict(code=code, title='' if code else r['name'], classes=cls, pw=r['pw'], teacher=r['teacher'],
+                              note=r['note'], name=r['name'], raw=r))
+
+        # 2) ครู + กลุ่ม (วิชาเดียวกัน ชั้นเดียวกัน หลายครู = นักเรียนแยกกลุ่มเรียนพร้อมกัน)
+        key = lambda code, title, classes: (code or '#' + title, tuple(sorted(classes)))
+        groups = {}
+        for it in items:
+            it['tid'] = find_teacher(it['teacher']) if it['teacher'] else None
+            if it['teacher'] and not it['tid']:
+                plan['warnings'].append(f"ไม่พบครู \"{it['teacher']}\" ในระบบ ({it['code'] or it['title']}) — ใช้ครูเดิม/ยังไม่กำหนดครู")
+            groups.setdefault(key(it['code'], it['title'], it['classes']), []).append(it)
+
+        # 3) จับคู่กับรายวิชาเดิม (คีย์เดียวกัน · ครูเดียวกันก่อน)
+        old = [l for l in term['lessons'] if l['kind'] == 'subject']
+        pool = {}
+        for l in old:
+            pool.setdefault(key(l['code'], l['title'], l['classes']), []).append(l)
+        cur = load_curriculum() or {'grades': {}}
+        members = {g: {t['abbr']: {s['code'] for s in t.get('term1', [])} | {s['next'] for s in t.get('term1', []) if s.get('next')}
+                       | {s['code'] for s in t.get('term2_only', [])} for t in info.get('tracks', [])}
+                   for g, info in cur['grades'].items()}
+        ctracks = {c: list(v) for c, v in (cfg.get('tracks') or {}).items()}
+        for k, its in groups.items():
+            cands = list(pool.get(k, []))
+            for gi, it in enumerate(its):
+                o = next((l for l in cands if it['tid'] and it['tid'] in l['teacher_ids']), cands[0] if cands else None)
+                if o:
+                    cands.remove(o)
+                tids = [it['tid']] if it['tid'] else (list(o['teacher_ids']) if o else [])
+                if len(its) > 1 and o and len(o['teacher_ids']) > 1 and not it['tid']:
+                    tids = []
+                track = o['track'] if o else ''
+                if len(its) > 1 and not track:                     # กลุ่มแยกเรียน → สาย "กลุ่ม n" ของห้อง
+                    taken = {t for c in it['classes'] for t in ctracks.get(c, [])} | {x.get('track') for x in its}
+                    n = 1
+                    while f'กลุ่ม {n}' in taken:
+                        n += 1
+                    track = f'กลุ่ม {n}'
+                    for c in it['classes']:
+                        ctracks.setdefault(c, []).append(track)
+                elif not o and it['code'] and len(it['classes']) == 1 and 'ทั้งห้อง' not in it['note']:
+                    g = it['classes'][0].split('/')[0]
+                    trs = members.get(g, {})
+                    inside = [a for a, codes in trs.items() if it['code'] in codes]
+                    if 0 < len(inside) < len(trs) and all(a in ctracks.get(it['classes'][0], []) for a in inside):
+                        track = ','.join(inside)
+                it['track'] = track
+                note = it['note'] if it['note'] or not o else (o['note'] if o['note'] != 'ยังไม่กำหนดครู' else '')
+                if not tids:
+                    note = (note + ' · ' if note else '') + 'ยังไม่กำหนดครู'
+                lab = f"{it['code'] or it['title']} {it['name'] if it['code'] else ''} {', '.join('ม.' + c.split('/')[0] for c in it['classes'])}".replace('  ', ' ')
+                new = dict(code=it['code'], title=it['title'], classes=it['classes'], track=track, teacher_ids=tids,
+                           per_week=it['pw'], note=note, name=it['name'], label=lab,
+                           teachers=', '.join(tname.get(t, '?').split(' ')[0] for t in tids) or '-')
+                if not tids:
+                    plan['warnings'].append(f'{lab}: ยังไม่มีครูผู้สอน (จัดอัตโนมัติจะข้ามวิชานี้)')
+                elif any(not next((t for t in teachers if t['id'] == x), {}).get('active', 1) for x in tids):
+                    plan['warnings'].append(f"{lab}: ครู{new['teachers']} ย้ายออกแล้ว — ใช้ปุ่ม \"โอนวิชา\" ในเงื่อนไขครู")
+                if not o and not track and it['code'][3:4] in ('0', '2') and any(ctracks.get(c) for c in it['classes']):
+                    plan['notrack'].append(lab)                    # วิชาเลือก/เพิ่มเติมในห้องที่แยกสาย — ยังเรียนทั้งห้อง
+                if o:
+                    ch = []
+                    if o['per_week'] != new['per_week']:
+                        ch.append(f"คาบ {o['per_week']}→{new['per_week']}")
+                    if sorted(o['teacher_ids']) != sorted(tids):
+                        ch.append(f"ครู {', '.join(tname.get(t, '?').split(' ')[0] for t in o['teacher_ids']) or '-'}→{new['teachers']}")
+                    if (o['track'] or '') != track:
+                        ch.append(f"สาย → {track or 'ทั้งห้อง'}")
+                    new.update(id=o['id'], changes=ch, slots=len(o['slots']))
+                    plan['update'].append(new)
+                else:
+                    plan['add'].append(new)
+            for l in cands:
+                plan['remove'].append(dict(id=l['id'], label=f"{l['code'] or l['title']} {', '.join('ม.' + c.split('/')[0] for c in l['classes'])}",
+                                           teachers=', '.join(tname.get(t, '?').split(' ')[0] for t in l['teacher_ids']) or '-', slots=len(l['slots'])))
+            pool.pop(k, None)
+        for ls in pool.values():                                  # รายวิชาเดิมที่ไม่มีในไฟล์
+            for l in ls:
+                plan['remove'].append(dict(id=l['id'], label=f"{l['code'] or l['title']} {', '.join('ม.' + c.split('/')[0] for c in l['classes'])}",
+                                           teachers=', '.join(tname.get(t, '?').split(' ')[0] for t in l['teacher_ids']) or '-', slots=len(l['slots'])))
+        plan['tracks'] = {c: v for c, v in ctracks.items() if v != (cfg.get('tracks') or {}).get(c)}
+        return plan
+
+    @app.post('/api/tt/terms/<int:term_id>/import-load')
+    @tt_edit_required
+    def tt_import_load(term_id):
+        """อัปโหลดแบบสำรวจภาระงานสอน (.xlsx) → apply=0 ดูแผน / apply=1 นำเข้าแทนรายวิชาเดิม"""
+        f = request.files.get('file')
+        if not f or not f.filename.lower().endswith('.xlsx'):
+            return jsonify(success=False, message='เลือกไฟล์ Excel (.xlsx)'), 400
+        try:
+            rows = read_load_xlsx(f)
+        except Exception as e:
+            return jsonify(success=False, message=f'เปิดไฟล์ไม่ได้: {e}'), 400
+        if not rows:
+            return jsonify(success=False, message='ไม่พบตารางรายวิชาในไฟล์ (ต้องมีหัวคอลัมน์ รหัสวิชา / ชั้น / คาบ / ครูผู้สอน)'), 400
+        with get_db() as con:
+            if not con.execute('SELECT 1 FROM tt_terms WHERE id=?', (term_id,)).fetchone():
+                return jsonify(success=False, message='ไม่พบภาคเรียน'), 404
+            plan = plan_load_import(con, term_id, rows)
+            if request.form.get('apply') != '1':
+                return jsonify(success=True, plan=plan, rows=len(rows))
+            for x in plan['remove']:
+                con.execute('DELETE FROM tt_slots WHERE lesson_id=?', (x['id'],))
+                con.execute('DELETE FROM tt_lessons WHERE id=?', (x['id'],))
+            for x in plan['update'] + plan['add']:
+                if x['code']:
+                    save_subject_name(con, x['code'], x['name'])
+                vals = (x['code'], x['title'], json.dumps(x['classes']), x['track'], json.dumps(x['teacher_ids']), x['per_week'], x['note'])
+                if x.get('id'):
+                    con.execute('UPDATE tt_lessons SET code=?, title=?, classes=?, track=?, teacher_ids=?, per_week=?, note=? WHERE id=?', (*vals, x['id']))
+                    extra = con.execute('SELECT id FROM tt_slots WHERE lesson_id=? ORDER BY locked, day DESC, period DESC', (x['id'],)).fetchall()
+                    for s in extra[:max(0, len(extra) - x['per_week'])]:     # คาบลด → ตัดช่องส่วนเกิน (ไม่ล็อกก่อน)
+                        con.execute('DELETE FROM tt_slots WHERE id=?', (s['id'],))
+                else:
+                    con.execute("""INSERT INTO tt_lessons (term_id, code, title, kind, classes, track, teacher_ids, per_week, options, note)
+                                   VALUES (?,?,?,'subject',?,?,?,?,'{}',?)""", (term_id, *vals))
+            if plan['tracks']:
+                row = con.execute('SELECT config FROM tt_terms WHERE id=?', (term_id,)).fetchone()
+                cfg = jl(row['config'], {})
+                cfg['tracks'] = dict(cfg.get('tracks') or {}, **plan['tracks'])
+                con.execute('UPDATE tt_terms SET config=? WHERE id=?', (json.dumps(cfg, ensure_ascii=False), term_id))
+        return jsonify(success=True, plan=plan,
+                       message=f"นำเข้าแล้ว: เพิ่ม {len(plan['add'])} · แก้ {len(plan['update'])} · ลบ {len(plan['remove'])} รายวิชา")
+
     # ═════════════ ขั้นที่ 3: ร่างภาคเรียนถัดไป + บันทึกผลจัดอัตโนมัติ ═════════════
     def next_code(code):
         """รหัสภาคเรียนถัดไปตามธรรมเนียม: เลขท้ายคี่ +1 (ท21101→ท21102, พ30209→พ30210)"""
