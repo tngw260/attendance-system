@@ -3,7 +3,8 @@
    2) วางทีละช่วง เริ่มจากช่วงที่ยากสุด เลือกช่องคะแนนดีสุด (+ สุ่มนิด ๆ)
    3) ช่วงที่วางไม่ลง → ย้ายช่วงที่ขวาง 1-2 ช่วงไปที่อื่น (ซ่อม)
    4) ทำหลายรอบ เก็บผลที่วางได้ครบที่สุด / สายเรียนพร้อมกันมากสุด
-   กฎตายตัว: ครูไม่สอนซ้อน, ห้อง/สายไม่ชน, ครูไม่ว่าง · กฎที่ตั้งได้: คาบคู่, ไม่ซ้ำวัน, เลี่ยงคาบ, สอนไม่เกินวันละ N, สอนติดกันไม่เกิน N */
+   กฎตายตัว: ครูไม่สอนซ้อน, ห้อง/สายไม่ชน, ครูไม่ว่าง · กฎที่ตั้งได้: คาบคู่, ไม่ซ้ำวัน, เลี่ยงคาบ, สอนไม่เกินวันละ N, สอนติดกันไม่เกิน N
+   เป้าหมาย: นักเรียนไม่ว่างในคาบที่กำหนด (เช่น คาบแรก) · วิชาต่างสายเรียนพร้อมกัน */
 
 function ttSolve(opts) {
   const mode = opts.mode || 'fresh';                  // fresh = จัดใหม่ (คงที่ล็อก) / fill = เติมเฉพาะที่ยังขาด
@@ -23,6 +24,10 @@ function ttSolve(opts) {
   const runRaised = T.teachers.filter(t => maxRunOf(t.id) && maxRun[t.id] > maxRunOf(t.id))
     .map(t => ({ t, from: maxRunOf(t.id), to: maxRun[t.id], load: teachLoad(t.id) }));
   const classTracks = T.term.config.tracks || {};
+  // นักเรียนไม่ว่างคาบ … (config.class_busy): ทุกสายหลักของห้องต้องมีเรียนในคาบนั้น
+  const REQ = new Set(classBusyPeriods()), rootsCache = {};
+  const rootsOf = c => (rootsCache[c] = rootsCache[c] || classRoots(c));
+  const hereOf = (st, c, s) => st.at[s].filter(e => e.l.classes.includes(c)).map(e => e.l);
 
   // ── เตรียม: ช่องคงที่ + ช่วงที่ต้องวาง ──
   const fixed = [], sessions = [], skipped = [];
@@ -49,6 +54,23 @@ function ttSolve(opts) {
       for (let q = p + len; q <= b && tt[sidx(d, q)]; q++) R++;
     }
     return [L, R];
+  }
+  // วาง l ที่ (d,p) ช่วยคาบที่นักเรียนห้ามว่างแค่ไหน: เติมจนครบทุกสาย +1 · ต่อเติมช่องที่มีบางสายแล้ว +0.5
+  // · เริ่มช่องว่างด้วยวิชาเฉพาะสาย (สายอื่นยังว่าง) −0.6 → คาบแรกควรเป็นวิชาทั้งห้อง หรือวิชาเลือกที่เรียนพร้อมกันครบทุกสาย
+  function holeGain(st, l, d, p, len) {
+    if (!REQ.size || !l.classes.length) return 0;
+    let g = 0;
+    for (let q = p; q < p + len; q++) {
+      if (!REQ.has(q)) continue;
+      for (const c of l.classes) {
+        const roots = rootsOf(c), here = hereOf(st, c, sidx(d, q));
+        const before = missingRoots(c, here, roots).length;
+        if (!before) continue;
+        const after = missingRoots(c, [...here, l], roots).length;
+        g += !after ? 1 : after < before ? (here.length ? 0.5 : -0.6) : 0;
+      }
+    }
+    return g;
   }
   const runOk = (st, l, d, p, len) => !l.classes.length || l.teacher_ids.every(t => {
     if (maxRun[t] >= 99) return true;
@@ -109,6 +131,7 @@ function ttSolve(opts) {
     l.teacher_ids.forEach(t => { sc -= 0.5 * ((st.tDay[t] && st.tDay[t][d]) || 0); });              // กระจายภาระครู
     if (st.dayUse[l.id]) for (let dd = 1; dd <= ND; dd++) if (st.dayUse[l.id][dd] && Math.abs(dd - d) === 1) sc -= 0.6; // เว้นวัน
     if (len === 2 && p <= LA) sc += 0.3;                                                               // คาบคู่ชอบช่วงเช้า
+    sc += 5 * holeGain(st, l, d, p, len);                                                              // เติมคาบที่นักเรียนห้ามว่าง
     if (l.classes.length) for (const x of runRaised) if (l.teacher_ids.includes(x.t.id)) {            // ครูที่ผ่อนกฎ: เกินกฎเดิมให้น้อยวันที่สุด
       const [L, R] = runAround(st, x.t.id, d, p, len);
       if (L + len + R > x.from) sc -= 1.5;
@@ -184,6 +207,47 @@ function ttSolve(opts) {
       }
     }
   }
+  // ช่องที่นักเรียนห้ามว่างแต่ยังว่าง → ลองย้ายวิชาของห้องนั้นจากที่อื่นมาลง (ที่เดิมต้องไม่กลายเป็นช่องว่างต้องห้าม)
+  const isHole = (st, c, d, q) => missingRoots(c, hereOf(st, c, sidx(d, q)), rootsOf(c)).length > 0;
+  // ย้ายช่วง S ไป (d,p1) ได้ไหม โดยที่เดิมของ S ไม่กลายเป็นช่องว่างต้องห้าม (ทำแล้วถ้าไม่ได้ คืนที่เดิม)
+  function tryMove(st, S, d, p1) {
+    const [d0, p0] = st.pos.get(S);
+    vacate(st, S);
+    let ok = p1 >= 1 && canPlace(st, S.l, d, p1, S.len);
+    for (let r = p0; ok && r < p0 + S.len; r++) if (REQ.has(r) && S.l.classes.some(c2 => isHole(st, c2, d0, r))) ok = false;
+    occupy(st, S.l, ok ? d : d0, ok ? p1 : p0, S.len, S);
+    return ok;
+  }
+  // ช่องที่นักเรียนห้ามว่างแต่ยังว่าง → (1) ย้ายวิชาของห้องนั้นจากที่อื่นมาเติม (2) ช่องที่มีแค่บางสาย: สลับกับวิชาทั้งห้อง
+  function fillHoles(st) {
+    if (!REQ.size) return;
+    for (const c of IDX.classes) for (let d = 1; d <= ND; d++) for (const q of REQ) {
+      if (q > NPS || !isHole(st, c, d, q)) continue;
+      const mine = [...st.pos.keys()].filter(S => S.l.classes.includes(c)).sort(() => Math.random() - 0.5);
+      for (const S of mine) {
+        const [d0, p0] = st.pos.get(S);
+        if (d0 === d && p0 <= q && q < p0 + S.len) continue;
+        const p1 = (S.len === 2 ? [q, q - 1] : [q]).find(x => x >= 1 && holeGain(st, S.l, d, x, S.len) > 0.9 && tryMove(st, S, d, x));
+        if (p1) break;
+      }
+      if (!isHole(st, c, d, q)) continue;
+      // มีวิชาเฉพาะสายอยู่ในช่องนี้ (สายอื่นว่าง) → ย้ายวิชาเหล่านั้นไปที่ของวิชาทั้งห้องคาบเดี่ยว แล้วเอาวิชาทั้งห้องมาลงแทน
+      const occ = st.at[sidx(d, q)].filter(e => e.l.classes.includes(c));
+      if (!occ.length || occ.some(e => !e.sess || e.sess.len !== 1)) continue;
+      const whole = mine.filter(S => S.len === 1 && !tracksOf(S.l).length && S.l.classes.length === 1 && !REQ.has(st.pos.get(S)[1]));
+      for (const W of whole) {
+        const [d2, p2] = st.pos.get(W), xs = occ.map(e => e.sess);
+        vacate(st, W); xs.forEach(x => vacate(st, x));
+        let ok = canPlace(st, W.l, d, q, 1);
+        if (ok) { occupy(st, W.l, d, q, 1, W); ok = xs.every(x => { if (!canPlace(st, x.l, d2, p2, 1)) return false; occupy(st, x.l, d2, p2, 1, x); return true; }); }
+        if (ok) break;
+        // คืนที่เดิมทั้งหมด
+        xs.forEach(x => { if (st.pos.has(x)) vacate(st, x); });
+        if (st.pos.has(W)) vacate(st, W);
+        occupy(st, W.l, d2, p2, 1, W); xs.forEach(x => occupy(st, x.l, d, q, 1, x));
+      }
+    }
+  }
   // คุณภาพผลลัพธ์: คาบที่ขาด (หลัก) + ช่องที่บางสายเรียนแต่สายอื่นว่าง + วิชาเดียวกันวันติดกัน
   function evaluate(st) {
     const unplaced = sessions.filter(s => !st.pos.has(s)).reduce((a, s) => a + s.len, 0);
@@ -207,7 +271,10 @@ function ttSolve(opts) {
         for (let p = a; p <= b + 1; p++) { if (p <= b && tt[sidx(d, p)]) k++; else { if (k > x.from) over++; k = 0; } }
       }
     }
-    return { unplaced, misaligned: mis, over, score: -unplaced * 100 - mis * 3 - over * 4 };
+    let holes = 0;                                // ช่องที่นักเรียนห้ามว่างแต่ยังว่าง
+    if (REQ.size) for (const c of IDX.classes) for (let d = 1; d <= ND; d++) for (const q of REQ)
+      if (q <= NPS && missingRoots(c, hereOf(st, c, sidx(d, q)), rootsOf(c)).length) holes++;
+    return { unplaced, misaligned: mis, over, holes, score: -unplaced * 100 - mis * 3 - over * 4 - holes * 6 };
   }
 
   return {
@@ -222,17 +289,19 @@ function ttSolve(opts) {
         const st = newState();
         base.map(x => ({ s: x.s, k: x.k + Math.random() * 3 })).sort((a, b) => b.k - a.k).forEach(x => placeBest(st, x.s));
         repair(st, 300);
+        fillHoles(st);
         const ev = evaluate(st);
         if (!best || ev.score > best.ev.score) best = { ev, pos: new Map(st.pos), st };
         if (onProgress) onProgress(r + 1, restarts, best.ev);
         if (performance.now() - lastYield > 30) { await yieldUI(); lastYield = performance.now(); }
-        if (best.ev.unplaced === 0 && best.ev.misaligned === 0) break;
+        if (best.ev.unplaced === 0 && best.ev.misaligned === 0 && !best.ev.holes && !best.ev.over) break;
       }
       // ช่วงที่ยังเหลือ: ซ่อม + วางแบบผ่อนกฎที่ตั้งได้ (ไม่ผ่อนครูซ้อน/ห้องชน/ครูไม่ว่าง)
       const pending = sessions.filter(s => !best.st.pos.has(s));
       if (pending.length) repair(best.st, 400, true);
       sessions.filter(s => !best.st.pos.has(s)).forEach(s => placeBest(best.st, s, true));
       const relaxed = pending.filter(s => best.st.pos.has(s));
+      fillHoles(best.st);
       const left = sessions.filter(s => !best.st.pos.has(s));
       return { ev: evaluate(best.st), st: best.st, relaxed, left };
     },
@@ -254,7 +323,8 @@ function openSolveModal() {
     <label class="form-label small mb-0">ความละเอียดการค้นหา</label>
     <select id="svRounds" class="form-select form-select-sm w-auto mb-2"><option value="40">ปกติ (40 รอบ)</option><option value="150">ละเอียด (150 รอบ)</option></select>
     <div class="small text-muted">กฎที่ใช้: ครูไม่สอนซ้อน · ห้อง/สายไม่ชน · ครูไม่ว่าง · คาบคู่ · วิชาไม่ซ้ำวัน · เลี่ยงคาบ · ครูสอนไม่เกินวันละ N คาบ
-      · ${T.term.config.max_run ? `<b>ครูสอนติดกันไม่เกิน ${T.term.config.max_run} คาบ</b>` : 'ครูสอนติดกัน: ไม่จำกัด'} <span class="text-nowrap">(แก้ที่ เครื่องมือ → กฎของครูทุกคน)</span>
+      · ${T.term.config.max_run ? `<b>ครูสอนติดกันไม่เกิน ${T.term.config.max_run} คาบ</b>` : 'ครูสอนติดกัน: ไม่จำกัด'}
+      · ${classBusyPeriods().length ? `<b>นักเรียนไม่ว่างคาบ ${classBusyPeriods().join(', ')}</b>` : 'คาบว่างนักเรียน: ไม่กำหนด'} <span class="text-nowrap">(แก้ที่ เครื่องมือ → กฎการจัดตาราง)</span>
       · พยายามให้วิชาต่างสายเรียนพร้อมกัน</div>
     <div class="progress mt-3" style="height:20px;display:none" id="svProg"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div></div>
     <div id="svResult" class="mt-2"></div>`;
@@ -288,6 +358,7 @@ async function runSolve() {
       <button class="btn btn-sm btn-warning" onclick="splitLeftAndRerun(this)">✂ แยกคาบคู่แล้วจัดใหม่</button></div>` : '',
     solver.runRaised.length ? `<div class="small mb-1">ℹ คาบสอนมากเกินกว่าจะทำตามกฎสอนติดกันได้ทุกวัน จึงผ่อนเฉพาะ: ${solver.runRaised.map(x => esc(`${teacherShort(x.t.id)} (${x.load} คาบ/สัปดาห์) ${x.from}→${x.to} คาบติด`)).join(', ')}</div>` : '',
     solver.skipped.length ? `<div class="small mb-1">⏭ ข้าม (ยังไม่กำหนดครู): ${solver.skipped.map(x => esc(lessonName(x.l) + ' ' + classLabel(x.l))).join(', ')}</div>` : '',
+    classBusyPeriods().length ? `<div class="small mb-1 ${res.ev.holes ? 'text-danger' : 'text-success'}">${res.ev.holes ? '✖' : '✓'} นักเรียนว่างในคาบที่ห้ามว่าง (คาบ ${classBusyPeriods().join(', ')}): ${res.ev.holes} ช่อง</div>` : '',
     `<div class="small text-muted">สายที่ต้องมีคาบว่างเพราะสายอื่นเรียน: ${res.ev.misaligned} ช่อง</div>`,
   ];
   el('svResult').innerHTML = lines.join('');

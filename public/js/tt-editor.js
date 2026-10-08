@@ -76,6 +76,31 @@ function trackChain(cls, t) {                    // [สาย, สายแม�
 }
 const trackRoot = (cls, t) => { const c = trackChain(cls, t); return c[c.length - 1]; };
 
+// กฎ "นักเรียนไม่ว่างคาบ …" (config.class_busy เช่น [1] = คาบแรก): ทุกสายหลักของห้องต้องมีเรียนในคาบนั้นทุกวัน
+const classBusyPeriods = () => (T.term.config.class_busy || []).filter(p => !isStaffPeriod(p));
+const classRoots = cls => [...new Set(((T.term.config.tracks || {})[cls] || []).map(t => trackRoot(cls, t)))];
+// สายหลักที่ยังไม่มีเรียนในช่องนี้ (ห้องไม่แยกสาย: ว่างทั้งห้อง = ['*'])
+function missingRoots(cls, here, roots = classRoots(cls)) {
+  if (!here.length) return roots.length >= 2 ? roots : ['*'];
+  if (roots.length < 2) return [];
+  const cov = new Set();
+  here.forEach(l => { const t = tracksOf(l); (t.length ? t.map(x => trackRoot(cls, x)) : roots).forEach(x => cov.add(x)); });
+  return roots.filter(r => !cov.has(r));
+}
+function classHoles(periods = classBusyPeriods()) {      // [{cls, d, p, miss}] ช่องที่นักเรียนว่างในคาบที่ห้ามว่าง
+  const out = [];
+  if (!periods.length) return out;
+  IDX.classes.forEach(cls => {
+    const roots = classRoots(cls);
+    for (let d = 1; d <= DAYS.length; d++) periods.forEach(p => {
+      const miss = missingRoots(cls, (IDX.byClass[cls] || {})[`${d}-${p}`] || [], roots);
+      if (miss.length) out.push({ cls, d, p, miss });
+    });
+  });
+  return out;
+}
+const holeLabel = h => `${classShort(h.cls)} วัน${DAYS[h.d - 1]} คาบ ${h.p}${h.miss[0] === '*' ? '' : ' (สาย ' + h.miss.join(', ') + ')'}`;
+
 // สองรายการในห้องเดียวกันเรียนพร้อมกันไม่ได้ ถ้ามีฝั่งใดเรียนทั้งห้อง หรือสายซ้อนกัน
 // (สายเดียวกัน หรือสายย่อยกับสายแม่ของมัน · สายย่อยต่างสายแม่ / กลุ่มย่อยคนละกลุ่ม = คนละคน เรียนพร้อมกันได้)
 function classOverlap(a, b) {
@@ -194,6 +219,9 @@ function allIssues() {
       if (l.slots.some(s => s[1] === p)) soft.push({ type, key, lid: l.id, msg: `${name} อยู่คาบ ${p} (ตั้งให้เลี่ยง)` });
     });
   });
+  const busyP = classBusyPeriods();
+  classHoles(busyP).forEach(h => soft.push({ d: h.d, p: h.p, type: 'class', key: h.cls,
+    msg: `${holeLabel(h)} นักเรียนว่าง — กฎนักเรียนไม่ว่างคาบ ${busyP.join(', ')}` }));
   T.teachers.forEach(t => {
     const mx = maxRunOf(t.id);
     if (!mx || !IDX.byTeacher[t.id]) return;
@@ -235,6 +263,7 @@ function renderEditor() {
                   || (ED.by === 'class' && x.lid && lessonById(x.lid)?.classes.includes(ED.key))
                   || (ED.by === 'teacher' && x.lid && lessonById(x.lid)?.teacher_ids.includes(+ED.key));
   const hardHere = issues.hard.filter(mine), softHere = issues.soft.filter(mine);
+  const holesHere = new Set(ED.by === 'class' ? classHoles().filter(h => h.cls === ED.key).map(h => `${h.d}-${h.p}`) : []);
 
   let head = '<tr><th class="ed-dayh"></th>';
   P.forEach(x => { head += `<th>${x.no}<div class="small fw-normal text-muted">${esc(x.start)}-${esc(x.end)}</div></th>`; if (x.no === lunchAfter()) head += '<th class="ed-lunch"></th>'; });
@@ -246,7 +275,8 @@ function renderEditor() {
     P.forEach(x => {
       const p = x.no, ls = lessonsInCell(d, p);
       const bad = hardHere.some(h => h.d === d && h.p === p);
-      body += `<td class="ed-cell${bad ? ' has-bad' : ''}" data-d="${d}" data-p="${p}">${ls.map(l => chipHTML(l, d, p)).join('')}</td>`;
+      const hole = holesHere.has(`${d}-${p}`);
+      body += `<td class="ed-cell${bad ? ' has-bad' : ''}${hole ? ' must-fill' : ''}" data-d="${d}" data-p="${p}"${hole ? ' title="คาบนี้นักเรียนห้ามว่าง (กฎการจัดตาราง)"' : ''}>${ls.map(l => chipHTML(l, d, p)).join('')}</td>`;
       if (p === lunchAfter()) body += di === 0 ? `<td class="ed-lunch" rowspan="${DAYS.length}"><div>พักกลางวัน</div></td>` : '';
     });
     body += '</tr>';
@@ -297,7 +327,7 @@ function renderEditor() {
           ${act('applyTracks()', 'magic', 'ตั้งสายการเรียนจากโครงสร้างหลักสูตร')}
           ${act('applySuggestedTracks()', 'lightbulb', 'แนะนำสายจากตารางปัจจุบัน')}
           ${act('openImportModal()', 'file-earmark-spreadsheet', 'นำเข้ารายวิชาจาก Excel (แบบสำรวจภาระงานสอน)')}
-          ${act('openRulesModal()', 'sliders', 'กฎของครูทุกคน (สอนติดกันไม่เกิน…)')}
+          ${act('openRulesModal()', 'sliders', 'กฎการจัดตาราง (สอนติดกัน · นักเรียนไม่ว่างคาบแรก)')}
           ${act('openStaffModal()', 'people', 'คาบของครูหลังเลิกเรียน (PLC)')}
           ${draftReport() ? act('showDraftReport(draftReport())', 'clipboard-check', 'รายงานการร่างภาคเรียน') : ''}
           <li><hr class="dropdown-divider"></li>
@@ -737,7 +767,7 @@ async function openTeacherModal(tid) {
       <div class="col-3"><input id="tcMax" type="number" min="0" max="7" class="form-control form-control-sm" value="${c.max_per_day || ''}" placeholder="ไม่จำกัด"></div><div class="col-auto small">คาบ</div></div>
     <div class="row g-2 align-items-center mt-1"><div class="col-auto small">สอนติดกันไม่เกิน</div>
       <div class="col-3"><input id="tcRun" type="number" min="2" max="7" class="form-control form-control-sm" value="${c.max_run || ''}" placeholder="${T.term.config.max_run ? 'ตามกฎ ' + T.term.config.max_run : 'ไม่จำกัด'}"></div>
-      <div class="col-auto small">คาบ <span class="text-muted">(ว่าง = ตามกฎของครูทุกคน${T.term.config.max_run ? ' ' + T.term.config.max_run + ' คาบ' : ''})</span></div></div>
+      <div class="col-auto small">คาบ <span class="text-muted">(ว่าง = ตามกฎการจัดตาราง${T.term.config.max_run ? ' ' + T.term.config.max_run + ' คาบ' : ''})</span></div></div>
     <label class="d-block small mt-2"><input type="checkbox" id="tcNoDbl" ${c.no_double ? 'checked' : ''}> <b>ไม่สอนคาบคู่</b>
       <span class="text-muted">— วิชาของครูคนนี้วางทีละคาบ ไม่เรียนติดกัน 2 คาบ (จัดอัตโนมัติจะแยกให้เอง)</span></label>
     ${transfer}`;
@@ -1083,19 +1113,27 @@ async function importApply() {
   } catch (e) { el('impGo').disabled = false; alert(e.message); }
 }
 
-/* ── กฎของครูทุกคน: สอนติดกันไม่เกิน N คาบ (config.max_run ของภาคเรียน · ร่างเทอมถัดไปคัดลอกไปด้วย) ── */
+/* ── กฎการจัดตาราง (ของภาคเรียน · ร่างเทอมถัดไปคัดลอกไปด้วย)
+   config.max_run = ครูสอนติดกันไม่เกิน N คาบ · config.class_busy = คาบที่นักเรียนห้ามว่าง เช่น [1] ── */
 function openRulesModal() {
   if (previewGuard()) return;
-  const cur = +(T.term.config.max_run || 0), la = lunchAfter(), nps = periodsFor('class').length;
+  const cfg = T.term.config, cur = +(cfg.max_run || 0), la = lunchAfter(), P = periodsFor('class');
+  const busy = cfg.class_busy || [1];                       // ยังไม่เคยตั้ง → แนะนำคาบแรก
   const opts = [[0, 'ไม่จำกัด'], [2, '2 คาบ'], [3, '3 คาบ'], [4, '4 คาบ'], [5, '5 คาบ']];
   const body = `
+    <div class="fw-bold mb-1">1) ครูสอนติดกัน</div>
     <div class="d-flex align-items-center gap-2"><span>ครูสอนติดกันไม่เกิน</span>
       <select id="ruRun" class="form-select form-select-sm w-auto" onchange="rulesPreview()">${opts.map(([v, t]) => `<option value="${v}" ${v === (cur || 3) ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-    <div class="small text-muted mt-2">นับเฉพาะคาบที่มีนักเรียน (รายวิชาและกิจกรรมที่มีชั้นเรียน) · ประชุมครูและ PLC ไม่นับ ·
-      พักกลางวันตัดช่วง (เช้า คาบ 1–${la} / บ่าย คาบ ${la + 1}–${nps}) · จัดอัตโนมัติจะไม่วางให้เกิน ·
-      ครูบางคนต้องการต่างจากนี้ ตั้งรายคนได้ที่ รายครู → เงื่อนไขครู</div>
-    <div id="ruNow" class="small mt-2"></div>`;
-  showModal('<i class="bi bi-sliders"></i> กฎของครูทุกคน', body, `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+    <div class="small text-muted mt-1">นับเฉพาะคาบที่มีนักเรียน (รายวิชาและกิจกรรมที่มีชั้นเรียน) · ประชุมครูและ PLC ไม่นับ ·
+      พักกลางวันตัดช่วง (เช้า คาบ 1–${la} / บ่าย คาบ ${la + 1}–${P.length}) · ครูบางคนต้องการต่างจากนี้ ตั้งรายคนได้ที่ รายครู → เงื่อนไขครู</div>
+    <div id="ruRunNow" class="small mt-1"></div>
+    <hr class="my-2">
+    <div class="fw-bold mb-1">2) คาบที่นักเรียนห้ามว่าง</div>
+    <div>${P.map(x => `<label class="me-3"><input type="checkbox" class="ruBusy" value="${x.no}" ${busy.includes(x.no) ? 'checked' : ''} onchange="rulesPreview()"> คาบ ${x.no}</label>`).join('')}</div>
+    <div class="small text-muted mt-1">ทุกห้องต้องมีเรียนในคาบที่ติ๊กทุกวัน — ห้องที่แยกสาย ทุกสายต้องมีเรียน (เช่น คาบแรก นักเรียนไม่ว่าง) · ไม่ติ๊กเลย = ไม่ใช้กฎนี้</div>
+    <div id="ruBusyNow" class="small mt-1"></div>
+    <div class="small text-muted mt-2">จัดอัตโนมัติจะจัดตามกฎเหล่านี้ · จุดที่ยังผิดกฎขึ้นในปุ่ม <b>เตือน</b></div>`;
+  showModal('<i class="bi bi-sliders"></i> กฎการจัดตาราง', body, `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
     <button class="btn btn-primary btn-sm" onclick="saveRules()"><i class="bi bi-save"></i> บันทึก</button>`);
   rulesPreview();
 }
@@ -1115,26 +1153,34 @@ function runOverloaded(n) {
     return m && IDX.byTeacher[t.id] ? { t, m, load: teachLoad(t.id), cap: runCapacity(t.id, m), eff: effectiveMaxRun(t.id, m) } : null;
   }).filter(x => x && x.eff > x.m);
 }
+const rulesBusy = () => [...document.querySelectorAll('.ruBusy:checked')].map(x => +x.value);
 function rulesPreview() {
   const n = +el('ruRun').value, v = runViolations(n), ov = n ? runOverloaded(n) : [];
-  el('ruNow').innerHTML = (!n ? '' : v.length
-    ? `<div class="alert alert-warning py-2 mb-0">ตารางตอนนี้มี <b>${v.length}</b> จุดที่สอนติดกันเกิน ${n} คาบ<div class="text-muted">${esc(v.slice(0, 8).join(' · '))}${v.length > 8 ? ' …' : ''}</div></div>`
+  const list = arr => `<div class="text-muted">${esc(arr.slice(0, 8).join(' · '))}${arr.length > 8 ? ' …' : ''}</div>`;
+  el('ruRunNow').innerHTML = (!n ? '' : v.length
+    ? `<div class="alert alert-warning py-2 mb-0">ตารางตอนนี้มี <b>${v.length}</b> จุดที่สอนติดกันเกิน ${n} คาบ${list(v)}</div>`
     : `<div class="text-success"><i class="bi bi-check-circle"></i> ตารางตอนนี้ไม่มีครูสอนติดกันเกิน ${n} คาบ</div>`)
     + (ov.length ? `<div class="alert alert-info py-2 mt-2 mb-0"><b>ครูที่คาบสอนมากเกินกว่าจะทำตามกฎได้ทุกวัน</b> — จัดอัตโนมัติจะยอมให้ติดกันได้มากขึ้นเฉพาะครูคนนั้น:
         <ul class="mb-0 ps-3">${ov.map(x => `<li>${esc(teacherShort(x.t.id))} สอน ${x.load} คาบ/สัปดาห์ แต่ถ้าไม่เกิน ${x.m} คาบติด สอนได้สูงสุด ${x.cap} คาบ → ยอมให้ <b>${x.eff} คาบติด</b></li>`).join('')}</ul>
         <div class="text-muted">ถ้าต้องการให้ได้ตามกฎ: ลดคาบ/ย้ายบางวิชาให้ครูคนอื่น หรือปลดคาบไม่ว่าง</div></div>` : '');
+  const bp = rulesBusy(), h = classHoles(bp).map(holeLabel);
+  el('ruBusyNow').innerHTML = !bp.length ? '' : h.length
+    ? `<div class="alert alert-warning py-2 mb-0">ตารางตอนนี้มี <b>${h.length}</b> ช่องที่นักเรียนว่างในคาบ ${bp.join(', ')}${list(h)}</div>`
+    : `<div class="text-success"><i class="bi bi-check-circle"></i> ตารางตอนนี้นักเรียนไม่ว่างในคาบ ${bp.join(', ')}</div>`;
 }
 async function saveRules() {
-  const n = +el('ruRun').value;
+  const n = +el('ruRun').value, bp = rulesBusy();
   try {
-    await apiFetch(`/api/tt/terms/${T.term.id}`, { method: 'PUT', body: JSON.stringify({ config: { max_run: n } }) });
+    await apiFetch(`/api/tt/terms/${T.term.id}`, { method: 'PUT', body: JSON.stringify({ config: { max_run: n, class_busy: bp } }) });
     if (n) T.term.config.max_run = n; else delete T.term.config.max_run;
+    if (bp.length) T.term.config.class_busy = bp; else delete T.term.config.class_busy;
     edModal.hide(); renderEditor();
-    const v = n ? runViolations(n).length : 0;
-    if (v) showModal('<i class="bi bi-sliders"></i> บันทึกกฎแล้ว', `<div class="alert alert-warning py-2">ตารางตอนนี้มี <b>${v}</b> จุดที่ครูสอนติดกันเกิน ${n} คาบ (ขึ้นในปุ่ม เตือน)</div>
-      กด <b>จัดอัตโนมัติ → จัดใหม่ทั้งหมด</b> ระบบจะจัดให้ไม่เกิน ${n} คาบ (ช่องที่ล็อก 🔒 อยู่ที่เดิม)`,
+    const v = n ? runViolations(n).length : 0, h = classHoles().length;
+    const msgs = [v ? `ครูสอนติดกันเกิน ${n} คาบ <b>${v}</b> จุด` : '', h ? `นักเรียนว่างในคาบ ${bp.join(', ')} <b>${h}</b> ช่อง` : ''].filter(Boolean);
+    if (msgs.length) showModal('<i class="bi bi-sliders"></i> บันทึกกฎแล้ว', `<div class="alert alert-warning py-2">ตารางตอนนี้ยังผิดกฎ: ${msgs.join(' · ')} (ขึ้นในปุ่ม เตือน)</div>
+      กด <b>จัดอัตโนมัติ → จัดใหม่ทั้งหมด</b> ระบบจะจัดให้ตามกฎ (ช่องที่ล็อก 🔒 อยู่ที่เดิม)`,
       `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ไว้ทีหลัง</button><button class="btn btn-primary btn-sm" onclick="openSolveModal()"><i class="bi bi-cpu"></i> จัดอัตโนมัติ</button>`);
-    else toastEd(n ? `ตั้งกฎแล้ว: ครูสอนติดกันไม่เกิน ${n} คาบ` : 'ยกเลิกกฎสอนติดกันแล้ว');
+    else toastEd('บันทึกกฎการจัดตารางแล้ว — ตารางตอนนี้ตรงตามกฎ');
   } catch (e) { alert(e.message); }
 }
 

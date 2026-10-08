@@ -680,7 +680,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.put('/api/tt/terms/<int:term_id>')
     @tt_edit_required
     def tt_term_update(term_id):
-        """แก้ค่าภาคเรียน: ชื่อ, เผยแพร่, config (คาบเวลา / สายการเรียนของแต่ละห้อง / ผู้ลงนาม / max_run กฎสอนติดกัน)"""
+        """แก้ค่าภาคเรียน: ชื่อ, เผยแพร่, config (คาบเวลา / สายการเรียนของแต่ละห้อง / ผู้ลงนาม / max_run กฎสอนติดกัน / class_busy คาบที่นักเรียนห้ามว่าง)"""
         b = request.get_json() or {}
         max_run = None
         if isinstance(b.get('config'), dict) and 'max_run' in b['config']:      # ครูสอนติดกันไม่เกิน N คาบ (0 = ไม่จำกัด)
@@ -690,6 +690,14 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 max_run = -1
             if not (max_run == 0 or 2 <= max_run <= 7):
                 return jsonify(success=False, message='สอนติดกันไม่เกิน 2-7 คาบ (0 = ไม่จำกัด)'), 400
+        class_busy = None
+        if isinstance(b.get('config'), dict) and 'class_busy' in b['config']:   # คาบที่นักเรียนห้ามว่าง เช่น [1]
+            try:
+                class_busy = sorted({int(p) for p in (b['config']['class_busy'] or [])})
+            except (TypeError, ValueError):
+                class_busy = [0]
+            if any(not 1 <= p <= 12 for p in class_busy):
+                return jsonify(success=False, message='คาบที่นักเรียนห้ามว่างไม่ถูกต้อง'), 400
         with get_db() as con:
             row = con.execute('SELECT * FROM tt_terms WHERE id=?', (term_id,)).fetchone()
             if not row:
@@ -713,6 +721,13 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                         cfg['max_run'] = max_run
                     else:
                         cfg.pop('max_run', None)
+                if class_busy is not None:
+                    regular = len([p for p in cfg.get('periods') or [] if not p.get('teacher_only')]) or 7
+                    class_busy = [p for p in class_busy if p <= regular]          # คาบของครูหลังเลิกเรียนไม่นับ
+                    if class_busy:
+                        cfg['class_busy'] = class_busy
+                    else:
+                        cfg.pop('class_busy', None)
                 con.execute('UPDATE tt_terms SET config=? WHERE id=?', (json.dumps(cfg, ensure_ascii=False), term_id))
         return jsonify(success=True)
 
