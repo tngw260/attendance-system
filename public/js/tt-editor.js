@@ -146,9 +146,11 @@ function classOverlap(a, b) {
 }
 
 /* ── ปัญหาถ้าวางรายการ l ที่ (d,p) ── hard = ชนจริง / soft = ผิดเงื่อนไขที่ตั้งไว้ */
-function conflictsAt(l, d, p) {
+// opt.ignore = รายการที่ไม่นับ (เช่น ตอนคิดสลับช่อง) · opt.from = ช่องเดิมของ l ที่กำลังย้ายออก (ค่าเริ่มต้น: ช่องที่เลือกอยู่)
+function conflictsAt(l, d, p, opt = {}) {
   const out = [];
-  const others = (IDX.bySlot[`${d}-${p}`] || []).filter(x => x.id !== l.id);
+  const fromSlot = 'from' in opt ? opt.from : (ED.picked && ED.picked.lid === l.id ? ED.picked.from : null);
+  const others = (IDX.bySlot[`${d}-${p}`] || []).filter(x => x.id !== l.id && !(opt.ignore || []).includes(x.id));
   others.forEach(x => {
     const tc = x.teacher_ids.filter(t => l.teacher_ids.includes(t));
     if (tc.length) out.push({ hard: true, msg: `${tc.map(teacherShort).join(', ')} ติด ${lessonName(x)} ${classLabel(x)}` });
@@ -163,7 +165,7 @@ function conflictsAt(l, d, p) {
   if (teachesStudents(l) && !isStaffPeriod(p)) l.teacher_ids.forEach(tid => {      // วางแล้วครูสอนติดกันเกินกฎไหม
     const mx = maxRunOf(tid);
     if (!mx) return;
-    const from = ED.picked && ED.picked.lid === l.id && ED.picked.from && ED.picked.from[0] === d ? ED.picked.from[1] : 0;
+    const from = fromSlot && fromSlot[0] === d ? fromSlot[1] : 0;
     const on = q => q === p || (q !== from && ((IDX.byTeacher[tid] || {})[`${d}-${q}`] || []).some(teachesStudents));
     const seg = runSegments().find(([a, b]) => p >= a && p <= b);
     if (!seg) return;
@@ -175,13 +177,13 @@ function conflictsAt(l, d, p) {
   });
   if (!isStaffPeriod(p)) l.teacher_ids.forEach(tid => {                         // วางแล้ววันนั้นครูไม่เหลือคาบว่างติดกัน 2 คาบ
     if (!wantsFreePair(tid)) return;
-    const from = ED.picked && ED.picked.lid === l.id && ED.picked.from && ED.picked.from[0] === d ? ED.picked.from[1] : 0;
+    const from = fromSlot && fromSlot[0] === d ? fromSlot[1] : 0;
     const busy = q => q !== from && dayBusy(tid, d)(q);
     if (hasFreePair(busy) && !hasFreePair(q => q === p || busy(q))) out.push({ hard: false, msg: `${teacherShort(tid)} วันนี้จะไม่มีคาบว่างติดกัน 2 คาบ` });
   });
   if (((l.options || {}).avoid || []).includes(p)) out.push({ hard: false, msg: `วิชานี้ตั้งให้เลี่ยงคาบ ${p}` });
   if (!(l.options || {}).allow_same_day && l.kind === 'subject') {
-    const same = l.slots.filter(s => s[0] === d && !(ED.picked && ED.picked.from && ED.picked.from[0] === s[0] && ED.picked.from[1] === s[1]));
+    const same = l.slots.filter(s => s[0] === d && !(fromSlot && fromSlot[0] === s[0] && fromSlot[1] === s[1]));
     const adj = same.some(s => Math.abs(s[1] - p) === 1 && Math.min(s[1], p) !== lunchAfter());
     if (same.length && adj && noDoubleTeacher(l)) out.push({ hard: false, msg: `${teacherShort(noDoubleTeacher(l))} ไม่สอนคาบคู่` });
     else if (same.length && !adj) out.push({ hard: false, msg: 'วิชานี้มีในวันเดียวกันแล้ว' });
@@ -373,6 +375,7 @@ function renderEditor() {
           ${act('applyTracks()', 'magic', 'ตั้งสายการเรียนจากโครงสร้างหลักสูตร')}
           ${act('applySuggestedTracks()', 'lightbulb', 'แนะนำสายจากตารางปัจจุบัน')}
           ${act('openImportModal()', 'file-earmark-spreadsheet', 'นำเข้ารายวิชาจาก Excel (แบบสำรวจภาระงานสอน)')}
+          ${act('openClearModal()', 'eraser', 'ล้างตาราง (เอาวิชาออกจากช่อง)')}
           ${act('openRulesModal()', 'sliders', 'กฎการจัดตาราง (สอนติดกัน · นักเรียนไม่ว่างคาบแรก)')}
           ${act('openStaffModal()', 'people', 'คาบของครูหลังเลิกเรียน (PLC)')}
           ${draftReport() ? act('showDraftReport(draftReport())', 'clipboard-check', 'รายงานการร่างภาคเรียน') : ''}
@@ -392,7 +395,7 @@ function renderEditor() {
       <div class="col-xl-9">
         <div class="table-responsive"><table class="ed-grid"><thead>${head}</thead><tbody>${body}</tbody></table></div>
         <div class="small text-muted mt-1"><i class="bi bi-hand-index"></i> ลากวิชาไปวาง หรือแตะวิชาแล้วแตะช่อง • × หรือลากไปที่ "ยังไม่ได้วาง" = เอาออก • 🔓 = ล็อกช่อง (จัดอัตโนมัติจะไม่ย้าย)
-          <span class="ms-2 text-nowrap">สีช่องตอนเลือกวิชา: <span class="ed-swatch" style="background:#4caf50"></span>วางได้ <span class="ed-swatch" style="background:#e0a800"></span>ผิดเงื่อนไข <span class="ed-swatch" style="background:#dc3545"></span>ชน</span></div>
+          <span class="ms-2 text-nowrap">สีช่องตอนเลือกวิชา: <span class="ed-swatch" style="background:#4caf50"></span>วางได้ <span class="ed-swatch" style="background:#e0a800"></span>ผิดเงื่อนไข <span class="ed-swatch" style="background:#dc3545"></span>ชน <span class="ed-swatch" style="background:#0d6efd"></span>สลับช่องได้</span></div>
       </div>
       <div class="col-xl-3">
         <div class="ed-panel" id="edPending">
@@ -474,7 +477,7 @@ function pick(lid, from, byClick) {
 }
 function clearPick() {
   ED.picked = null;
-  document.querySelectorAll('.ed-cell').forEach(td => { td.classList.remove('ok', 'soft', 'bad'); td.removeAttribute('title'); });
+  document.querySelectorAll('.ed-cell').forEach(td => { td.classList.remove('ok', 'soft', 'bad', 'swap'); td.removeAttribute('title'); });
   document.querySelectorAll('.picked').forEach(x => x.classList.remove('picked'));
 }
 // ระบายสีทุกช่องตามผลถ้าวางวิชาที่เลือกลงไป
@@ -483,11 +486,11 @@ function showTargets() {
   if (!l) return;
   document.querySelectorAll('.ed-cell').forEach(td => {
     const d = +td.dataset.d, p = +td.dataset.p;
-    td.classList.remove('ok', 'soft', 'bad');
+    td.classList.remove('ok', 'soft', 'bad', 'swap');
     if (slotHas(l, d, p)) { td.removeAttribute('title'); return; }
-    const c = conflictsAt(l, d, p);
-    td.classList.add(c.some(x => x.hard) ? 'bad' : c.length ? 'soft' : 'ok');
-    td.title = c.map(x => (x.hard ? '✖ ' : '⚠ ') + x.msg).join('\n') || 'วางได้';
+    const c = conflictsAt(l, d, p), B = c.some(x => x.hard) ? swapOption(l, ED.picked.from, d, p) : null;
+    td.classList.add(B ? 'swap' : c.some(x => x.hard) ? 'bad' : c.length ? 'soft' : 'ok');
+    td.title = B ? `⇄ สลับช่องกับ ${lessonName(B)} ${classLabel(B)} ได้` : c.map(x => (x.hard ? '✖ ' : '⚠ ') + x.msg).join('\n') || 'วางได้';
   });
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && ED.picked) clearPick(); });
@@ -502,11 +505,43 @@ async function doPlace(d, p) {
   if (!pk.from && wantsDouble(l) && l.per_week - l.slots.length >= 2 && p < nPeriods() && p !== lunchAfter()
       && !slotHas(l, d, p + 1) && !conflictsAt(l, d, p + 1).some(c => c.hard)) add.push([d, p + 1]);
   const hard = conflictsAt(l, d, p).filter(c => c.hard);
+  const B = hard.length ? swapOption(l, pk.from, d, p) : null;               // ช่องปลายทางมีวิชาอื่น → สลับช่องกันได้ไหม
+  if (B) {
+    clearPick();
+    if (confirm(`สลับช่องกัน?\n• ${lessonName(l)} ${classLabel(l)} → วัน${DAYS[d - 1]} คาบ ${p}\n• ${lessonName(B)} ${classLabel(B)} → วัน${DAYS[pk.from[0] - 1]} คาบ ${pk.from[1]}`)) await doSwap(l, pk.from, B, [d, p]);
+    return;
+  }
   if (hard.length && !confirm(`วางแล้วจะชนกัน:\n• ${hard.map(c => c.msg).join('\n• ')}\n\nวางต่อหรือไม่?`)) return;
   if (!pk.from && l.slots.length >= l.per_week && !confirm(`${lessonName(l)} วางครบ ${l.per_week} คาบแล้ว จะวางเพิ่มอีกหรือไม่?`)) return;
   const body = { lesson_id: l.id, add, remove: pk.from ? [pk.from] : [] };
   clearPick();
   await applySlots(body, true);
+}
+
+// ย้ายวิชา l จากช่อง from ไป (d,p) ที่มีวิชา B ขวางอยู่ 1 วิชา → สลับกันได้ถ้าทั้งสองฝั่งไม่ชน (B ต้องไม่ล็อก)
+function swapOption(l, from, d, p) {
+  if (!from) return null;
+  const blockers = (IDX.bySlot[`${d}-${p}`] || []).filter(x => x.id !== l.id &&
+    (x.teacher_ids.some(t => l.teacher_ids.includes(t)) || (x.classes.some(c => l.classes.includes(c)) && classOverlap(l, x))));
+  if (blockers.length !== 1) return null;
+  const B = blockers[0];
+  if (lockedAt(B, d, p) || slotHas(B, from[0], from[1])) return null;
+  if (conflictsAt(l, d, p, { ignore: [B.id], from }).some(c => c.hard)) return null;
+  if (conflictsAt(B, from[0], from[1], { ignore: [l.id], from: [d, p] }).some(c => c.hard)) return null;
+  return B;
+}
+async function doSwap(A, from, B, to) {
+  if (previewGuard()) return;
+  try {
+    const r1 = await apiFetch('/api/tt/slots', { method: 'POST', body: JSON.stringify({ lesson_id: A.id, remove: [from], add: [to] }) });
+    T.lessons[T.lessons.findIndex(l => l.id === A.id)] = r1.lesson;
+    const r2 = await apiFetch('/api/tt/slots', { method: 'POST', body: JSON.stringify({ lesson_id: B.id, remove: [to], add: [from] }) });
+    T.lessons[T.lessons.findIndex(l => l.id === B.id)] = r2.lesson;
+    ED.undo.push({ multi: [{ lesson_id: B.id, add: [to], remove: [from] }, { lesson_id: A.id, add: [from], remove: [to] }] });
+    if (ED.undo.length > 50) ED.undo.shift();
+    buildIndex(); renderEditor();
+    toastEd(`สลับแล้ว: ${lessonName(A)} ⇄ ${lessonName(B)} (กด ย้อนกลับ ได้)`);
+  } catch (e) { alert('สลับไม่สำเร็จ: ' + e.message); await loadTerm(T.term.id); }
 }
 
 async function removeChip(lid, d, p) {
@@ -535,7 +570,65 @@ async function applySlots(body, pushUndo) {
 }
 async function edUndo() {
   const u = ED.undo.pop(); if (!u) return;
+  if (u.restore) {                                // ย้อนการล้างตาราง
+    try { await setSlotsBulk(u.restore); toastEd('ย้อนกลับแล้ว — ตารางกลับเป็นเหมือนก่อนล้าง'); } catch (e) { alert(e.message); }
+    return;
+  }
+  if (u.multi) { for (const op of u.multi) await applySlots(op, false); return; }   // ย้อนการสลับช่อง
   await applySlots(u, false);
+}
+// แทนที่ช่องของหลายรายการพร้อมกัน {lid: [[d,p,locked]]} (ล้างตาราง / ย้อนกลับ) — เซิร์ฟเวอร์ทำในธุรกรรมเดียว
+async function setSlotsBulk(map) {
+  await apiFetch(`/api/tt/terms/${T.term.id}/set-slots`, { method: 'POST', body: JSON.stringify({ lessons: map }) });
+  Object.entries(map).forEach(([lid, slots]) => { const L = lessonById(+lid); if (L) L.slots = slots.map(s => [s[0], s[1], s[2] ? 1 : 0]); });
+  buildIndex(); renderEditor();
+}
+
+/* ── ล้างตาราง: เอาวิชาออกจากช่อง (รายการสอนยังอยู่ครบ) ทั้งภาคเรียน / เฉพาะห้อง / เฉพาะครู · ย้อนกลับได้ ── */
+function openClearModal() {
+  if (previewGuard()) return;
+  const here = ED.by === 'class' ? classShort(ED.key) : teacherShort(+ED.key);
+  const body = `
+    <div class="mb-2">เอาวิชาออกจากช่องในตาราง — <b>รายการสอนยังอยู่ครบ</b> (ไปอยู่ที่ "ยังไม่ได้วาง") แล้วลากวางเอง หรือกด <b>จัดอัตโนมัติ</b></div>
+    <label class="d-block"><input type="radio" name="clScope" value="all" checked onchange="clearPreview()"> ทั้งภาคเรียน ${esc(T.term.name)}</label>
+    <label class="d-block"><input type="radio" name="clScope" value="here" onchange="clearPreview()"> เฉพาะ${ED.by === 'class' ? 'ห้อง' : ''} ${esc(here)}
+      ${ED.by === 'class' ? '<span class="text-muted small">(วิชาที่เรียนรวมหลายห้อง เช่น ศาสนา คงไว้)</span>' : '<span class="text-muted small">(วิชาที่สอนร่วมกับครูอื่นจะออกทั้งรายการ)</span>'}</label>
+    <label class="d-block mt-2"><input type="checkbox" id="clKeep" checked onchange="clearPreview()"> เก็บช่องที่ล็อก 🔒 ไว้ <span class="text-muted small">(เช่น ชุมนุม ลูกเสือ ประชุม PLC)</span></label>
+    <div id="clNow" class="alert alert-warning py-2 mt-2 mb-0 small"></div>`;
+  showModal('<i class="bi bi-eraser"></i> ล้างตาราง', body, `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+    <button id="clGo" class="btn btn-danger btn-sm" onclick="doClear()"><i class="bi bi-eraser"></i> ล้างตาราง</button>`);
+  clearPreview();
+}
+function clearPlan() {
+  const scope = document.querySelector('input[name="clScope"]:checked').value, keep = el('clKeep').checked;
+  const inScope = l => scope === 'all' || (ED.by === 'class' ? l.classes.length === 1 && l.classes[0] === ED.key : l.teacher_ids.includes(+ED.key));
+  const map = {}, prev = {};
+  let n = 0;
+  T.lessons.filter(inScope).forEach(l => {
+    const stay = keep ? l.slots.filter(s => s[2]) : [];
+    if (stay.length === l.slots.length) return;
+    n += l.slots.length - stay.length;
+    map[l.id] = stay.map(s => [s[0], s[1], 1]);
+    prev[l.id] = l.slots.map(s => [s[0], s[1], s[2] ? 1 : 0]);
+  });
+  return { map, prev, n, lessons: Object.keys(map).length };
+}
+function clearPreview() {
+  const c = clearPlan();
+  el('clNow').innerHTML = c.n ? `จะเอาออก <b>${c.n}</b> ช่อง จาก ${c.lessons} รายการ · เปลี่ยนใจกด <b>ย้อนกลับ</b> ได้` : 'ไม่มีช่องที่ต้องเอาออก';
+  el('clGo').disabled = !c.n;
+}
+async function doClear() {
+  const c = clearPlan();
+  if (!c.n) return;
+  if (T.term.published && !confirm(`ภาคเรียน ${T.term.name} เผยแพร่แล้ว ครูจะเห็นตารางว่างทันที — ล้างต่อหรือไม่?`)) return;
+  try {
+    await setSlotsBulk(c.map);
+    ED.undo.push({ restore: c.prev });
+    if (ED.undo.length > 50) ED.undo.shift();
+    edModal.hide(); renderEditor();
+    toastEd(`ล้างแล้ว ${c.n} ช่อง — ลากวางเอง หรือกด จัดอัตโนมัติ · เปลี่ยนใจกด ย้อนกลับ`);
+  } catch (e) { alert(e.message); }
 }
 function edBy(by) { ED.by = by; ED.key = ''; clearPick(); renderEditor(); }
 

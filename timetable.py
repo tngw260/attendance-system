@@ -1367,6 +1367,34 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                         n += 1
         return jsonify(success=True, placed=n)
 
+    @app.post('/api/tt/terms/<int:term_id>/set-slots')
+    @tt_edit_required
+    def tt_set_slots(term_id):
+        """แทนที่ช่องทั้งหมดของรายการที่ส่งมา {lessons: {lesson_id: [[d,p,locked],...]}} — ล้างตาราง / ย้อนกลับ (ธุรกรรมเดียว)"""
+        data = (request.get_json(silent=True) or {}).get('lessons')
+        try:
+            data = {int(k): [(int(x[0]), int(x[1]), 1 if len(x) > 2 and x[2] else 0) for x in v] for k, v in (data or {}).items()}
+        except (TypeError, ValueError, AttributeError, IndexError):
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        with get_db() as con:
+            row = con.execute('SELECT config FROM tt_terms WHERE id=?', (term_id,)).fetchone()
+            if not row:
+                return jsonify(success=False, message='ไม่พบภาคเรียน'), 404
+            cfg = jl(row['config'], {})
+            nd, np_ = len(cfg.get('days') or [1] * 5), len(cfg.get('periods') or [1] * 7)
+            staff = {x['no'] for x in cfg.get('periods') or [] if x.get('teacher_only')}
+            own = {r['id']: jl(r['classes'], []) for r in con.execute('SELECT id, classes FROM tt_lessons WHERE term_id=?', (term_id,))}
+            if any(lid not in own for lid in data):
+                return jsonify(success=False, message='มีรายการที่ไม่ได้อยู่ในภาคเรียนนี้'), 400
+            if any(not (1 <= d <= nd and 1 <= p <= np_) or (own[lid] and p in staff) for lid, v in data.items() for d, p, _ in v):
+                return jsonify(success=False, message='ช่องไม่ถูกต้อง'), 400
+            n = 0
+            for lid, v in data.items():
+                con.execute('DELETE FROM tt_slots WHERE lesson_id=?', (lid,))
+                for d, p, lk in v:
+                    n += con.execute('INSERT OR IGNORE INTO tt_slots (lesson_id, day, period, locked) VALUES (?,?,?,?)', (lid, d, p, lk)).rowcount
+        return jsonify(success=True, placed=n)
+
     # ── สอนแทน ─────────────────────────────────────────────
     # คาบที่ต้องหาครูแทน คำนวณในเบราว์เซอร์จาก "ครูไม่มา" + ตารางที่เผยแพร่ · เซิร์ฟเวอร์เก็บแค่บันทึกไม่มา + ผลการจัด
     def absence_dict(r):
