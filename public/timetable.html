@@ -46,6 +46,7 @@
     table.tt-grid th.diag .d1 { position: absolute; left: 5pt; top: 1pt; font-size: 14pt; font-weight: 400; }
     table.tt-grid th.diag .d2 { position: absolute; right: 18pt; bottom: 0; font-size: 14pt; font-weight: 400; }
     .tt-cell .ln1, .tt-cell .ln2 { display: block; }
+    .tt-cell .ln1.sm { font-size: 13pt; line-height: 15pt; }   /* ชื่อกิจกรรมยาว เช่น ติว O-NET ภาษาอังกฤษ → ไม่ตัดเป็น 3 บรรทัด */
     /* หลายสาย/กลุ่มเรียนพร้อมกัน: วิชาละบรรทัด · รหัสตัวหนา + สาย + ชื่อครูตัวเล็ก · ไม่ตัดกลางชื่อ */
     .tt-cell.multi { font-size: 13pt; line-height: 14pt; padding: 2pt 1pt; }
     .tt-cell .ml { display: block; }
@@ -422,14 +423,14 @@ function cellHTML(mode, ls, key) {
   if (mode === 'teacher') {
     return ls.map(l => {
       const lab = (l.kind === 'activity' && l.classes.length > 1) ? '' : classLabel(l);   // กิจกรรมรวมหลายชั้น ไม่ต้องใส่ชั้น (ตามแบบเดิม)
-      return `<span class="ln1">${esc(lessonName(l))}</span>${lab ? `<span class="ln2">${esc(lab)}</span>` : ''}`;
+      return `<span class="ln1${lessonName(l).length > 16 ? ' sm' : ''}">${esc(lessonName(l))}</span>${lab ? `<span class="ln2">${esc(lab)}</span>` : ''}`;
     }).join('');
   }
   const idle = idleTracks(key, ls);
   if (ls.length === 1 && !idle.length) {
     const l = ls[0];
     const who = l.teacher_ids.length > 2 ? `ครู ${l.teacher_ids.length} ท่าน` : l.teacher_ids.map(teacherShort).join(', ');
-    return `<span class="ln1">${esc(lessonName(l))}</span><span class="ln2">${esc(who)}</span>`;
+    return `<span class="ln1${lessonName(l).length > 16 ? ' sm' : ''}">${esc(lessonName(l))}</span><span class="ln2">${esc(who)}</span>`;
   }
   // หลายสายเรียนพร้อมกัน: วิชาละบรรทัด รหัส + สาย (ชื่อครูดูได้ในตารางรายสาย — ใส่ทุกวิชาแถวจะสูงจนต้องย่อทั้งหน้า) · สายที่ว่าง = ซ่อมเสริม
   return ls.map(l => `<span class="ml" title="${esc(l.teacher_ids.map(teacherShort).join(', '))}"><b class="${l.code ? 'c' : ''}">${esc(lessonName(l))}</b>${l.track ? ` <span class="tk">${esc(l.track)}</span>` : ''}</span>`).join('')
@@ -620,7 +621,7 @@ async function printDoc(all) {
 }
 </script>
 <script src="/js/tt-editor.js?v=32"></script>
-<script src="/js/tt-solver.js?v=14"></script>
+<script src="/js/tt-solver.js?v=15"></script>
 <script src="/js/tt-subs.js?v=4"></script>
 </body>
 </html>

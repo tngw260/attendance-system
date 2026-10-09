@@ -59,6 +59,12 @@ function ttSolve(opts) {
     while (need > 0) { const len = dbl && need >= 2 ? 2 : 1; sessions.push({ l, len }); need -= len; }
   });
   const fits = (l, d, p, len) => p + len - 1 <= (l.classes.length ? NPS : NP) && !(len === 2 && p === LA);
+  // เพดานรายวันของครู = คาบทั้งสัปดาห์ (ทุกรายการในคาบ 1..คาบสุดท้ายของนักเรียน) ÷ จำนวนวัน ปัดขึ้น
+  const dayCap = {};
+  T.teachers.forEach(t => {
+    const n = T.lessons.filter(l => l.teacher_ids.includes(t.id) && !isSupervise(l) && !(l.options || {}).staff).reduce((a, l) => a + l.per_week, 0);
+    dayCap[t.id] = Math.max(1, Math.ceil(n / ND));
+  });
   // สอนติดกัน: นับคาบที่ครูอยู่กับนักเรียน (tTeach) ต่อจากช่วงที่จะวาง ทั้งซ้าย-ขวา ภายในช่วงเช้า/บ่าย
   function runAround(st, t, d, p, len) {
     const tt = st.tTeach[t], [a, b] = p <= LA ? [1, LA] : [LA + 1, NPS];
@@ -105,7 +111,7 @@ function ttSolve(opts) {
 
   // ── สถานะของรอบค้นหา ──
   function newState() {
-    const st = { at: Array.from({ length: NS }, () => []), tBusy: {}, tTeach: {}, tDay: {}, dayUse: {}, fixedDay: {}, pos: new Map(), byLesson: new Map() };
+    const st = { at: Array.from({ length: NS }, () => []), tBusy: {}, tTeach: {}, tDay: {}, tAll: {}, dayUse: {}, fixedDay: {}, pos: new Map(), byLesson: new Map() };
     fixed.forEach(f => occupy(st, f.l, f.d, f.p, 1, null));
     return st;
   }
@@ -114,7 +120,7 @@ function ttSolve(opts) {
     for (let q = p; q < p + len; q++) {
       const s = sidx(d, q);
       st.at[s].push({ l, sess });
-      l.teacher_ids.forEach(t => { arr(st.tBusy, t, NS)[s]++; if (isSub(l)) arr(st.tDay, t, ND + 1)[d]++; if (teachesStudents(l)) arr(st.tTeach, t, NS)[s]++; });
+      l.teacher_ids.forEach(t => { arr(st.tBusy, t, NS)[s]++; if (isSub(l)) arr(st.tDay, t, ND + 1)[d]++; if (teachesStudents(l)) arr(st.tTeach, t, NS)[s]++; if (q <= NPS) arr(st.tAll, t, ND + 1)[d]++; });
     }
     arr(st.dayUse, l.id, ND + 1)[d] += len;
     if (!sess) arr(st.fixedDay, l.id, ND + 1)[d] += len;
@@ -125,7 +131,7 @@ function ttSolve(opts) {
     for (let q = p; q < p + sess.len; q++) {
       const s = sidx(d, q), a = st.at[s];
       a.splice(a.findIndex(e => e.sess === sess), 1);
-      l.teacher_ids.forEach(t => { st.tBusy[t][s]--; if (isSub(l)) st.tDay[t][d]--; if (teachesStudents(l)) st.tTeach[t][s]--; });
+      l.teacher_ids.forEach(t => { st.tBusy[t][s]--; if (isSub(l)) st.tDay[t][d]--; if (teachesStudents(l)) st.tTeach[t][s]--; if (q <= NPS) st.tAll[t][d]--; });
     }
     st.dayUse[l.id][d] -= sess.len;
     st.pos.delete(sess);
@@ -155,7 +161,11 @@ function ttSolve(opts) {
       const s = sidx(d, q);
       if (tr.length) sc += st.at[s].some(e => e.l.classes.some(c => l.classes.includes(c))) ? 5 : 0;   // เรียนพร้อมกับสายอื่น
     }
-    l.teacher_ids.forEach(t => { sc -= 0.5 * ((st.tDay[t] && st.tDay[t][d]) || 0); });              // กระจายภาระครู
+    l.teacher_ids.forEach(t => {                                                                         // กระจายภาระครูให้แต่ละวันใกล้เคียงกัน
+      sc -= 0.5 * ((st.tDay[t] && st.tDay[t][d]) || 0);
+      const over = ((st.tAll[t] && st.tAll[t][d]) || 0) + len - dayCap[t];
+      if (over > 0) sc -= 2 * over;                                                                      // เกินค่าเฉลี่ยรายวันของครูคนนั้น
+    });
     if (st.dayUse[l.id]) for (let dd = 1; dd <= ND; dd++) if (st.dayUse[l.id][dd] && Math.abs(dd - d) === 1) sc -= 0.6; // เว้นวัน
     if (len === 2 && p <= LA) sc += 0.3;                                                               // คาบคู่ชอบช่วงเช้า
     sc += 5 * holeGain(st, l, d, p, len);                                                              // เติมคาบที่นักเรียนห้ามว่าง
@@ -390,9 +400,11 @@ function ttSolve(opts) {
     let holes = 0;                                // ช่องที่นักเรียนห้ามว่างแต่ยังว่าง
     if (REQ.size) for (const c of IDX.classes) for (let d = 1; d <= ND; d++) for (const q of REQ)
       if (q <= NPS && missingRoots(c, hereOf(st, c, sidx(d, q)), rootsOf(c)).length) holes++;
+    let heavy = 0;                                // คาบที่เกินเพดานรายวันของครู (วันหนักเกินค่าเฉลี่ย)
+    Object.entries(st.tAll).forEach(([t, arr2]) => { for (let d = 1; d <= ND; d++) heavy += Math.max(0, arr2[d] - (dayCap[t] || 99)); });
     let pairMiss = 0;                             // วันที่ครูที่ขอคาบว่างติดกันไม่มีคู่ว่าง
     for (const t of pairList) for (let d = 1; d <= ND; d++) if (!pairOK(st, t, d, [])) pairMiss++;
-    return { unplaced, misaligned: mis, over, holes, pairMiss, score: -unplaced * 100 - mis * 8 - over * 4 - holes * 6 - pairMiss * 4 };
+    return { unplaced, misaligned: mis, over, holes, pairMiss, heavy, score: -unplaced * 100 - mis * 8 - over * 4 - holes * 6 - pairMiss * 4 - heavy * 2 };
   }
 
   return {
