@@ -112,15 +112,30 @@ const trackRoot = (cls, t) => { const c = trackChain(cls, t); return c[c.length 
 
 // กฎ "นักเรียนไม่ว่างคาบ …" (config.class_busy เช่น [1] = คาบแรก): ทุกสายหลักของห้องต้องมีเรียนในคาบนั้นทุกวัน
 const classBusyPeriods = () => (T.term.config.class_busy || []).filter(p => !isStaffPeriod(p));
-const classRoots = cls => [...new Set(((T.term.config.tracks || {})[cls] || []).map(t => trackRoot(cls, t)))];
+// สายหลักของห้อง — "กลุ่ม …" ที่ยังไม่ได้ตั้งว่าอยู่ในสายไหน ไม่นับเป็นสายหลัก (ถ้าห้องมีสายอื่นอยู่แล้ว เช่น ม.5 SMTP/BEP)
+function classRoots(cls) {
+  const all = [...new Set(((T.term.config.tracks || {})[cls] || []).map(t => trackRoot(cls, t)))];
+  const main = all.filter(r => !/^กลุ่ม/.test(r));
+  return main.length >= 2 ? main : all;
+}
 // สายหลักที่ยังไม่มีเรียนในช่องนี้ (ห้องไม่แยกสาย: ว่างทั้งห้อง = ['*'])
+// มีวิชาของสาย/กลุ่มที่ไม่รู้ว่าอยู่ในสายไหน → ไม่ฟันธงว่าใครว่าง (กันขึ้น "ซ่อมเสริม" ทั้งที่มีเรียน)
 function missingRoots(cls, here, roots = classRoots(cls)) {
   if (!here.length) return roots.length >= 2 ? roots : ['*'];
   if (roots.length < 2) return [];
   const cov = new Set();
-  here.forEach(l => { const t = tracksOf(l); (t.length ? t.map(x => trackRoot(cls, x)) : roots).forEach(x => cov.add(x)); });
+  for (const l of here) {
+    const t = tracksOf(l);
+    if (!t.length) return [];                                        // เรียนทั้งห้อง
+    const rs = t.map(x => trackRoot(cls, x));
+    if (rs.some(r => !roots.includes(r))) return [];
+    rs.forEach(r => cov.add(r));
+  }
   return roots.filter(r => !cov.has(r));
 }
+// สาย/กลุ่มที่วิชาในห้องใช้ แต่ไม่รู้ว่าอยู่ในสายหลักไหน (เช่น กลุ่ม 1/2 ที่ยังไม่ได้เลือก "อยู่ใน …")
+const unknownTracks = cls => { const roots = classRoots(cls); return roots.length < 2 ? [] :
+  [...new Set(T.lessons.filter(l => l.classes.includes(cls)).flatMap(l => tracksOf(l).filter(t => !roots.includes(trackRoot(cls, t)))))]; };
 function classHoles(periods = classBusyPeriods()) {      // [{cls, d, p, miss}] ช่องที่นักเรียนว่างในคาบที่ห้ามว่าง
   const out = [];
   if (!periods.length) return out;
@@ -154,8 +169,8 @@ function trackBalance(cls) {
   const roots = classRoots(cls), per = Object.fromEntries(roots.map(r => [r, 0]));
   let whole = 0;
   T.lessons.filter(l => l.classes.includes(cls)).forEach(l => {
-    const rs = [...new Set(tracksOf(l).map(t => trackRoot(cls, t)))].filter(r => r in per);
-    if (rs.length) rs.forEach(r => { per[r] += l.per_week; }); else whole += l.per_week;
+    const all = [...new Set(tracksOf(l).map(t => trackRoot(cls, t)))], rs = all.filter(r => r in per);
+    if (rs.length) rs.forEach(r => { per[r] += l.per_week; }); else if (!all.length) whole += l.per_week;   // สายที่ไม่รู้ = ไม่นับ
   });
   return { roots, per, whole, slots: DAYS.length * periodsFor('class').length };
 }
@@ -296,6 +311,8 @@ function allIssues() {
   trackGaps().forEach(g => soft.push({ d: g.d, p: g.p, type: 'class', key: g.cls,
     msg: `${classShort(g.cls)} สาย ${g.busy.join(', ')} เรียน แต่สาย ${g.idle.join(', ')} ว่าง (ทุกสายควรเรียนพร้อมกัน)` }));
   IDX.classes.forEach(cls => {
+    const unk = unknownTracks(cls);
+    if (unk.length) soft.push({ type: 'class', key: cls, msg: `${classShort(cls)}: ${unk.join(', ')} ยังไม่ได้ตั้งว่าอยู่ในสายไหน — ตารางรายสาย/ซ่อมเสริมของห้องนี้อาจไม่ตรง (ปุ่ม สายการเรียน → เลือก "อยู่ใน …" หรือกด ใช้คำแนะนำ)` });
     const b = trackBalance(cls);
     if (b.roots.length < 2) return;
     const vals = b.roots.map(r => b.per[r]), mx = Math.max(...vals), mn = Math.min(...vals);

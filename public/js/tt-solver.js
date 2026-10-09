@@ -370,16 +370,13 @@ function ttSolve(opts) {
   // คุณภาพผลลัพธ์: คาบที่ขาด (หลัก) + ช่องที่บางสายเรียนแต่สายอื่นว่าง + วิชาเดียวกันวันติดกัน
   function evaluate(st) {
     const unplaced = sessions.filter(s => !st.pos.has(s)).reduce((a, s) => a + s.len, 0);
-    let mis = 0;
-    Object.entries(classTracks).forEach(([cls, trs]) => {
-      const roots = [...new Set(trs.map(t => trackRoot(cls, t)))];     // นับที่สายหลัก (สายย่อยรวมกับสายแม่)
+    let mis = 0;                                  // ช่องที่บางสายหลักเรียน บางสายว่าง (สายย่อยรวมกับสายแม่ · สายที่ไม่รู้ = ไม่นับ)
+    Object.keys(classTracks).forEach(cls => {
+      const roots = rootsOf(cls);
       if (roots.length < 2) return;
       for (let s = 0; s < NS; s++) {
-        const here = st.at[s].filter(e => e.l.classes.includes(cls));
-        if (!here.length) continue;
-        const cov = new Set();
-        here.forEach(e => { const t = tracksOf(e.l); (t.length ? t.map(x => trackRoot(cls, x)) : roots).forEach(x => cov.add(x)); });
-        if (roots.some(t => !cov.has(t))) mis++;
+        const here = hereOf(st, cls, s);
+        if (here.length && missingRoots(cls, here, roots).length) mis++;
       }
     });
     let over = 0;                                 // ครูที่ผ่อนกฎ: จำนวนช่วงที่ติดกันเกินกฎเดิม (ยิ่งน้อยยิ่งดี)

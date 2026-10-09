@@ -404,7 +404,9 @@ const trackLabel = t => /^กลุ่ม/.test(t) ? t : `สาย ${t}`;
 function cellLessons(mode, key, d, p) {
   if (mode === 'teacher') return ((IDX.byTeacher[key] || {})[`${d}-${p}`]) || [];
   const { cls, tr } = splitKey(key), ls = ((IDX.byClass[cls] || {})[`${d}-${p}`]) || [];
-  return tr ? ls.filter(l => !tracksOf(l).length || tracksOf(l).some(t => trackChain(cls, t).includes(tr))) : ls;
+  const roots = tr ? classRoots(cls) : [];
+  return tr ? ls.filter(l => { const t = tracksOf(l);                   // วิชาทั้งห้อง · วิชาของสายนี้/กลุ่มย่อยในสาย · สายที่ไม่รู้ว่าอยู่ไหน (ไม่ขึ้นว่าว่าง)
+    return !t.length || t.some(x => trackChain(cls, x).includes(tr)) || t.every(x => !roots.includes(trackRoot(cls, x))); }) : ls;
 }
 // คาบที่นักเรียนไม่มีเรียน (ตารางเรียนเท่านั้น — ตารางครูเว้นว่างตามเดิม)
 const FREE_LABEL = 'ซ่อมเสริม';
@@ -431,7 +433,7 @@ function cellHTML(mode, ls, key) {
   }
   // หลายสายเรียนพร้อมกัน: วิชาละบรรทัด รหัส + สาย (ชื่อครูดูได้ในตารางรายสาย — ใส่ทุกวิชาแถวจะสูงจนต้องย่อทั้งหน้า) · สายที่ว่าง = ซ่อมเสริม
   return ls.map(l => `<span class="ml" title="${esc(l.teacher_ids.map(teacherShort).join(', '))}"><b class="${l.code ? 'c' : ''}">${esc(lessonName(l))}</b>${l.track ? ` <span class="tk">${esc(l.track)}</span>` : ''}</span>`).join('')
-    + (idle.length ? `<span class="ml"><b>${FREE_LABEL}</b> <span class="tk">${esc(idle.join(','))}</span></span>` : '');
+    + (idle.length ? `<span class="ml"><b>${FREE_LABEL}</b> <span class="tk">เฉพาะ ${esc(idle.join(','))}</span></span>` : '');
 }
 
 /* ===== หน้า A4 แนวนอน (หน้าตาเหมือนไฟล์เดิม) ===== */
@@ -523,7 +525,7 @@ function mobileHTML(mode, key) {
       const txt = ls.length ? ls.map(l => mode === 'teacher'
           ? `<b>${esc(lessonName(l))}</b> ${esc(classLabel(l))}`
           : `<b>${esc(lessonName(l))}</b>${l.track && !splitKey(key).tr ? ` <small>${esc(l.track)}</small>` : ''} ${esc(l.teacher_ids.length > 2 ? `ครู ${l.teacher_ids.length} ท่าน` : l.teacher_ids.map(teacherShort).join(', '))}`).join('<br>')
-          + (idle.length ? `<br><b>${FREE_LABEL}</b> <small>${esc(idle.join(','))}</small>` : '')
+          + (idle.length ? `<br><b>${FREE_LABEL}</b> <small>เฉพาะ ${esc(idle.join(','))}</small>` : '')
         : (mode === 'class' ? FREE_LABEL : 'ว่าง');
       const cls = !ls.length ? ' free' : ls.every(l => l.kind === 'activity') ? ' act' : '';
       html += `<div class="row1${cur ? ' now' : ''}${cls}"><div class="t"><b>คาบ ${x.no}</b><br>${esc(x.start)}-${esc(x.end)}</div><div class="s">${txt}</div></div>`;
@@ -617,8 +619,8 @@ async function printDoc(all) {
   if (all) setTimeout(render, 500);
 }
 </script>
-<script src="/js/tt-editor.js?v=31"></script>
-<script src="/js/tt-solver.js?v=13"></script>
+<script src="/js/tt-editor.js?v=32"></script>
+<script src="/js/tt-solver.js?v=14"></script>
 <script src="/js/tt-subs.js?v=4"></script>
 </body>
 </html>
