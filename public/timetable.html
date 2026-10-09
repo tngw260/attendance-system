@@ -406,21 +406,32 @@ function cellLessons(mode, key, d, p) {
   const { cls, tr } = splitKey(key), ls = ((IDX.byClass[cls] || {})[`${d}-${p}`]) || [];
   return tr ? ls.filter(l => !tracksOf(l).length || tracksOf(l).some(t => trackChain(cls, t).includes(tr))) : ls;
 }
-function cellHTML(mode, ls) {
-  if (!ls.length) return '';
+// คาบที่นักเรียนไม่มีเรียน (ตารางเรียนเท่านั้น — ตารางครูเว้นว่างตามเดิม)
+const FREE_LABEL = 'ซ่อมเสริม';
+// ตารางห้องแบบรวมทุกสาย: สายที่ว่างในช่องนี้ (บางสายเรียน บางสายว่าง) → แสดง "ซ่อมเสริม" ของสายนั้นด้วย
+function idleTracks(key, ls) {
+  const { cls, tr } = splitKey(key), roots = classRoots(cls);
+  if (tr || roots.length < 2 || !ls.length) return [];
+  const idle = missingRoots(cls, ls, roots);
+  return idle.length < roots.length ? idle : [];
+}
+function cellHTML(mode, ls, key) {
+  if (!ls.length) return mode === 'class' ? `<span class="ln1">${FREE_LABEL}</span>` : '';
   if (mode === 'teacher') {
     return ls.map(l => {
       const lab = (l.kind === 'activity' && l.classes.length > 1) ? '' : classLabel(l);   // กิจกรรมรวมหลายชั้น ไม่ต้องใส่ชั้น (ตามแบบเดิม)
       return `<span class="ln1">${esc(lessonName(l))}</span>${lab ? `<span class="ln2">${esc(lab)}</span>` : ''}`;
     }).join('');
   }
-  if (ls.length === 1) {
+  const idle = idleTracks(key, ls);
+  if (ls.length === 1 && !idle.length) {
     const l = ls[0];
     const who = l.teacher_ids.length > 2 ? `ครู ${l.teacher_ids.length} ท่าน` : l.teacher_ids.map(teacherShort).join(', ');
     return `<span class="ln1">${esc(lessonName(l))}</span><span class="ln2">${esc(who)}</span>`;
   }
-  // หลายสายเรียนพร้อมกัน: วิชาละบรรทัด รหัส + สาย (ชื่อครูดูได้ในตารางรายสาย — ใส่ทุกวิชาแถวจะสูงจนต้องย่อทั้งหน้า)
-  return ls.map(l => `<span class="ml" title="${esc(l.teacher_ids.map(teacherShort).join(', '))}"><b class="${l.code ? 'c' : ''}">${esc(lessonName(l))}</b>${l.track ? ` <span class="tk">${esc(l.track)}</span>` : ''}</span>`).join('');
+  // หลายสายเรียนพร้อมกัน: วิชาละบรรทัด รหัส + สาย (ชื่อครูดูได้ในตารางรายสาย — ใส่ทุกวิชาแถวจะสูงจนต้องย่อทั้งหน้า) · สายที่ว่าง = ซ่อมเสริม
+  return ls.map(l => `<span class="ml" title="${esc(l.teacher_ids.map(teacherShort).join(', '))}"><b class="${l.code ? 'c' : ''}">${esc(lessonName(l))}</b>${l.track ? ` <span class="tk">${esc(l.track)}</span>` : ''}</span>`).join('')
+    + (idle.length ? `<span class="ml"><b>${FREE_LABEL}</b> <span class="tk">${esc(idle.join(','))}</span></span>` : '');
 }
 
 /* ===== หน้า A4 แนวนอน (หน้าตาเหมือนไฟล์เดิม) ===== */
@@ -435,10 +446,11 @@ function pageHTML(mode, key) {
     while (p <= P.length) {
       const ls = cellLessons(mode, key, d, p);
       let span = 1;
-      // รวมคาบติดกันที่เป็นรายการเดียวกัน (ไม่ข้ามพักกลางวัน)
-      while (ls.length && p + span <= P.length && !(p + span - 1 === lunchAfter) &&
+      // รวมคาบติดกันที่เป็นรายการเดียวกัน (ไม่ข้ามพักกลางวัน) · ตารางเรียน: คาบว่างติดกันรวมเป็น "ซ่อมเสริม" ช่องเดียว
+      while ((ls.length || mode === 'class') && p + span <= P.length && !(p + span - 1 === lunchAfter) &&
              sig(cellLessons(mode, key, d, p + span)) === sig(ls)) span++;
-      cells += `<td class="tt-cell${ls.length > 1 && mode === 'class' ? ' multi' : ''}"${span > 1 ? ` colspan="${span}"` : ''}>${cellHTML(mode, ls)}</td>`;
+      const multi = mode === 'class' && (ls.length > 1 || (ls.length && idleTracks(key, ls).length));
+      cells += `<td class="tt-cell${multi ? ' multi' : ''}"${span > 1 ? ` colspan="${span}"` : ''}>${cellHTML(mode, ls, key)}</td>`;
       p += span;
       if (p - 1 === lunchAfter && di === 0) { /* คอลัมน์พักอยู่ในแถวหัว (rowspan) */ }
     }
@@ -507,9 +519,12 @@ function mobileHTML(mode, key) {
     P.forEach(x => {
       const ls = cellLessons(mode, key, d, x.no);
       const cur = d === today && hhmm >= x.start && hhmm < x.end;
+      const idle = mode === 'class' ? idleTracks(key, ls) : [];
       const txt = ls.length ? ls.map(l => mode === 'teacher'
           ? `<b>${esc(lessonName(l))}</b> ${esc(classLabel(l))}`
-          : `<b>${esc(lessonName(l))}</b> ${esc(l.teacher_ids.length > 2 ? `ครู ${l.teacher_ids.length} ท่าน` : l.teacher_ids.map(teacherShort).join(', '))}`).join('<br>') : 'ว่าง';
+          : `<b>${esc(lessonName(l))}</b>${l.track && !splitKey(key).tr ? ` <small>${esc(l.track)}</small>` : ''} ${esc(l.teacher_ids.length > 2 ? `ครู ${l.teacher_ids.length} ท่าน` : l.teacher_ids.map(teacherShort).join(', '))}`).join('<br>')
+          + (idle.length ? `<br><b>${FREE_LABEL}</b> <small>${esc(idle.join(','))}</small>` : '')
+        : (mode === 'class' ? FREE_LABEL : 'ว่าง');
       const cls = !ls.length ? ' free' : ls.every(l => l.kind === 'activity') ? ' act' : '';
       html += `<div class="row1${cur ? ' now' : ''}${cls}"><div class="t"><b>คาบ ${x.no}</b><br>${esc(x.start)}-${esc(x.end)}</div><div class="s">${txt}</div></div>`;
     });
