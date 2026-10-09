@@ -1285,6 +1285,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             rep = dict(check_code=[], changed=[], no_teacher=[], ended=[], uncovered={}, merged=[])
             out = {}          # key → lesson ใหม่ (รวมรายการซ้ำ)
             for l in src['lessons']:
+                if (l['options'] or {}).get('supervise'):          # ครูดูแลซ่อมเสริมผูกกับตารางเทอมนั้น — ไม่ยกไป
+                    continue
                 classes, g = l['classes'], (int(l['classes'][0].split('/')[0]) if l['classes'] else None)
                 who = ', '.join(teacher_name.get(t, '') for t in l['teacher_ids'])
                 cls_txt = ', '.join('ม.' + c.split('/')[0] for c in classes)
@@ -1388,6 +1390,44 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                         con.execute('INSERT OR IGNORE INTO tt_slots (lesson_id, day, period) VALUES (?,?,?)', (lid, d, p))
                         n += 1
         return jsonify(success=True, placed=n)
+
+    @app.post('/api/tt/terms/<int:term_id>/supervision')
+    @tt_edit_required
+    def tt_supervision(term_id):
+        """ครูดูแลคาบซ่อมเสริม (คาบว่างของนักเรียน) {items: [{cls, track, d, p, teacher_id}]}
+        แทนชุดเดิมทั้งหมด: ลบรายการ options.supervise ของภาคเรียน แล้วสร้างใหม่ (รายการละ ห้อง+สาย+ครู · ช่องล็อก)"""
+        items = (request.get_json(silent=True) or {}).get('items') or []
+        with get_db() as con:
+            row = con.execute('SELECT config FROM tt_terms WHERE id=?', (term_id,)).fetchone()
+            if not row:
+                return jsonify(success=False, message='ไม่พบภาคเรียน'), 404
+            cfg = jl(row['config'], {})
+            nd = len(cfg.get('days') or [1] * 5)
+            npr = len([x for x in cfg.get('periods') or [] if not x.get('teacher_only')]) or 7
+            known = {r['id'] for r in con.execute('SELECT id FROM tt_teachers')}
+            groups = {}
+            try:
+                for it in items:
+                    cls, tr = str(it.get('cls') or ''), re.sub(r'\s+', '', str(it.get('track') or ''))[:60]
+                    d, p, tid = int(it['d']), int(it['p']), int(it['teacher_id'])
+                    if cls not in cfg.get('classes', []) or not (1 <= d <= nd and 1 <= p <= npr) or tid not in known:
+                        raise ValueError
+                    groups.setdefault((cls, tr, tid), set()).add((d, p))
+            except (TypeError, ValueError, KeyError):
+                return jsonify(success=False, message='ข้อมูลครูดูแลไม่ถูกต้อง'), 400
+            old = [r['id'] for r in con.execute('SELECT id, options FROM tt_lessons WHERE term_id=?', (term_id,)) if jl(r['options'], {}).get('supervise')]
+            for lid in old:
+                con.execute('DELETE FROM tt_slots WHERE lesson_id=?', (lid,))
+                con.execute('DELETE FROM tt_lessons WHERE id=?', (lid,))
+            n = 0
+            for (cls, tr, tid), slots in groups.items():
+                lid = con.execute("""INSERT INTO tt_lessons (term_id, code, title, kind, classes, track, teacher_ids, per_week, options, note)
+                                     VALUES (?, '', 'ซ่อมเสริม', 'activity', ?, ?, ?, ?, ?, '')""",
+                                  (term_id, json.dumps([cls]), tr, json.dumps([tid]), len(slots), json.dumps({'supervise': True}))).lastrowid
+                for d, p in sorted(slots):
+                    con.execute('INSERT INTO tt_slots (lesson_id, day, period, locked) VALUES (?,?,?,1)', (lid, d, p))
+                    n += 1
+        return jsonify(success=True, slots=n, message=f'จัดครูดูแลซ่อมเสริมแล้ว {n} คาบ' if n else 'ล้างครูดูแลซ่อมเสริมแล้ว')
 
     @app.post('/api/tt/terms/<int:term_id>/lesson-options')
     @tt_edit_required

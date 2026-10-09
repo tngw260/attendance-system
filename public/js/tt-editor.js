@@ -259,6 +259,7 @@ function allIssues() {
     const n = l.slots.length, pw = l.per_week, name = `${lessonName(l)} ${classLabel(l)}`.trim();
     const key = l.classes[0] || String(l.teacher_ids[0] || '');
     const type = l.classes.length ? 'class' : 'teacher';
+    if (isSupervise(l)) return;                                     // ครูดูแลซ่อมเสริม: ระบบจัดเอง ไม่เตือนวางไม่ครบ
     if (n < pw) soft.push({ type, key, lid: l.id, msg: `${name} ยังวางไม่ครบ (${n}/${pw})` });
     if (n > pw) soft.push({ type, key, lid: l.id, msg: `${name} วางเกิน (${n}/${pw})` });
     if (l.classes.length) l.slots.filter(s => isStaffPeriod(s[1])).forEach(([d, p]) =>
@@ -368,7 +369,7 @@ function renderEditor() {
   });
 
   const vl = viewLessons();
-  const pending = vl.filter(l => l.slots.length < l.per_week);
+  const pending = vl.filter(l => l.slots.length < l.per_week && !isSupervise(l));
   const cards = pending.map(l => `
     <div class="ed-card" draggable="true" data-lid="${l.id}" style="background:${colorOf(l)}" title="ลากไปวาง หรือแตะแล้วแตะช่อง">
       <b>${esc(lessonName(l))}</b> ${esc(ED.by === 'class' ? l.teacher_ids.map(teacherShort).join(', ') : classLabel(l))}
@@ -412,6 +413,7 @@ function renderEditor() {
           ${act('applyTracks()', 'magic', 'ตั้งสายการเรียนจากโครงสร้างหลักสูตร')}
           ${act('applySuggestedTracks()', 'lightbulb', 'แนะนำสายจากตารางปัจจุบัน')}
           ${act('openImportModal()', 'file-earmark-spreadsheet', 'นำเข้ารายวิชาจาก Excel (แบบสำรวจภาระงานสอน)')}
+          ${act('openSupervisionModal()', 'person-check', 'ครูดูแลซ่อมเสริม (คาบว่างนักเรียน)')}
           ${act('openClearModal()', 'eraser', 'ล้างตาราง (เอาวิชาออกจากช่อง)')}
           ${act('openDoublesModal()', 'layout-split', 'ตั้งคาบคู่หลายวิชา (เช่น แลปวิทยาศาสตร์)')}
           ${act('openRulesModal()', 'sliders', 'กฎการจัดตาราง (สอนติดกัน · นักเรียนไม่ว่างคาบแรก)')}
@@ -622,6 +624,107 @@ async function setSlotsBulk(map) {
   await apiFetch(`/api/tt/terms/${T.term.id}/set-slots`, { method: 'POST', body: JSON.stringify({ lessons: map }) });
   Object.entries(map).forEach(([lid, slots]) => { const L = lessonById(+lid); if (L) L.slots = slots.map(s => [s[0], s[1], s[2] ? 1 : 0]); });
   buildIndex(); renderEditor();
+}
+
+/* ── ครูดูแลคาบซ่อมเสริม (คาบว่างของนักเรียน) ──
+   รายการ "ซ่อมเสริม" options.supervise = true · ห้อง+สาย(ที่ว่าง)+ครู · ช่องล็อก · จัดอัตโนมัติไม่นับ แล้วตัดช่องที่ชนออกตอนบันทึก */
+const isSupervise = l => !!(l.options || {}).supervise;
+let SUP = null;   // { items: [{cls, track, d, p, key}], pick: Map(key → teacher_id|0) }
+function supFreeSlots() {
+  const out = [], n = periodsFor('class').length;
+  IDX.classes.forEach(cls => {
+    const roots = classRoots(cls);
+    for (let d = 1; d <= DAYS.length; d++) for (let p = 1; p <= n; p++) {
+      const here = ((IDX.byClass[cls] || {})[`${d}-${p}`] || []).filter(l => !isSupervise(l));
+      let track = null;
+      if (!here.length) track = '';
+      else if (roots.length >= 2) { const idle = missingRoots(cls, here, roots); if (idle.length && idle.length < roots.length) track = idle.join(','); }
+      if (track !== null) out.push({ cls, track, d, p, key: `${cls}|${track}|${d}-${p}` });
+    }
+  });
+  return out;
+}
+// ครูที่ดูแลช่องนี้ได้: ไม่มีรายการ (ไม่นับซ่อมเสริมเดิม) · ไม่ตั้งไม่ว่าง · ไม่ถูกเลือกให้ช่องอื่นในคาบเดียวกัน
+function supCandidates(it, pick) {
+  const taken = new Set([...pick.entries()].filter(([k, t]) => t && k !== it.key && k.endsWith(`|${it.d}-${it.p}`)).map(([, t]) => t));
+  const duty = {}; pick.forEach(t => { if (t) duty[t] = (duty[t] || 0) + 1; });
+  return T.teachers.filter(t => t.active !== 0 && !taken.has(t.id) && !isUnavailable(t.id, it.d, it.p)
+      && !((IDX.byTeacher[t.id] || {})[`${it.d}-${it.p}`] || []).some(l => !isSupervise(l)))
+    .map(t => {
+      const mine = T.lessons.filter(l => l.teacher_ids.includes(t.id) && !isSupervise(l));
+      const knows = mine.some(l => l.classes.includes(it.cls));
+      const dayN = Object.keys(IDX.byTeacher[t.id] || {}).filter(k => k.startsWith(`${it.d}-`) && (IDX.byTeacher[t.id][k] || []).some(l => !isSupervise(l))).length;
+      let sc = (knows ? 3 : 0) - 1.5 * (duty[t.id] || 0) + (pick.get(it.key) === t.id ? 1.5 : 0) - 0.3 * dayN;
+      const mx = maxRunOf(t.id);                                     // ไม่ให้ผิดกฎสอนติดกัน / คาบว่างติดกันของครู
+      if (mx) { let s = it.p, e = it.p; const on = q => ((IDX.byTeacher[t.id] || {})[`${it.d}-${q}`] || []).some(teachesStudents);
+        const [a, b] = runSegments().find(([a, b]) => it.p >= a && it.p <= b) || [it.p, it.p];
+        while (s - 1 >= a && on(s - 1)) s--; while (e + 1 <= b && on(e + 1)) e++; if (e - s + 1 > mx) sc -= 4; }
+      if (wantsFreePair(t.id)) { const busy = dayBusy(t.id, it.d); if (hasFreePair(busy) && !hasFreePair(q => q === it.p || busy(q))) sc -= 4; }
+      return { t, sc, knows, dayN };
+    }).sort((a, b) => b.sc - a.sc);
+}
+function supAuto(keepCurrent) {
+  const order = [...SUP.items].sort((a, b) => supCandidates(a, SUP.pick).length - supCandidates(b, SUP.pick).length);
+  if (!keepCurrent) SUP.pick = new Map(SUP.items.map(it => [it.key, 0]));
+  order.forEach(it => { if (keepCurrent && SUP.pick.get(it.key)) return; const c = supCandidates(it, SUP.pick)[0]; SUP.pick.set(it.key, c ? c.t.id : 0); });
+}
+function openSupervisionModal() {
+  if (previewGuard()) return;
+  const cur = new Map();                                             // ครูดูแลเดิม (ช่องเดิมที่ยังเป็นซ่อมเสริม)
+  T.lessons.filter(isSupervise).forEach(l => l.slots.forEach(([d, p]) => cur.set(`${l.classes[0]}|${d}-${p}`, l.teacher_ids[0])));
+  const items = supFreeSlots();
+  SUP = { items, pick: new Map(items.map(it => [it.key, cur.get(`${it.cls}|${it.d}-${it.p}`) || 0])) };
+  if (!cur.size) supAuto(false);
+  const body = `
+    <div class="small text-muted mb-2">คาบที่นักเรียนว่าง (ซ่อมเสริม) ของทุกห้อง — รวมคาบที่บางสายว่างขณะสายอื่นเรียน · ระบบเลือกครูที่ว่างคาบนั้นให้
+      (ครูที่สอนห้องนั้นก่อน · กระจายให้เท่า ๆ กัน · ไม่ผิดกฎสอนติดกัน) เปลี่ยนเองได้ทีละช่อง · บันทึกแล้วตารางเรียนขึ้น "ซ่อมเสริม ครู…" และตารางครูขึ้นคาบนี้</div>
+    <div class="d-flex flex-wrap gap-2 mb-2">
+      <button class="btn btn-sm btn-outline-primary py-0" onclick="supAuto(false); drawSupervision()"><i class="bi bi-magic"></i> จัดให้ใหม่ทั้งหมด</button>
+      <button class="btn btn-sm btn-outline-secondary py-0" onclick="supAuto(true); drawSupervision()">เติมเฉพาะช่องที่ยังไม่มีครู</button>
+      <button class="btn btn-sm btn-outline-danger py-0" onclick="SUP.pick = new Map(SUP.items.map(it => [it.key, 0])); drawSupervision()">ไม่จัดทั้งหมด</button>
+    </div>
+    <div id="supSum" class="small mb-2"></div><div id="supList"></div>`;
+  showModal('<i class="bi bi-person-check"></i> ครูดูแลซ่อมเสริม', body, `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+    <button class="btn btn-primary btn-sm" onclick="saveSupervision()"><i class="bi bi-save"></i> บันทึก</button>`);
+  drawSupervision();
+}
+function drawSupervision() {
+  const { items, pick } = SUP;
+  if (!items.length) { el('supList').innerHTML = '<div class="text-success small py-2"><i class="bi bi-check-circle"></i> ไม่มีคาบซ่อมเสริม — นักเรียนมีเรียนครบทุกคาบ</div>'; el('supSum').innerHTML = ''; return; }
+  const duty = {}; pick.forEach(t => { if (t) duty[t] = (duty[t] || 0) + 1; });
+  const done = items.filter(it => pick.get(it.key)).length;
+  el('supSum').innerHTML = `ซ่อมเสริม <b>${items.length}</b> คาบ · มีครูดูแล <b>${done}</b>${done < items.length ? ` · <span class="text-danger">ยังไม่มีครู ${items.length - done}</span>` : ''}
+    <div class="text-muted">${Object.entries(duty).sort((a, b) => b[1] - a[1]).map(([t, n]) => `${esc(teacherShort(+t))} ${n}`).join(' · ')}</div>`;
+  let lastCls = '';
+  el('supList').innerHTML = `<div class="table-responsive" style="max-height:52vh"><table class="table table-sm align-middle mb-0">
+    <thead class="table-light sticky-top"><tr><th>ห้อง</th><th>วัน คาบ</th><th>ครูดูแล</th></tr></thead><tbody>${items.map(it => {
+      const cands = supCandidates(it, pick), sel = pick.get(it.key) || 0;
+      const head = it.cls !== lastCls; lastCls = it.cls;
+      return `<tr${head ? ' class="border-top border-2"' : ''}><td class="small">${esc(classShort(it.cls))}${it.track ? ` <span class="badge text-bg-light border">${esc(trackLabel(it.track))} ว่าง</span>` : ''}</td>
+        <td class="small text-nowrap">${DAYS[it.d - 1]} คาบ ${it.p}</td>
+        <td><select class="form-select form-select-sm" onchange="SUP.pick.set('${it.key}', +this.value); drawSupervision()">
+          <option value="0">— ไม่จัด —${cands.length ? '' : ' (ไม่มีครูว่าง)'}</option>
+          ${cands.map(c => `<option value="${c.t.id}" ${c.t.id === sel ? 'selected' : ''}>${esc(teacherShort(c.t.id))}${c.knows ? ' · สอนห้องนี้' : ''} · วันนี้ ${c.dayN} คาบ</option>`).join('')}</select></td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+async function saveSupervision() {
+  const items = SUP.items.filter(it => SUP.pick.get(it.key)).map(it => ({ cls: it.cls, track: it.track, d: it.d, p: it.p, teacher_id: SUP.pick.get(it.key) }));
+  try {
+    const r = await apiFetch(`/api/tt/terms/${T.term.id}/supervision`, { method: 'POST', body: JSON.stringify({ items }) });
+    edModal.hide(); await loadTerm(T.term.id); toastEd(r.message);
+  } catch (e) { alert(e.message); }
+}
+// หลังบันทึกผลจัดอัตโนมัติ: ช่องครูดูแลที่ตอนนี้ชน (มีวิชาลง/ครูติดสอน) → เอาออก · คืนจำนวนคาบที่เอาออก
+async function dropClashingSupervision() {
+  const fix = {};
+  let n = 0;
+  T.lessons.filter(isSupervise).forEach(l => {
+    const keep = l.slots.filter(([d, p]) => !(IDX.bySlot[`${d}-${p}`] || []).some(x => x.id !== l.id && !isSupervise(x) &&
+      (x.teacher_ids.some(t => l.teacher_ids.includes(t)) || (x.classes.some(c => l.classes.includes(c)) && classOverlap(l, x)))));
+    if (keep.length < l.slots.length) { n += l.slots.length - keep.length; fix[l.id] = keep.map(s => [s[0], s[1], s[2] ? 1 : 0]); }
+  });
+  if (n) { try { await setSlotsBulk(fix); } catch (e) { alert(e.message); } }
+  return n;
 }
 
 /* ── ตั้งคาบคู่หลายวิชาพร้อมกัน (เช่น แลปวิทยาศาสตร์): 3 คาบ = คู่ 1 + เดี่ยว 1 · 2 คาบ = คู่ 1 ── */

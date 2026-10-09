@@ -39,7 +39,7 @@ function ttSolve(opts) {
   // ── เตรียม: ช่องคงที่ + ช่วงที่ต้องวาง ──
   const fixed = [], sessions = [], skipped = [];
   T.lessons.forEach(l => {
-    if (l.per_week <= 0) return;
+    if (l.per_week <= 0 || isSupervise(l)) return;      // ครูดูแลซ่อมเสริม: จัดทีหลังจากคาบว่างที่เหลือ (ไม่ขวางการจัด)
     const keep = l.slots.filter(s => s[2] || mode === 'fill');
     keep.forEach(s => fixed.push({ l, d: s[0], p: s[1] }));
     let need = l.per_week - keep.length;
@@ -527,6 +527,7 @@ async function saveSolved() {
     const r = await apiFetch(`/api/tt/terms/${T.term.id}/slots-bulk`, { method: 'POST', body: JSON.stringify({ lessons }) });
     SOLVED = null; ED.preview = false; if (edModal) edModal.hide();
     await loadTerm(T.term.id);                                  // loadTerm ล้างประวัติ "ย้อนกลับ" ด้วย
-    toastEd(`บันทึกแล้ว ${r.placed} ช่อง`);
+    const dropped = await dropClashingSupervision();             // คาบซ่อมเสริมที่ตอนนี้มีวิชาลงแล้ว → เอาครูดูแลออก
+    toastEd(`บันทึกแล้ว ${r.placed} ช่อง${dropped ? ` · เอาครูดูแลซ่อมเสริมออก ${dropped} คาบ (ตารางเปลี่ยน) — จัดใหม่ได้ที่ เครื่องมือ → ครูดูแลซ่อมเสริม` : ''}`);
   } catch (e) { alert('บันทึกไม่สำเร็จ: ' + e.message); }
 }
