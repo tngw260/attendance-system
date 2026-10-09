@@ -46,8 +46,14 @@
     table.tt-grid th.diag .d1 { position: absolute; left: 5pt; top: 1pt; font-size: 14pt; font-weight: 400; }
     table.tt-grid th.diag .d2 { position: absolute; right: 18pt; bottom: 0; font-size: 14pt; font-weight: 400; }
     .tt-cell .ln1, .tt-cell .ln2 { display: block; }
-    .tt-cell.multi { font-size: 12pt; line-height: 14pt; padding-top: 2pt; padding-bottom: 2pt; }   /* หลายสาย/กลุ่มเรียนพร้อมกัน */
-    .tt-cell.multi .ln1 + .ln1 { border-top: 0.5pt dotted #999; }
+    /* หลายสาย/กลุ่มเรียนพร้อมกัน: วิชาละบรรทัด · รหัสตัวหนา + สาย + ชื่อครูตัวเล็ก · ไม่ตัดกลางชื่อ */
+    .tt-cell.multi { font-size: 13pt; line-height: 14pt; padding: 2pt 1pt; }
+    .tt-cell .ml { display: block; }
+    .tt-cell .ml + .ml { border-top: 0.5pt dotted #999; margin-top: 1pt; padding-top: 1pt; }
+    .tt-cell .ml b { font-weight: 700; }
+    .tt-cell .ml b.c, .tt-cell .ml .tk, .tt-cell .ml .tn { white-space: nowrap; }
+    .tt-cell .ml .tk, .tt-cell .ml .tn { font-size: 11pt; }
+    .tt-cell .ml .tk { color: #333; }
     .tt-signs { display: flex; margin: 50pt 0 0 94pt; }
     .tt-sign { width: 300pt; margin-right: 68pt; text-align: center; line-height: 21pt; }
 
@@ -413,7 +419,8 @@ function cellHTML(mode, ls) {
     const who = l.teacher_ids.length > 2 ? `ครู ${l.teacher_ids.length} ท่าน` : l.teacher_ids.map(teacherShort).join(', ');
     return `<span class="ln1">${esc(lessonName(l))}</span><span class="ln2">${esc(who)}</span>`;
   }
-  return ls.map(l => `<span class="ln1">${esc(lessonName(l))}${l.track ? ' (' + esc(l.track) + ')' : ''} · ${esc(l.teacher_ids.map(teacherShort).join(','))}</span>`).join('');
+  // หลายสายเรียนพร้อมกัน: วิชาละบรรทัด รหัส + สาย (ชื่อครูดูได้ในตารางรายสาย — ใส่ทุกวิชาแถวจะสูงจนต้องย่อทั้งหน้า)
+  return ls.map(l => `<span class="ml" title="${esc(l.teacher_ids.map(teacherShort).join(', '))}"><b class="${l.code ? 'c' : ''}">${esc(lessonName(l))}</b>${l.track ? ` <span class="tk">${esc(l.track)}</span>` : ''}</span>`).join('');
 }
 
 /* ===== หน้า A4 แนวนอน (หน้าตาเหมือนไฟล์เดิม) ===== */
@@ -537,7 +544,10 @@ function render() {
   if (view.mode === 'sub') { renderSubs(); return; }
   if (!view.key) { el('content').innerHTML = '<div class="text-center text-muted py-5">ไม่มีข้อมูล</div>'; return; }
   if (el('selPick').value !== view.key) el('selPick').value = view.key;
-  el('content').innerHTML = `<div class="tt-desktop-only">${pageHTML(view.mode, view.key)}</div>
+  const sk = view.mode === 'class' ? splitKey(view.key) : null, nr = sk && !sk.tr ? classRoots(sk.cls).length : 0;
+  const hint = nr >= 2 ? `<div class="container no-print"><div class="alert alert-info py-2 small mb-2">💡 ${esc(classShort(sk.cls))} แยก ${nr} สาย — ตารางรวมจะแน่นในคาบที่หลายสายเรียนพร้อมกัน
+      ถ้าพิมพ์ให้นักเรียน เลือก <b>${esc(classShort(sk.cls))} ${esc(trackLabel(classRoots(sk.cls)[0]))}</b> ฯลฯ ในช่อง "ห้อง / สาย" (หรือปุ่ม <b>ทุกห้อง แยกสาย</b>)</div></div>` : '';
+  el('content').innerHTML = `${hint}<div class="tt-desktop-only">${pageHTML(view.mode, view.key)}</div>
     <div class="tt-mobile-only container">${mobileHTML(view.mode, view.key)}</div>`;
   fitPages();
   if (view.mode === 'teacher') mySubsBanner();     // ครูเปิดตารางตัวเอง → เห็นคาบสอนแทนที่ถูกจัดไว้
