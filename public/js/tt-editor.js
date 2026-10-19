@@ -435,6 +435,7 @@ function renderEditor() {
           ${act('openDoublesModal()', 'layout-split', 'ตั้งคาบคู่หลายวิชา (เช่น แลปวิทยาศาสตร์)')}
           ${act('openRulesModal()', 'sliders', 'กฎการจัดตาราง (สอนติดกัน · นักเรียนไม่ว่างคาบแรก)')}
           ${act('openStaffModal()', 'people', 'คาบของครูหลังเลิกเรียน (PLC)')}
+          ${act('openSignersModal()', 'pen', 'ผู้ลงนามท้ายตาราง / ใส่ลายเซ็น')}
           ${draftReport() ? act('showDraftReport(draftReport())', 'clipboard-check', 'รายงานการร่างภาคเรียน') : ''}
           <li><hr class="dropdown-divider"></li>
           ${act('openShareModal()', 'line', 'ส่งลิงก์จัดตารางทาง LINE')}
@@ -1505,6 +1506,125 @@ async function importApply() {
         <li>กด <b>จัดอัตโนมัติ</b> → เลือก <b>วางเฉพาะคาบที่ยังไม่ได้วาง</b> (ยังวางไม่ครบ ${left} รายการ)</li>
       </ol>`, '<button class="btn btn-primary btn-sm" data-bs-dismiss="modal">ตกลง</button>');
   } catch (e) { el('impGo').disabled = false; alert(e.message); }
+}
+
+/* ── ผู้ลงนามท้ายตาราง: หัวหน้าวิชาการ · รอง ผอ. · ผอ. + ใส่/ไม่ใส่ลายเซ็นรายคน
+   ภาพลายเซ็นเก็บในระบบ (ใช้ทุกภาคเรียน · อัปโหลด/ลบมีผลทันที) · ชื่อ ตำแหน่ง และสวิตช์ "ใส่ลายเซ็น" เป็นของภาคเรียนนี้ (กดบันทึก) ── */
+function openSignersModal(st) {
+  if (previewGuard()) return;
+  const sig = T.signatures || {}, show = st ? st.show : (T.term.config.sign_show || {});
+  const row = s => {
+    const v = sig[s.role], ro = s.role === 'director', f = st && st[s.role] || s;
+    return `<div class="border rounded p-2 mb-2" data-role="${s.role}">
+      <div class="d-flex align-items-center gap-2 mb-1"><b class="me-auto">${s.label}</b>
+        ${s.role === 'deputy' ? `<label class="small mb-0"><input type="checkbox" class="sg-vis" ${f.hide ? '' : 'checked'}> แสดงช่องนี้ในตาราง</label>` : ''}</div>
+      <div class="row g-2">
+        <div class="col-sm-5"><input class="form-control form-control-sm sg-name" value="${esc(f.name)}" placeholder="ชื่อ-สกุล (ว่าง = ไม่มีช่องนี้)" ${ro ? 'disabled' : ''}></div>
+        <div class="col-sm-7"><input class="form-control form-control-sm sg-title" value="${esc(f.title)}" placeholder="ตำแหน่ง" ${ro ? 'disabled' : ''}></div>
+      </div>
+      ${ro ? '<div class="small text-muted mt-1">ชื่อ/ตำแหน่ง ผอ. แก้ที่ <a href="/settings.html">หน้าตั้งค่าระบบ</a></div>' : ''}
+      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+        <div style="min-width:120px">${v ? `<img src="/api/tt/signatures/${s.role}?v=${encodeURIComponent(v)}" alt="ลายเซ็น" style="height:46px;max-width:170px;object-fit:contain;border:1px dashed #ced4da;background:#fff;padding:2px">`
+          : '<span class="text-muted small">ยังไม่มีภาพลายเซ็น</span>'}</div>
+        <label class="btn btn-sm btn-outline-primary mb-0"><i class="bi bi-upload"></i> ${v ? 'เปลี่ยนภาพ' : 'อัปโหลดลายเซ็น'}<input type="file" accept="image/*" hidden onchange="uploadSignature('${s.role}', this)"></label>
+        ${v ? `<button class="btn btn-sm btn-outline-danger" title="ลบภาพลายเซ็น" onclick="deleteSignature('${s.role}')"><i class="bi bi-trash"></i></button>` : ''}
+        <div class="form-check form-switch ms-auto mb-0"><input class="form-check-input sg-show" type="checkbox" id="sgShow_${s.role}" ${v ? '' : 'disabled'} ${v && show[s.role] ? 'checked' : ''}>
+          <label class="form-check-label" for="sgShow_${s.role}">ใส่ลายเซ็น</label></div>
+      </div></div>`;
+  };
+  const body = `${signerList(true).map(row).join('')}
+    <div class="small text-muted">ท้ายตารางเรียงซ้าย → ขวา ตามลำดับนี้ · <b>ใส่ลายเซ็น</b> = ตารางที่พิมพ์/บันทึก PDF มีลายเซ็นทับเส้น "ลงชื่อ" (ปิด = เว้นให้เซ็นมือ) ·
+      ภาพลายเซ็นไม่เปิดสาธารณะ — ครูที่ล็อกอินเห็นเฉพาะเมื่อภาคเรียนเผยแพร่แล้วและเปิดใส่ลายเซ็นของคนนั้น ·
+      ภาพจากกล้องได้ ระบบทำพื้นขาวให้โปร่งใสและตัดขอบให้ (ใช้ปากกาสีเข้มบนกระดาษขาว)</div>`;
+  showModal('<i class="bi bi-pen"></i> ผู้ลงนามท้ายตาราง', body, `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+    <button class="btn btn-primary btn-sm" onclick="saveSigners()"><i class="bi bi-save"></i> บันทึก</button>`);
+}
+// ค่าที่กรอกค้างไว้ (อัปโหลด/ลบภาพแล้ววาดหน้าต่างใหม่ ไม่ให้หาย)
+function signersState() {
+  const st = { show: {} };
+  document.querySelectorAll('#edModal [data-role]').forEach(b => {
+    const r = b.dataset.role, vis = b.querySelector('.sg-vis');
+    st[r] = { name: b.querySelector('.sg-name').value.trim(), title: b.querySelector('.sg-title').value.trim(), hide: vis ? !vis.checked : false };
+    st.show[r] = b.querySelector('.sg-show').checked;
+  });
+  return st;
+}
+async function saveSigners() {
+  const st = signersState();
+  const signers = [{ name: st.academic.name, title: st.academic.title },
+                   Object.assign({ name: st.deputy.name, title: st.deputy.title }, st.deputy.hide ? { hide: true } : {})];
+  const sign_show = Object.fromEntries(Object.entries(st.show).filter(([r, v]) => v && (T.signatures || {})[r]));
+  try {
+    await apiFetch(`/api/tt/terms/${T.term.id}`, { method: 'PUT', body: JSON.stringify({ config: { signers, sign_show } }) });
+    T.term.config.signers = signers;
+    if (Object.keys(sign_show).length) T.term.config.sign_show = Object.fromEntries(Object.keys(sign_show).map(r => [r, true]));
+    else delete T.term.config.sign_show;
+    edModal.hide();
+    const on = signerList().filter(s => signImgURL(s.role)).length;
+    toastEd(`บันทึกผู้ลงนามแล้ว — ${on ? `ใส่ลายเซ็น ${on} ท่าน` : 'ไม่ใส่ลายเซ็น (เว้นให้เซ็นมือ)'}`);
+  } catch (e) { alert(e.message); }
+}
+async function uploadSignature(role, input) {
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  try {
+    const st = signersState();
+    const image = await signatureDataURL(f);
+    const r = await apiFetch(`/api/tt/signatures/${role}`, { method: 'PUT', body: JSON.stringify({ image }) });
+    (T.signatures = T.signatures || {})[role] = r.version;
+    st.show[role] = true;                                   // อัปโหลดแล้ว → ติ๊กใส่ลายเซ็นให้ (ยังต้องกดบันทึก)
+    openSignersModal(st);
+  } catch (e) { alert(e.message); }
+}
+async function deleteSignature(role) {
+  if (!confirm('ลบภาพลายเซ็นนี้ออกจากระบบ?')) return;
+  try {
+    const st = signersState();
+    await apiFetch(`/api/tt/signatures/${role}`, { method: 'DELETE' });
+    delete (T.signatures || {})[role];
+    st.show[role] = false;
+    openSignersModal(st);
+  } catch (e) { alert(e.message); }
+}
+// ภาพลายเซ็น (สแกน/ถ่ายรูป/PNG) → พื้นกระดาษเป็นโปร่งใส · ตัดขอบ (ทำที่ความละเอียดสูง) · แล้วค่อยย่อไม่เกิน 900×450 → data URL PNG
+function signatureDataURL(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onerror = () => { URL.revokeObjectURL(u); rej(new Error('เปิดภาพไม่ได้ — ใช้ไฟล์ PNG หรือ JPG')); };
+    img.onload = () => {
+      URL.revokeObjectURL(u);
+      const k = Math.min(1, 2000 / img.naturalWidth, 2000 / img.naturalHeight);
+      const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0, w, h);
+      const d = g.getImageData(0, 0, w, h), px = d.data, lum = new Float32Array(w * h), hist = new Uint32Array(256);
+      let opaque = 0;
+      for (let i = 0, p = 0; i < px.length; i += 4, p++) {
+        lum[p] = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+        if (px[i + 3] > 200) { hist[Math.round(lum[p])]++; opaque++; }
+      }
+      // ระดับสีกระดาษ = ค่าสว่างที่ 70% ของจุดทึบ (ภาพโปร่งใสอยู่แล้ว → ไม่มีกระดาษ ใช้ 255)
+      let paper = 255;
+      if (opaque > w * h * 0.3) { let acc = 0; for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= opaque * 0.3) { paper = v; break; } } }
+      const lo = Math.max(60, paper - 30), hi = Math.max(20, lo - 90);    // สว่างกว่า lo = โปร่งใส · มืดกว่า hi = หมึกเต็ม
+      let x0 = w, y0 = h, x1 = -1, y1 = -1;
+      for (let p = 0; p < w * h; p++) {
+        const a = Math.min(px[p * 4 + 3], Math.max(0, Math.min(255, (lo - lum[p]) * 255 / (lo - hi))));
+        px[p * 4 + 3] = a;
+        if (a > 80) { const x = p % w, y = (p - x) / w; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      }
+      if (x1 < 0) return rej(new Error('ไม่พบลายเซ็นในภาพ — ลองถ่ายใหม่ให้หมึกเข้มบนกระดาษขาว'));
+      g.putImageData(d, 0, 0);
+      const pad = 10; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+      const cw = x1 - x0 + 1, chh = y1 - y0 + 1, k2 = Math.min(1, 900 / cw, 450 / chh);
+      const o = document.createElement('canvas'); o.width = Math.max(1, Math.round(cw * k2)); o.height = Math.max(1, Math.round(chh * k2));
+      const og = o.getContext('2d'); og.imageSmoothingQuality = 'high';
+      og.drawImage(c, x0, y0, cw, chh, 0, 0, o.width, o.height);
+      res(o.toDataURL('image/png'));
+    };
+    img.src = u;
+  });
 }
 
 /* ── กฎการจัดตาราง (ของภาคเรียน · ร่างเทอมถัดไปคัดลอกไปด้วย)

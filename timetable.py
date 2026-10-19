@@ -9,6 +9,8 @@
   tt_absences  ครูไม่มา (ลา / ไปราชการ / ย้ายออก) ช่วงวันที่ + คาบ (ว่าง = ทั้งวัน)
   tt_subs      การจัดครูสอนแทน รายวัน-คาบ-รายการ (เก็บรหัสวิชา/ชั้นไว้ด้วย ประวัติไม่หายเมื่อแก้ตาราง)
   tt_editors   ผู้ช่วยจัดตาราง (เช่น ฝ่ายวิชาการ) — ไม่ต้องเป็นแอดมินทั้งระบบ
+  tt_signatures ภาพลายเซ็นผู้ลงนามท้ายตาราง (หัวหน้าวิชาการ / รอง ผอ. / ผอ.) เก็บในฐานข้อมูล ไม่อยู่ใน public/
+               ครูที่ล็อกอินเปิดได้เฉพาะเมื่อเทอมนั้นเผยแพร่และเปิด "ใส่ลายเซ็น" (config.sign_show) ของคนนั้น
 
 สิทธิ์: แอดมิน + ผู้ช่วยจัดตาราง แก้ตาราง/สอนแทน/เผยแพร่ได้ · ลบภาคเรียน นำเข้า ผูกบัญชี ตั้งผู้ช่วย = แอดมินเท่านั้น
        ครูทุกคนดูได้
@@ -92,11 +94,19 @@ CREATE TABLE IF NOT EXISTS tt_editors (
     user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     added_at    TEXT DEFAULT (datetime('now','localtime'))
 );
+CREATE TABLE IF NOT EXISTS tt_signatures (
+    role        TEXT PRIMARY KEY,
+    mime        TEXT NOT NULL,
+    data        BLOB NOT NULL,
+    updated_at  TEXT DEFAULT (datetime('now','localtime'))
+);
 CREATE INDEX IF NOT EXISTS idx_ttabs_to ON tt_absences(date_to);
 CREATE INDEX IF NOT EXISTS idx_ttsub_date ON tt_subs(date);
 """
 
 DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}$')
+SIGN_ROLES = ('academic', 'deputy', 'director')      # ท้ายตาราง ซ้าย → ขวา
+SIGN_MAX = 1024 * 1024                               # ภาพลายเซ็นไม่เกิน 1 MB
 OPEN_END = '9999-12-31'          # ไม่มา "ยังไม่มีกำหนด" (เช่น ย้ายออก รอครูใหม่)
 
 
@@ -365,7 +375,61 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         data['term']['start_date'], data['term']['end_date'] = term_dates(data['term']['name'], s)
         data['school'] = dict(name=s.get('school_name', ''), director=s.get('director_name', ''),
                               director_title=s.get('director_title', ''), logo=s.get('school_logo', ''))
+        with get_db() as con:                             # มีภาพลายเซ็นของใครบ้าง (เวลาแก้ล่าสุด ใช้เป็นเลขเวอร์ชันของภาพ)
+            data['signatures'] = {r['role']: r['updated_at'] for r in con.execute('SELECT role, updated_at FROM tt_signatures')}
         return jsonify(data)
+
+    # ── ลายเซ็นผู้ลงนามท้ายตาราง ─────────────────────────
+    @app.get('/api/tt/signatures/<role>')
+    @login_required
+    def tt_signature_get(role):
+        """ภาพลายเซ็น · ?t=<term_id> — ครูทั่วไปเปิดได้เฉพาะเทอมที่เผยแพร่และเปิดใส่ลายเซ็นของคนนั้นไว้"""
+        if role not in SIGN_ROLES:
+            return jsonify(error='not found'), 404
+        with get_db() as con:
+            if not can_edit_tt(current_user()):
+                term = con.execute('SELECT published, config FROM tt_terms WHERE id=?', (request.args.get('t', type=int),)).fetchone()
+                if not term or not term['published'] or not (jl(term['config'], {}).get('sign_show') or {}).get(role):
+                    return jsonify(error='not found'), 404
+            row = con.execute('SELECT mime, data FROM tt_signatures WHERE role=?', (role,)).fetchone()
+        if not row:
+            return jsonify(error='not found'), 404
+        resp = app.response_class(bytes(row['data']), mimetype=row['mime'])      # /api/ ไม่เก็บแคช (after_request ใน app.py)
+        resp.headers['X-Content-Type-Options'] = 'nosniff'
+        return resp
+
+    @app.put('/api/tt/signatures/<role>')
+    @tt_edit_required
+    def tt_signature_put(role):
+        """{image: 'data:image/png;base64,...'} (PNG/JPEG ไม่เกิน 1 MB)"""
+        import base64
+        import binascii
+        if role not in SIGN_ROLES:
+            return jsonify(success=False, message='ไม่รู้จักผู้ลงนาม'), 404
+        m = re.fullmatch(r'data:image/(png|jpeg);base64,([A-Za-z0-9+/=\s]+)', str((request.get_json(silent=True) or {}).get('image') or ''))
+        try:
+            raw = base64.b64decode(m.group(2), validate=False) if m else b''
+        except (binascii.Error, ValueError):
+            raw = b''
+        mime = 'image/png' if raw.startswith(b'\x89PNG\r\n\x1a\n') else 'image/jpeg' if raw.startswith(b'\xff\xd8\xff') else ''
+        if not mime:
+            return jsonify(success=False, message='ไฟล์ต้องเป็นภาพ PNG หรือ JPG'), 400
+        if len(raw) > SIGN_MAX:
+            return jsonify(success=False, message='ภาพใหญ่เกิน 1 MB'), 400
+        with get_db() as con:
+            con.execute("""INSERT OR REPLACE INTO tt_signatures (role, mime, data, updated_at)
+                           VALUES (?,?,?,datetime('now','localtime'))""", (role, mime, raw))
+            ver = con.execute('SELECT updated_at FROM tt_signatures WHERE role=?', (role,)).fetchone()['updated_at']
+        return jsonify(success=True, version=ver)
+
+    @app.delete('/api/tt/signatures/<role>')
+    @tt_edit_required
+    def tt_signature_delete(role):
+        if role not in SIGN_ROLES:
+            return jsonify(success=False, message='ไม่รู้จักผู้ลงนาม'), 404
+        with get_db() as con:
+            con.execute('DELETE FROM tt_signatures WHERE role=?', (role,))
+        return jsonify(success=True)
 
     # ── นำเข้าตารางตั้งต้น (อ่านจาก PDF เดิมไว้แล้วในโฟลเดอร์ seed/) ─────────
     @app.post('/api/tt/import-seed')
@@ -682,8 +746,21 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.put('/api/tt/terms/<int:term_id>')
     @tt_edit_required
     def tt_term_update(term_id):
-        """แก้ค่าภาคเรียน: ชื่อ, เผยแพร่, config (คาบเวลา / สายการเรียนของแต่ละห้อง / ผู้ลงนาม / max_run กฎสอนติดกัน / class_busy คาบที่นักเรียนห้ามว่าง)"""
+        """แก้ค่าภาคเรียน: ชื่อ, เผยแพร่, config (คาบเวลา / สายการเรียนของแต่ละห้อง / ผู้ลงนาม / max_run กฎสอนติดกัน / class_busy คาบที่นักเรียนห้ามว่าง
+        / sign_show ใส่ลายเซ็นของใครในตารางที่พิมพ์)"""
         b = request.get_json() or {}
+        signers = sign_show = None
+        if isinstance(b.get('config'), dict) and 'signers' in b['config']:     # [หัวหน้าวิชาการ, รอง ผอ.] (ผอ. มาจากหน้าตั้งค่า)
+            raw = b['config']['signers']
+            if not isinstance(raw, list) or len(raw) > 2 or not all(isinstance(x, dict) for x in raw):
+                return jsonify(success=False, message='ผู้ลงนามไม่ถูกต้อง'), 400
+            signers = [dict(name=squeeze(x.get('name'), 80), title=squeeze(x.get('title'), 120),
+                            **({'hide': True} if x.get('hide') else {})) for x in raw]
+        if isinstance(b.get('config'), dict) and 'sign_show' in b['config']:
+            raw = b['config']['sign_show']
+            if not isinstance(raw, dict):
+                return jsonify(success=False, message='ค่าใส่ลายเซ็นไม่ถูกต้อง'), 400
+            sign_show = {r: True for r in SIGN_ROLES if raw.get(r)}
         max_run = None
         if isinstance(b.get('config'), dict) and 'max_run' in b['config']:      # ครูสอนติดกันไม่เกิน N คาบ (0 = ไม่จำกัด)
             try:
@@ -715,9 +792,16 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 con.execute('UPDATE tt_terms SET published=? WHERE id=?', (1 if b['published'] else 0, term_id))
             if 'config' in b and isinstance(b['config'], dict):
                 cfg = jl(row['config'], {})
-                for k in ('periods', 'pre', 'lunch', 'lunch_after', 'classes', 'signers', 'tracks', 'days'):
+                for k in ('periods', 'pre', 'lunch', 'lunch_after', 'classes', 'tracks', 'days'):
                     if k in b['config']:
                         cfg[k] = b['config'][k]
+                if signers is not None:
+                    cfg['signers'] = signers
+                if sign_show is not None:
+                    if sign_show:
+                        cfg['sign_show'] = sign_show
+                    else:
+                        cfg.pop('sign_show', None)
                 if max_run is not None:
                     if max_run:
                         cfg['max_run'] = max_run

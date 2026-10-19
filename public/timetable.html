@@ -56,7 +56,13 @@
     .tt-cell .ml .tk, .tt-cell .ml .tn { font-size: 11pt; }
     .tt-cell .ml .tk { color: #333; }
     .tt-signs { display: flex; margin: 50pt 0 0 94pt; }
-    .tt-sign { width: 300pt; margin-right: 68pt; text-align: center; line-height: 21pt; }
+    .tt-sign { position: relative; width: 300pt; margin-right: 68pt; text-align: center; line-height: 21pt; }
+    /* 3 คน (หัวหน้าวิชาการ · รอง ผอ. · ผอ.) กระจายเต็มความกว้างตาราง */
+    .tt-signs.n3 { margin-left: 16.7pt; width: 779pt; }
+    .tt-signs.n3 .tt-sign { width: auto; flex: 1 1 0; margin-right: 0; white-space: nowrap; }
+    /* ภาพลายเซ็นทับเส้นจุด "ลงชื่อ" (ไม่กินที่ — ขนาดหน้าเท่าเดิม) */
+    .tt-sign img.sig { position: absolute; left: calc(50% + 12pt); bottom: calc(100% - 19pt); transform: translateX(-50%);
+      height: 40pt; max-width: 150pt; object-fit: contain; pointer-events: none; }
 
     /* มือถือ: ดูเป็นรายวัน */
     .tt-mobile .day { background: var(--surface,#fff); border: 1px solid var(--border,#dee2e6); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
@@ -481,10 +487,10 @@ function pageHTML(mode, key) {
     const { cls, tr } = splitKey(key);
     title = `ตารางเรียนชั้น${esc(classFull(cls))}${tr ? ' ' + esc(trackLabel(tr)) : ''} ภาคเรียนที่ ${esc(termName)} ${esc(school)}`;
   }
-  const signers = (cfg.signers || []).slice(0, 1);
-  const dirTitle = (T.school.director_title || 'ผู้อำนวยการ');
-  const dirFull = school.startsWith('โรงเรียน') ? dirTitle.replace(/โรงเรียน$/, '') + school : dirTitle + school;
-  const sign = (cls, name, role) => `<div class="tt-sign ${cls}">ลงชื่อ.........................................................<br>(${esc(name)})<br>${esc(role)}</div>`;
+  const signers = signerList(), n3 = signers.length >= 3;
+  const dots = '.'.repeat(n3 ? 46 : 57);
+  const sign = s => { const src = signImgURL(s.role);
+    return `<div class="tt-sign">${src ? `<img class="sig" src="${src}" alt="">` : ''}ลงชื่อ${dots}<br>(${esc(s.name)})<br>${esc(s.title)}</div>`; };
   return `<div class="tt-page"><div class="tt-rot">
     ${box}
     <div class="tt-title">${title}</div>
@@ -494,8 +500,31 @@ function pageHTML(mode, key) {
       <tr class="tt-h2">${h2}</tr>
       ${rows}
     </table>
-    <div class="tt-signs">${signers[0] ? sign('l', signers[0].name, signers[0].title) : ''}${sign('r', T.school.director || '', dirFull)}</div>
+    <div class="tt-signs${n3 ? ' n3' : ''}">${signers.map(sign).join('')}</div>
   </div></div>`;
+}
+
+// ผู้ลงนามท้ายตาราง ซ้าย → ขวา: หัวหน้าวิชาการ · รองผู้อำนวยการ · ผู้อำนวยการ
+// config.signers = [หัวหน้าวิชาการ, รอง ผอ.] (ยังไม่เคยตั้งรอง ผอ. → ใช้ค่าเริ่มต้น · hide = ไม่แสดงช่องนี้) · ผอ. มาจากหน้าตั้งค่าระบบ
+const DEFAULT_DEPUTY = 'นางภัคกัญญา นิ่มจงจิตร์';
+function directorTitle() {
+  const school = T.school.name || '', t = T.school.director_title || 'ผู้อำนวยการ';
+  return school.startsWith('โรงเรียน') ? t.replace(/โรงเรียน$/, '') + school : t + school;
+}
+function signerList(all) {
+  const s = T.term.config.signers || [];
+  const dep = s[1] || { name: DEFAULT_DEPUTY, title: '' };
+  const list = [
+    { role: 'academic', label: 'หัวหน้ากลุ่มบริหารงานวิชาการ', name: (s[0] || {}).name || '', title: (s[0] || {}).title || 'หัวหน้ากลุ่มบริหารงานวิชาการ' },
+    { role: 'deputy', label: 'รองผู้อำนวยการ', name: dep.name || '', title: dep.title || 'รอง' + directorTitle(), hide: !!dep.hide },
+    { role: 'director', label: 'ผู้อำนวยการ', name: T.school.director || '', title: directorTitle() },
+  ];
+  return all ? list : list.filter(x => x.name && !x.hide);
+}
+// ใส่ลายเซ็น: เปิดไว้ในภาคเรียนนี้ (config.sign_show) และมีภาพในระบบ
+function signImgURL(role) {
+  const v = (T.signatures || {})[role];
+  return v && (T.term.config.sign_show || {})[role] ? `/api/tt/signatures/${role}?t=${T.term.id}&v=${encodeURIComponent(v)}` : '';
 }
 
 function teacherCounts(tid) {
@@ -587,7 +616,7 @@ function fitPages() {
     const px2pt = 0.75;
     let o = over();
     if (o <= 0) return;
-    signs.style.marginTop = Math.max(14, 50 - o * px2pt) + 'pt';
+    signs.style.marginTop = Math.max(signs.querySelector('img.sig') ? 26 : 14, 50 - o * px2pt) + 'pt';   // ภาพลายเซ็นยื่นขึ้นไป ~21pt ไม่ให้ทับตาราง
     if ((o = over()) > 0) {                                      // เลื่อนหัวเรื่อง + ตารางขึ้น (ไม่เกิน 30pt)
       const up = Math.min(30, o * px2pt);
       pg.style.paddingTop = (119 - up) + 'pt'; title.style.top = (77 - up) + 'pt';
@@ -615,12 +644,14 @@ async function printDoc(all) {
   }
   try { await document.fonts.ready; } catch (e) {}
   try { await document.fonts.load('16pt THSarabunDoc', 'กขค'); await document.fonts.load('bold 16pt THSarabunDoc', 'กขค'); await document.fonts.ready; } catch (e) {}
+  await Promise.all([...document.querySelectorAll('.tt-sign img.sig')].map(i => i.complete ? 0   // รอภาพลายเซ็นโหลดก่อนพิมพ์
+    : new Promise(r => { i.addEventListener('load', r, { once: true }); i.addEventListener('error', r, { once: true }); setTimeout(r, 5000); })));
   fitPages();
   window.print();
   if (all) setTimeout(render, 500);
 }
 </script>
-<script src="/js/tt-editor.js?v=32"></script>
+<script src="/js/tt-editor.js?v=33"></script>
 <script src="/js/tt-solver.js?v=15"></script>
 <script src="/js/tt-subs.js?v=4"></script>
 </body>
