@@ -60,8 +60,8 @@
     /* 3 คน (หัวหน้าวิชาการ · รอง ผอ. · ผอ.) กระจายเต็มความกว้างตาราง */
     .tt-signs.n3 { margin-left: 16.7pt; width: 779pt; }
     .tt-signs.n3 .tt-sign { width: auto; flex: 1 1 0; margin-right: 0; white-space: nowrap; }
-    /* ภาพลายเซ็นทับเส้นจุด "ลงชื่อ" (ไม่กินที่ — ขนาดหน้าเท่าเดิม) */
-    .tt-sign img.sig { position: absolute; left: calc(50% + 12pt); bottom: calc(100% - 19pt); transform: translateX(-50%);
+    /* ภาพลายเซ็นกึ่งกลางชื่อ ขอบล่างวางบนเส้นจุด "ลงชื่อ" (เส้นฐานบรรทัดแรก 13.5pt + ขอบใสของภาพ ~0.5pt) · ไม่กินที่ — ขนาดหน้าเท่าเดิม */
+    .tt-sign img.sig { position: absolute; left: 50%; bottom: calc(100% - 14pt); transform: translateX(-50%);
       height: 40pt; max-width: 150pt; object-fit: contain; pointer-events: none; }
 
     /* มือถือ: ดูเป็นรายวัน */
@@ -616,7 +616,7 @@ function fitPages() {
     const px2pt = 0.75;
     let o = over();
     if (o <= 0) return;
-    signs.style.marginTop = Math.max(signs.querySelector('img.sig') ? 26 : 14, 50 - o * px2pt) + 'pt';   // ภาพลายเซ็นยื่นขึ้นไป ~21pt ไม่ให้ทับตาราง
+    signs.style.marginTop = Math.max(signs.querySelector('img.sig') ? 31 : 14, 50 - o * px2pt) + 'pt';   // ภาพลายเซ็นยื่นขึ้นไป ~26pt ไม่ให้ทับตาราง
     if ((o = over()) > 0) {                                      // เลื่อนหัวเรื่อง + ตารางขึ้น (ไม่เกิน 30pt)
       const up = Math.min(30, o * px2pt);
       pg.style.paddingTop = (119 - up) + 'pt'; title.style.top = (77 - up) + 'pt';
