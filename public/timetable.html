@@ -552,7 +552,7 @@ function teacherCounts(tid) {
     const n = l.slots.filter(s => !isStaffPeriod(s[1])).length;
     staff += l.slots.length - n;                          // คาบหลังเลิกเรียน (PLC) แยกบรรทัด
     if (l.kind === 'subject') teach += n;
-    else if (!isMeeting(l)) act += n;                    // ประชุมครูไม่นับ (ตามแบบเดิม)
+    else act += n;                                       // กิจกรรม รวมประชุมครู (เช่น ประชุมสุดสัปดาห์วันศุกร์) — ผู้ใช้สั่งนับ 20 ต.ค. 69
   });
   return { teach, act, staff };
 }
@@ -598,7 +598,7 @@ function loadHTML() {
     <div class="table-responsive"><table class="table table-sm table-bordered load-table">
       <thead class="table-light"><tr><th>ที่</th><th>ครู</th><th>คาบสอน</th><th>กิจกรรม</th>${hasStaff ? `<th>${esc(staffLabel())}</th>` : ''}<th>รวม</th><th>รายวิชา (รหัส ชั้น · คาบ)</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-    <div class="small text-muted">กิจกรรมไม่นับประชุมครู (ตามแบบตารางเดิม)</div>
+    <div class="small text-muted">กิจกรรมรวมคาบประชุมครู (เช่น ประชุมสุดสัปดาห์วันศุกร์)</div>
   </div></div></div>`;
 }
 
