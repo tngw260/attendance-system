@@ -1509,12 +1509,23 @@ async function importApply() {
 }
 
 /* ── ผู้ลงนามท้ายตาราง: หัวหน้าวิชาการ · รอง ผอ. · ผอ. + ใส่/ไม่ใส่ลายเซ็นรายคน
-   ภาพลายเซ็นเก็บในระบบ (ใช้ทุกภาคเรียน · อัปโหลด/ลบมีผลทันที) · ชื่อ ตำแหน่ง และสวิตช์ "ใส่ลายเซ็น" เป็นของภาคเรียนนี้ (กดบันทึก) ── */
+   ภาพลายเซ็นเก็บในระบบ (ใช้ทุกภาคเรียน · อัปโหลด/ลบมีผลทันที) · ชื่อ ตำแหน่ง สวิตช์ "ใส่ลายเซ็น" และตำแหน่ง/ขนาดลายเซ็น เป็นของภาคเรียนนี้ (กดบันทึก) ── */
+let SGA = {}, SGOPEN = new Set();                     // ตำแหน่ง/ขนาดลายเซ็นที่กำลังปรับ (ยังไม่บันทึก) · คนที่เปิดแผงปรับอยู่
 function openSignersModal(st) {
   if (previewGuard()) return;
   const sig = T.signatures || {}, show = st ? st.show : (T.term.config.sign_show || {});
+  SGA = st ? st.adj : JSON.parse(JSON.stringify(T.term.config.sign_adj || {}));
+  SGOPEN = new Set(st ? st.open : []);
+  const nb = (role, k, d, icon, tip) => `<button class="btn btn-sm btn-outline-secondary" title="${tip}" onclick="sgNudge('${role}','${k}',${d})"><i class="bi bi-${icon}"></i></button>`;
   const row = s => {
     const v = sig[s.role], ro = s.role === 'director', f = st && st[s.role] || s;
+    const adjPanel = v ? `<div class="sg-adj mt-2" ${SGOPEN.has(s.role) ? '' : 'hidden'}>
+        <div class="sg-pv">${signBlockHTML(Object.assign({}, s, { name: f.name, title: f.title }), true, `/api/tt/signatures/${s.role}?v=${encodeURIComponent(v)}`, SGA)}</div>
+        <div class="d-flex justify-content-center align-items-center gap-1 mt-2 flex-wrap">
+          ${nb(s.role, 'x', -1, 'arrow-left', 'เลื่อนซ้าย')}${nb(s.role, 'x', 1, 'arrow-right', 'เลื่อนขวา')}${nb(s.role, 'y', -1, 'arrow-up', 'เลื่อนขึ้น')}${nb(s.role, 'y', 1, 'arrow-down', 'เลื่อนลง')}
+          <span class="mx-1"></span>${nb(s.role, 's', -5, 'dash-lg', 'เล็กลง')}${nb(s.role, 's', 5, 'plus-lg', 'ใหญ่ขึ้น')}
+          <button class="btn btn-sm btn-outline-secondary ms-1" onclick="sgReset('${s.role}')"><i class="bi bi-arrow-counterclockwise"></i> ค่าเริ่มต้น</button></div>
+        <div class="small text-muted text-center mt-1 sg-val"></div></div>` : '';
     return `<div class="border rounded p-2 mb-2" data-role="${s.role}">
       <div class="d-flex align-items-center gap-2 mb-1"><b class="me-auto">${s.label}</b>
         ${s.role === 'deputy' ? `<label class="small mb-0"><input type="checkbox" class="sg-vis" ${f.hide ? '' : 'checked'}> แสดงช่องนี้ในตาราง</label>` : ''}</div>
@@ -1527,10 +1538,11 @@ function openSignersModal(st) {
         <div style="min-width:120px">${v ? `<img src="/api/tt/signatures/${s.role}?v=${encodeURIComponent(v)}" alt="ลายเซ็น" style="height:46px;max-width:170px;object-fit:contain;border:1px dashed #ced4da;background:#fff;padding:2px">`
           : '<span class="text-muted small">ยังไม่มีภาพลายเซ็น</span>'}</div>
         <label class="btn btn-sm btn-outline-primary mb-0"><i class="bi bi-upload"></i> ${v ? 'เปลี่ยนภาพ' : 'อัปโหลดลายเซ็น'}<input type="file" accept="image/*" hidden onchange="uploadSignature('${s.role}', this)"></label>
-        ${v ? `<button class="btn btn-sm btn-outline-danger" title="ลบภาพลายเซ็น" onclick="deleteSignature('${s.role}')"><i class="bi bi-trash"></i></button>` : ''}
+        ${v ? `<button class="btn btn-sm btn-outline-danger" title="ลบภาพลายเซ็น" onclick="deleteSignature('${s.role}')"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="sgToggle('${s.role}')"><i class="bi bi-arrows-move"></i> ปรับตำแหน่ง/ขนาด</button>` : ''}
         <div class="form-check form-switch ms-auto mb-0"><input class="form-check-input sg-show" type="checkbox" id="sgShow_${s.role}" ${v ? '' : 'disabled'} ${v && show[s.role] ? 'checked' : ''}>
           <label class="form-check-label" for="sgShow_${s.role}">ใส่ลายเซ็น</label></div>
-      </div></div>`;
+      </div>${adjPanel}</div>`;
   };
   const body = `${signerList(true).map(row).join('')}
     <div class="small text-muted">ท้ายตารางเรียงซ้าย → ขวา ตามลำดับนี้ · <b>ใส่ลายเซ็น</b> = ตารางที่พิมพ์/บันทึก PDF มีลายเซ็นทับเส้น "ลงชื่อ" (ปิด = เว้นให้เซ็นมือ) ·
@@ -1538,10 +1550,45 @@ function openSignersModal(st) {
       ภาพจากกล้องได้ ระบบทำพื้นขาวให้โปร่งใสและตัดขอบให้ (ใช้ปากกาสีเข้มบนกระดาษขาว)</div>`;
   showModal('<i class="bi bi-pen"></i> ผู้ลงนามท้ายตาราง', body, `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
     <button class="btn btn-primary btn-sm" onclick="saveSigners()"><i class="bi bi-save"></i> บันทึก</button>`);
+  document.querySelectorAll('#edModal [data-role]').forEach(b => { if (b.querySelector('.sg-pv')) { sgApply(b.dataset.role); sgDrag(b); } });
+}
+// ปรับตำแหน่ง/ขนาดลายเซ็น: ปุ่มทีละ 1pt / 5% หรือลากภาพในกรอบตัวอย่าง (ขนาดจริงเท่ากระดาษ)
+function sgToggle(role) {
+  const p = document.querySelector(`#edModal [data-role="${role}"] .sg-adj`);
+  p.hidden = !p.hidden;
+  if (p.hidden) SGOPEN.delete(role); else SGOPEN.add(role);
+}
+function sgSet(role, a) {
+  a = { x: Math.max(-100, Math.min(100, Math.round(a.x * 2) / 2)), y: Math.max(-40, Math.min(40, Math.round(a.y * 2) / 2)), s: Math.max(50, Math.min(200, Math.round(a.s))) };
+  if (a.x || a.y || a.s !== 100) SGA[role] = a; else delete SGA[role];
+  sgApply(role);
+}
+const sgNudge = (role, k, d) => { const a = signAdj(role, SGA); a[k] += d; sgSet(role, a); };
+const sgReset = role => sgSet(role, { x: 0, y: 0, s: 100 });
+function sgApply(role) {
+  const b = document.querySelector(`#edModal [data-role="${role}"]`), a = signAdj(role, SGA);
+  const img = b && b.querySelector('.sg-pv img.sig');
+  if (!img) return;
+  img.setAttribute('style', signImgStyle(a));
+  const n = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v);
+  b.querySelector('.sg-val').textContent = a.x || a.y || a.s !== 100
+    ? `ซ้าย-ขวา ${n(a.x)} pt · ขึ้น-ลง ${n(a.y)} pt · ขนาด ${a.s}%` : 'ตำแหน่งปกติ: กึ่งกลางชื่อ วางบนเส้นจุด — ลากภาพหรือกดปุ่มเพื่อปรับ';
+}
+function sgDrag(box) {
+  const role = box.dataset.role, img = box.querySelector('.sg-pv img.sig');
+  let start = null;
+  img.addEventListener('dragstart', e => e.preventDefault());
+  img.addEventListener('pointerdown', e => { start = { px: e.clientX, py: e.clientY, a: signAdj(role, SGA) }; img.setPointerCapture(e.pointerId); e.preventDefault(); });
+  img.addEventListener('pointermove', e => {
+    if (!start) return;
+    sgSet(role, { x: start.a.x + (e.clientX - start.px) * 0.75, y: start.a.y + (e.clientY - start.py) * 0.75, s: start.a.s });   // px → pt
+  });
+  const end = () => { start = null; };
+  img.addEventListener('pointerup', end); img.addEventListener('pointercancel', end);
 }
 // ค่าที่กรอกค้างไว้ (อัปโหลด/ลบภาพแล้ววาดหน้าต่างใหม่ ไม่ให้หาย)
 function signersState() {
-  const st = { show: {} };
+  const st = { show: {}, adj: SGA, open: [...SGOPEN] };
   document.querySelectorAll('#edModal [data-role]').forEach(b => {
     const r = b.dataset.role, vis = b.querySelector('.sg-vis');
     st[r] = { name: b.querySelector('.sg-name').value.trim(), title: b.querySelector('.sg-title').value.trim(), hide: vis ? !vis.checked : false };
@@ -1554,9 +1601,11 @@ async function saveSigners() {
   const signers = [{ name: st.academic.name, title: st.academic.title },
                    Object.assign({ name: st.deputy.name, title: st.deputy.title }, st.deputy.hide ? { hide: true } : {})];
   const sign_show = Object.fromEntries(Object.entries(st.show).filter(([r, v]) => v && (T.signatures || {})[r]));
+  const sign_adj = JSON.parse(JSON.stringify(SGA));
   try {
-    await apiFetch(`/api/tt/terms/${T.term.id}`, { method: 'PUT', body: JSON.stringify({ config: { signers, sign_show } }) });
+    await apiFetch(`/api/tt/terms/${T.term.id}`, { method: 'PUT', body: JSON.stringify({ config: { signers, sign_show, sign_adj } }) });
     T.term.config.signers = signers;
+    if (Object.keys(sign_adj).length) T.term.config.sign_adj = sign_adj; else delete T.term.config.sign_adj;
     if (Object.keys(sign_show).length) T.term.config.sign_show = Object.fromEntries(Object.keys(sign_show).map(r => [r, true]));
     else delete T.term.config.sign_show;
     edModal.hide();

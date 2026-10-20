@@ -107,6 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_ttsub_date ON tt_subs(date);
 DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}$')
 SIGN_ROLES = ('academic', 'deputy', 'director')      # ท้ายตาราง ซ้าย → ขวา
 SIGN_MAX = 1024 * 1024                               # ภาพลายเซ็นไม่เกิน 1 MB
+SIGN_ADJ_X, SIGN_ADJ_Y = 100, 40                     # เลื่อนลายเซ็นได้ ซ้าย-ขวา ±100pt ขึ้น-ลง ±40pt (ขนาด 50–200%)
 OPEN_END = '9999-12-31'          # ไม่มา "ยังไม่มีกำหนด" (เช่น ย้ายออก รอครูใหม่)
 
 
@@ -747,9 +748,9 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @tt_edit_required
     def tt_term_update(term_id):
         """แก้ค่าภาคเรียน: ชื่อ, เผยแพร่, config (คาบเวลา / สายการเรียนของแต่ละห้อง / ผู้ลงนาม / max_run กฎสอนติดกัน / class_busy คาบที่นักเรียนห้ามว่าง
-        / sign_show ใส่ลายเซ็นของใครในตารางที่พิมพ์)"""
+        / sign_show ใส่ลายเซ็นของใครในตารางที่พิมพ์ / sign_adj ตำแหน่ง-ขนาดลายเซ็นรายคน)"""
         b = request.get_json() or {}
-        signers = sign_show = None
+        signers = sign_show = sign_adj = None
         if isinstance(b.get('config'), dict) and 'signers' in b['config']:     # [หัวหน้าวิชาการ, รอง ผอ.] (ผอ. มาจากหน้าตั้งค่า)
             raw = b['config']['signers']
             if not isinstance(raw, list) or len(raw) > 2 or not all(isinstance(x, dict) for x in raw):
@@ -761,6 +762,22 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             if not isinstance(raw, dict):
                 return jsonify(success=False, message='ค่าใส่ลายเซ็นไม่ถูกต้อง'), 400
             sign_show = {r: True for r in SIGN_ROLES if raw.get(r)}
+        if isinstance(b.get('config'), dict) and 'sign_adj' in b['config']:    # {role: {x: เลื่อนขวา pt, y: เลื่อนลง pt, s: ขนาด %}}
+            raw = b['config']['sign_adj']
+            if not isinstance(raw, dict):
+                return jsonify(success=False, message='ตำแหน่งลายเซ็นไม่ถูกต้อง'), 400
+            sign_adj = {}
+            for r in SIGN_ROLES:
+                a = raw.get(r)
+                if not isinstance(a, dict):
+                    continue
+                try:
+                    x, y, sc = (round(float(a.get(k, d)), 1) for k, d in (('x', 0), ('y', 0), ('s', 100)))
+                except (TypeError, ValueError):
+                    return jsonify(success=False, message='ตำแหน่งลายเซ็นไม่ถูกต้อง'), 400
+                x, y, sc = max(-SIGN_ADJ_X, min(SIGN_ADJ_X, x)), max(-SIGN_ADJ_Y, min(SIGN_ADJ_Y, y)), max(50, min(200, sc))
+                if x or y or sc != 100:
+                    sign_adj[r] = {'x': x, 'y': y, 's': sc}
         max_run = None
         if isinstance(b.get('config'), dict) and 'max_run' in b['config']:      # ครูสอนติดกันไม่เกิน N คาบ (0 = ไม่จำกัด)
             try:
@@ -802,6 +819,11 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                         cfg['sign_show'] = sign_show
                     else:
                         cfg.pop('sign_show', None)
+                if sign_adj is not None:
+                    if sign_adj:
+                        cfg['sign_adj'] = sign_adj
+                    else:
+                        cfg.pop('sign_adj', None)
                 if max_run is not None:
                     if max_run:
                         cfg['max_run'] = max_run

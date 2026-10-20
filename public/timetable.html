@@ -110,6 +110,11 @@
     .ed-issues li { padding: 3px 6px; border-radius: 6px; margin-bottom: 3px; cursor: default; }
     .ed-issues li[data-go] { cursor: pointer; }
     .ed-issues li.hard { background: #fde3e5; color: #58151c; } .ed-issues li.soft { background: #fff5d6; color: #664d03; }
+    /* ปรับตำแหน่งลายเซ็น (หน้าต่างผู้ลงนาม): ตัวอย่างขนาดจริง พื้นขาวเหมือนกระดาษ · ลากภาพได้ */
+    .sg-pv { position: relative; width: 262pt; margin: 6px auto 0; padding: 46pt 0 4pt; background: #fff; color: #000; border: 1px dashed #adb5bd;
+      font-family: 'THSarabunDoc', 'TH Sarabun New', 'TH SarabunPSK', sans-serif; font-size: 16pt; line-height: 21pt; touch-action: none; user-select: none; }
+    .sg-pv .tt-sign { width: auto; margin: 0; white-space: nowrap; }
+    .sg-pv .tt-sign img.sig { pointer-events: auto; cursor: move; outline: 1px dashed rgba(13,110,253,.45); }
     .ed-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
     .tc-grid td.tc { cursor: pointer; height: 26px; } .tc-grid td.tc.off { background: #f8d7da; }
     .tc-grid td.tc.off::after { content: '✖'; color: #b02a37; font-size: .75rem; }
@@ -488,9 +493,6 @@ function pageHTML(mode, key) {
     title = `ตารางเรียนชั้น${esc(classFull(cls))}${tr ? ' ' + esc(trackLabel(tr)) : ''} ภาคเรียนที่ ${esc(termName)} ${esc(school)}`;
   }
   const signers = signerList(), n3 = signers.length >= 3;
-  const dots = '.'.repeat(n3 ? 46 : 57);
-  const sign = s => { const src = signImgURL(s.role);
-    return `<div class="tt-sign">${src ? `<img class="sig" src="${src}" alt="">` : ''}ลงชื่อ${dots}<br>(${esc(s.name)})<br>${esc(s.title)}</div>`; };
   return `<div class="tt-page"><div class="tt-rot">
     ${box}
     <div class="tt-title">${title}</div>
@@ -500,7 +502,7 @@ function pageHTML(mode, key) {
       <tr class="tt-h2">${h2}</tr>
       ${rows}
     </table>
-    <div class="tt-signs${n3 ? ' n3' : ''}">${signers.map(sign).join('')}</div>
+    <div class="tt-signs${n3 ? ' n3' : ''}">${signers.map(s => signBlockHTML(s, n3, signImgURL(s.role))).join('')}</div>
   </div></div>`;
 }
 
@@ -520,6 +522,22 @@ function signerList(all) {
     { role: 'director', label: 'ผู้อำนวยการ', name: T.school.director || '', title: directorTitle() },
   ];
   return all ? list : list.filter(x => x.name && !x.hide);
+}
+// ช่องลงชื่อ 1 คน · ภาพลายเซ็นปกติกึ่งกลางชื่อ ขอบล่างบนเส้นจุด สูง 40pt
+// ปรับได้รายคน config.sign_adj[role] = {x: เลื่อนขวา pt, y: เลื่อนลง pt, s: ขนาด %} (ขยายจากเส้นจุดขึ้นไป)
+const SIGN_H = 40, SIGN_MAXW = 150, SIGN_BASE = 14;
+function signAdj(role, adj) {
+  const a = (adj || T.term.config.sign_adj || {})[role] || {};
+  return { x: +a.x || 0, y: +a.y || 0, s: +a.s || 100 };
+}
+function signImgStyle(a) {
+  return `transform:translate(calc(-50% + ${a.x}pt), ${a.y}pt);height:${+(SIGN_H * a.s / 100).toFixed(1)}pt;max-width:${+(SIGN_MAXW * a.s / 100).toFixed(1)}pt`;
+}
+const signExt = a => SIGN_H * a.s / 100 - SIGN_BASE - a.y;          // ภาพยื่นเหนือกล่องลงชื่อกี่ pt
+function signBlockHTML(s, n3, src, adj) {
+  const a = signAdj(s.role, adj);
+  const img = src ? `<img class="sig" src="${src}" alt="" data-ext="${signExt(a).toFixed(1)}"${a.x || a.y || a.s !== 100 ? ` style="${signImgStyle(a)}"` : ''}>` : '';
+  return `<div class="tt-sign">${img}ลงชื่อ${'.'.repeat(n3 ? 46 : 57)}<br>(${esc(s.name)})<br>${esc(s.title)}</div>`;
 }
 // ใส่ลายเซ็น: เปิดไว้ในภาคเรียนนี้ (config.sign_show) และมีภาพในระบบ
 function signImgURL(role) {
@@ -616,7 +634,8 @@ function fitPages() {
     const px2pt = 0.75;
     let o = over();
     if (o <= 0) return;
-    signs.style.marginTop = Math.max(signs.querySelector('img.sig') ? 31 : 14, 50 - o * px2pt) + 'pt';   // ภาพลายเซ็นยื่นขึ้นไป ~26pt ไม่ให้ทับตาราง
+    const ext = Math.max(0, ...[...signs.querySelectorAll('img.sig')].map(i => +i.dataset.ext || 0));   // ภาพลายเซ็นยื่นขึ้นไป (ปกติ 26pt) ไม่ให้ทับตาราง
+    signs.style.marginTop = Math.max(ext ? ext + 5 : 14, 50 - o * px2pt) + 'pt';
     if ((o = over()) > 0) {                                      // เลื่อนหัวเรื่อง + ตารางขึ้น (ไม่เกิน 30pt)
       const up = Math.min(30, o * px2pt);
       pg.style.paddingTop = (119 - up) + 'pt'; title.style.top = (77 - up) + 'pt';
@@ -651,7 +670,7 @@ async function printDoc(all) {
   if (all) setTimeout(render, 500);
 }
 </script>
-<script src="/js/tt-editor.js?v=33"></script>
+<script src="/js/tt-editor.js?v=34"></script>
 <script src="/js/tt-solver.js?v=15"></script>
 <script src="/js/tt-subs.js?v=4"></script>
 </body>
