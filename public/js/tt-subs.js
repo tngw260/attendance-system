@@ -2,10 +2,13 @@
    1) บันทึกครูไม่มา (ลา / ไปราชการ / ย้ายออก) ทั้งวัน บางคาบ หรือหลายวัน
    2) คาบที่ต้องมีครูแทน = คาบของครูที่ไม่มาในตารางภาคเรียนที่เปิดอยู่ (วิชาที่มีครูร่วมสอน / ประชุมครู ไม่ต้องจัด)
    3) แนะนำครู: ว่างคาบนั้น → สอนแทนมาน้อยสุดในภาคเรียน (กระจายให้เท่ากัน) → สาระเดียวกัน → สอนห้องนั้นอยู่ → วันนั้นมีคาบน้อย
-   4) พิมพ์ใบบันทึกการสอนแทนรายวัน · ครูเปิดตารางตัวเองเห็นคาบสอนแทน 7 วันข้างหน้า */
+   4) พิมพ์ใบบันทึกการสอนแทนรายวัน · ครูเปิดตารางตัวเองเห็นคาบสอนแทน 7 วันข้างหน้า
+   5) ครูทุกคน: "ฝากสอน" ของตัวเอง (ลาป่วย/ลากิจ/ไปราชการ) · กด "รับสอนแทน" คาบที่ว่าง (คนแรกได้) → รอแอดมิน/ผู้ช่วยจัดตารางอนุมัติ */
 
 const SUB = { date: '', data: null, from: '', to: '' };
 const SUB_REASONS = ['ลาป่วย', 'ลากิจ', 'ไปราชการ', 'อบรม/ประชุม', 'ลาคลอด', 'ย้ายออก/รอครูใหม่', 'อื่น ๆ'];
+const SELF_REASONS = ['ลาป่วย', 'ลากิจ', 'ไปราชการ'];          // ครูฝากสอนเอง (ตรงกับ SELF_REASONS ใน timetable.py)
+const isPending = s => s?.status === 'pending';
 const OPEN_END = '9999-12-31';
 const MON_ABBR = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
@@ -72,7 +75,7 @@ function subCounts(date) {                                    // คาบที
   const total = {}, day = {};
   (SUB.data?.subs || []).forEach(s => {
     if (!s.sub_id) return;
-    total[s.sub_id] = (total[s.sub_id] || 0) + 1;
+    if (!isPending(s)) total[s.sub_id] = (total[s.sub_id] || 0) + 1;    // รออนุมัติยังไม่นับสถิติ แต่นับเป็นภาระของวันนั้น
     if (s.date === date) day[s.sub_id] = (day[s.sub_id] || 0) + 1;
   });
   return { total, day };
@@ -182,6 +185,43 @@ async function clearDay() {
   saveSubs({ date: SUB.date, clear: saved.map(s => ({ period: s.period, lesson_id: s.lesson_id })) });
 }
 
+/* ── ครูกดรับสอนแทน / ผู้มีสิทธิ์อนุมัติ ── */
+async function subPost(url, body, ok) {
+  try {
+    const r = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
+    SUB.data.subs = SUB.data.subs.filter(s => s.date !== body.date).concat(r.subs);
+    renderSubsBody();
+    if (ok) toastEd(ok);
+    return r;
+  } catch (e) { alert(e.message); await loadSubs(); renderSubsBody(); return null; }  // มีคนกดก่อน → โหลดใหม่ให้เห็นชื่อ
+}
+
+const subKey = n => ({ date: SUB.date, period: n.p, lesson_id: n.l.id });
+
+async function volunteer(key) {
+  const n = needsOn(SUB.date).find(x => x.key === key);
+  if (!n || !confirm(`รับสอนแทน คาบ ${n.p} ${classLabel(n.l)} ${lessonName(n.l)}\nแทน${n.gone.map(tShort).join(', ')} · ${formatThaiDateFull(SUB.date)}?`)) return;
+  subPost('/api/tt/subs/volunteer', { ...subKey(n), subject: lessonName(n.l), class_label: classLabel(n.l) },
+          'ส่งคำขอรับสอนแทนแล้ว — รอผู้จัดตารางอนุมัติ');
+}
+
+async function withdrawSub(key) {
+  const n = needsOn(SUB.date).find(x => x.key === key);
+  if (!n || !confirm(`ยกเลิกการรับสอนแทน คาบ ${n.p} ${classLabel(n.l)}?`)) return;
+  subPost('/api/tt/subs/withdraw', subKey(n), 'ยกเลิกแล้ว');
+}
+
+async function approveSubs(keys) {
+  const items = keys.map(k => ({ period: +k.split('-')[0], lesson_id: +k.split('-')[1] }));
+  if (items.length) subPost('/api/tt/subs/approve', { date: SUB.date, items }, `อนุมัติแล้ว ${items.length} คาบ`);
+}
+
+async function rejectSub(key) {
+  const s = savedOn(SUB.date).find(x => `${x.period}-${x.lesson_id}` === key);
+  if (!s || !confirm(`ไม่อนุมัติให้${tShort(s.sub_id)}สอนแทน คาบ ${s.period}?\nคาบนี้จะกลับไปว่าง ให้ครูคนอื่นกดรับหรือจัดเองได้`)) return;
+  saveSubs({ date: SUB.date, clear: [{ period: s.period, lesson_id: s.lesson_id }] });
+}
+
 /* ── หน้าจอ ── */
 async function renderSubs() {
   if (!SUB.date) { SUB.date = todayLocal(); if (wdOf(SUB.date) === 0 || wdOf(SUB.date) === 6) SUB.date = nextSchoolDay(SUB.date, 1); }
@@ -207,7 +247,9 @@ function renderSubsBody() {
   const needs = needsOn(date), saved = savedOn(date), counts = subCounts(date);
   const savedBy = new Map(saved.map(s => [`${s.period}-${s.lesson_id}`, s]));
   const assigned = new Map(saved.map(s => [`${s.period}-${s.lesson_id}`, s.sub_id]));
-  const todo = needs.filter(n => !n.skip), done = todo.filter(n => savedBy.has(n.key)).length;
+  const todo = needs.filter(n => !n.skip), done = todo.filter(n => savedBy.has(n.key) && !isPending(savedBy.get(n.key))).length;
+  const pend = todo.filter(n => isPending(savedBy.get(n.key))).map(n => n.key);
+  const canPick = !!T.me && date >= todayLocal();             // ครูที่ผูกบัญชีแล้ว กดรับได้ตั้งแต่วันนี้เป็นต้นไป
   const P = Object.fromEntries(periodsOf().map(x => [x.no, x]));
 
   // แถบวันที่
@@ -229,12 +271,13 @@ function renderSubsBody() {
   const abs = absencesOn(date);
   html += `<div class="col-lg-4">
     <div class="card mb-2"><div class="card-body py-2">
-      <div class="d-flex align-items-center mb-1"><div class="fw-bold flex-fill"><i class="bi bi-person-dash me-1"></i>ครูที่ไม่มา</div>
-        ${admin ? `<button class="btn btn-sm btn-danger" onclick="openAbsenceModal()"><i class="bi bi-plus-lg"></i> บันทึกครูไม่มา</button>` : ''}</div>
+      <div class="d-flex align-items-center mb-1"><div class="fw-bold flex-fill"><i class="bi bi-person-dash me-1"></i>ครูที่ไม่มา / ฝากสอน</div>
+        ${admin ? `<button class="btn btn-sm btn-danger" onclick="openAbsenceModal()"><i class="bi bi-plus-lg"></i> บันทึกครูไม่มา</button>`
+          : T.me ? `<button class="btn btn-sm btn-warning" onclick="openAbsenceModal()"><i class="bi bi-send"></i> ฝากสอน</button>` : ''}</div>
       ${abs.length ? abs.map(a => `<div class="sub-abs d-flex align-items-start gap-2">
           <div class="flex-fill"><b>${esc(tName(a.teacher_id))}</b> <span class="badge text-bg-warning">${esc(a.reason || 'ไม่มา')}</span>
             <div class="small text-muted">${esc(periodLabel(a.periods))} · ${esc(spanLabel(a))}${a.note ? ' · ' + esc(a.note) : ''}</div></div>
-          ${admin ? `<button class="btn btn-sm btn-link p-0" onclick="openAbsenceModal(${a.id})" title="แก้ไข"><i class="bi bi-pencil-square"></i></button>` : ''}
+          ${admin || a.editable ? `<button class="btn btn-sm btn-link p-0" onclick="openAbsenceModal(${a.id})" title="แก้ไข"><i class="bi bi-pencil-square"></i></button>` : ''}
         </div>`).join('') : '<div class="small text-muted py-1">— ไม่มี —</div>'}
     </div></div>
     <div class="d-none d-lg-block">${statsHTML(counts)}</div>
@@ -249,14 +292,25 @@ function renderSubsBody() {
       const cands = candidatesFor(n, date, assigned, counts);
       const opt = c => `<option value="${c.t.id}" ${s?.sub_id === c.t.id ? 'selected' : ''} ${c.ok || s?.sub_id === c.t.id ? '' : 'disabled'}>` +
         `${esc(tShort(c.t.id))} · แทนแล้ว ${c.total}${c.why.length ? ' · ' + esc(c.why.join(' · ')) : ''}</option>`;
-      pick = `<select class="form-select form-select-sm ${s ? (s.sub_id ? 'is-valid' : 'border-warning') : 'border-danger'}" onchange="setSub('${n.key}', this.value)">
+      pick = (isPending(s) ? `<div class="sub-req mb-1"><span class="badge text-bg-warning">รออนุมัติ</span> <b>${esc(tShort(s.sub_id))}</b> ขอรับสอนแทน
+          <div class="mt-1"><button class="btn btn-sm btn-success py-0" onclick="approveSubs(['${n.key}'])"><i class="bi bi-check-lg"></i> อนุมัติ</button>
+          <button class="btn btn-sm btn-outline-danger py-0" onclick="rejectSub('${n.key}')">ไม่อนุมัติ</button></div></div>` : '') +
+        `<select class="form-select form-select-sm ${!s ? 'border-danger' : isPending(s) || !s.sub_id ? 'border-warning' : 'is-valid'}" onchange="setSub('${n.key}', this.value)">
           <option value="" ${s ? '' : 'selected'}>— ยังไม่จัด —</option>
           <option value="none" ${s && !s.sub_id ? 'selected' : ''}>✗ ไม่มีครูแทน (มอบงาน/รวมห้อง)</option>
           <optgroup label="ว่าง — เรียงตามความเหมาะสม">${cands.filter(c => c.ok).map(opt).join('')}</optgroup>
           <optgroup label="ไม่ว่าง">${cands.filter(c => !c.ok).map(opt).join('')}</optgroup></select>
-        ${s ? `<input class="form-control form-control-sm mt-1" placeholder="หมายเหตุ เช่น ให้ทำใบงาน หน้า 12" value="${esc(s.note)}" onchange="setSubNote('${n.key}', this.value)">` : ''}`;
-    } else pick = s ? (s.sub_id ? `<b>${esc(tShort(s.sub_id))}</b>` : 'ไม่มีครูแทน') + (s.note ? `<div class="small text-muted">${esc(s.note)}</div>` : '')
-                    : '<span class="text-danger small">ยังไม่จัด</span>';
+        ${s && !isPending(s) ? `<input class="form-control form-control-sm mt-1" placeholder="หมายเหตุ เช่น ให้ทำใบงาน หน้า 12" value="${esc(s.note)}" onchange="setSubNote('${n.key}', this.value)">` : ''}`;
+    } else if (!s) {                                             // ยังไม่มีใครรับ → ครูที่ว่างกดรับได้
+      const me = canPick ? candidatesFor(n, date, assigned, counts).find(c => c.t.id === T.me) : null;
+      const free = canPick && (me ? me.ok : !n.gone.includes(T.me));
+      pick = `<span class="text-danger small">ยังไม่มีครูแทน</span>` +
+        (free ? `<div><button class="btn btn-sm btn-primary mt-1 text-nowrap" onclick="volunteer('${n.key}')">🙋 รับสอนแทน</button></div>`
+              : me && me.why.length ? `<div class="small text-muted">${esc(me.why[0])}</div>` : '');
+    } else if (isPending(s)) pick = `<span class="badge text-bg-warning">รออนุมัติ</span> <b>${esc(tShort(s.sub_id))}</b>` +
+        (s.sub_id === T.me ? `<div><button class="btn btn-sm btn-link p-0 text-danger" onclick="withdrawSub('${n.key}')">ยกเลิกการรับ</button></div>` : '');
+    else pick = (s.sub_id ? `<b>${esc(tShort(s.sub_id))}</b> <span class="badge text-bg-success">อนุมัติแล้ว</span>` : 'ไม่มีครูแทน') +
+        (s.note ? `<div class="small text-muted">${esc(s.note)}</div>` : '');
     const mine = !admin && s?.sub_id && s.sub_id === T.me;
     return `<tr class="${n.skip ? 'table-light text-muted' : ''}${mine ? ' table-warning' : ''}">
       <td class="text-center"><b>${n.p}</b><div class="small text-muted text-nowrap">${esc(time)}</div></td>
@@ -271,7 +325,9 @@ function renderSubsBody() {
   html += `<div class="col-lg-8"><div class="card"><div class="card-body py-2">
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
       <div class="fw-bold flex-fill"><i class="bi bi-arrow-left-right me-1"></i>คาบที่ต้องมีครูสอนแทน
-        <span class="badge ${done < todo.length ? 'bg-danger' : 'bg-success'}">จัดแล้ว ${done}/${todo.length}</span></div>
+        <span class="badge ${done < todo.length ? 'bg-danger' : 'bg-success'}">จัดแล้ว ${done}/${todo.length}</span>
+        ${pend.length ? `<span class="badge text-bg-warning">รออนุมัติ ${pend.length}</span>` : ''}</div>
+      ${admin && pend.length > 1 ? `<button class="btn btn-sm btn-success" onclick="approveSubs(${esc(JSON.stringify(pend))})"><i class="bi bi-check2-all"></i> อนุมัติทั้งหมด</button>` : ''}
       ${admin && todo.length ? `<button class="btn btn-sm btn-primary" onclick="autoAssign()"><i class="bi bi-magic"></i> จัดอัตโนมัติ</button>
         <button class="btn btn-sm btn-outline-secondary" onclick="clearDay()">ล้าง</button>` : ''}
       ${todo.length ? `<button class="btn btn-sm btn-success" onclick="openLineModal()"><i class="bi bi-line"></i> ส่ง LINE / รูปภาพ</button>` : ''}
@@ -279,7 +335,8 @@ function renderSubsBody() {
     ${needs.length ? `<div class="table-responsive"><table class="table table-sm align-middle mb-1 sub-table">
       <thead class="table-light"><tr><th class="text-center">คาบ</th><th>ชั้น</th><th>วิชา</th><th class="d-none d-md-table-cell">ครูที่ไม่มา</th><th>สอนแทนโดย</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-      ${admin ? '<div class="small text-muted">รายชื่อเรียง: สอนแทนมาน้อยก่อน (นับตั้งแต่ ' + shortDate(SUB.from) + ') · สาระเดียวกัน · สอนห้องนี้อยู่ · วันนั้นมีคาบน้อย</div>' : ''}`
+      ${admin ? '<div class="small text-muted">รายชื่อเรียง: สอนแทนมาน้อยก่อน (นับตั้งแต่ ' + shortDate(SUB.from) + ') · สาระเดียวกัน · สอนห้องนี้อยู่ · วันนั้นมีคาบน้อย · ครูกดรับเองได้ (รออนุมัติ)</div>'
+        : canPick ? '<div class="small text-muted">คาบที่คุณว่างจะมีปุ่ม 🙋 รับสอนแทน — คนแรกที่กดได้คาบนั้น แล้วรอผู้จัดตารางอนุมัติ</div>' : ''}`
       : `<div class="text-center text-muted py-4">${hol?.type === 'holiday' || wd === 0 || wd === 6 || !inTerm(date) ? 'ไม่มีการเรียนการสอน' : abs.length ? 'ครูที่ไม่มาไม่มีคาบสอนวันนี้' : 'ไม่มีครูไม่มา — ไม่ต้องจัดครูแทน'}</div>`}
     ${stale.length ? `<div class="alert alert-warning py-1 px-2 small mt-2 mb-0">มีบันทึกที่ไม่ตรงตาราง/บันทึกไม่มาแล้ว ${stale.length} รายการ
       (${stale.map(s => `คาบ ${s.period} ${esc(s.class_label)} ${esc(s.subject)}`).join(', ')})
@@ -305,28 +362,35 @@ function statsHTML(counts) {
 
 /* ── ฟอร์มบันทึกครูไม่มา ── */
 function openAbsenceModal(id) {
-  const a = id ? SUB.data.absences.find(x => x.id === id) : { teacher_id: '', date_from: SUB.date, date_to: SUB.date, periods: [], reason: 'ลาป่วย', note: '' };
+  const self = !T.can_edit;                                  // ครูทั่วไป = ฝากสอนของตัวเอง (สาเหตุ 3 อย่าง ไม่ย้อนหลัง)
+  const start = self && SUB.date < todayLocal() ? todayLocal() : SUB.date;
+  const a = id ? SUB.data.absences.find(x => x.id === id)
+               : { teacher_id: self ? T.me : '', date_from: start, date_to: start, periods: [], reason: 'ลาป่วย', note: '' };
   if (!a) return;
   const list = T.teachers.filter(t => IDX.byTeacher[t.id] || t.id === a.teacher_id);
   const la = lunchAfter(), P = periodsOf();
   const mode = !a.periods.length ? 'all' : periodLabel(a.periods) === 'ช่วงเช้า' ? 'am' : periodLabel(a.periods) === 'ช่วงบ่าย' ? 'pm' : 'some';
   const open = a.date_to === OPEN_END;
-  const body = `
+  const reasons = self ? SELF_REASONS : [...new Set([...SUB_REASONS, a.reason].filter(Boolean))];
+  const body = self ? `
+    <div class="mb-2"><span class="small text-muted">ครูที่ฝากสอน</span> <b>${esc(tName(a.teacher_id))}</b><input type="hidden" id="abT" value="${a.teacher_id}"></div>` : `
     <label class="form-label small mb-0">ครู</label>
     <select id="abT" class="form-select form-select-sm mb-2"><option value="">— เลือกครู —</option>
       ${list.map(t => `<option value="${t.id}" ${t.id === a.teacher_id ? 'selected' : ''}>ครู${esc(t.name)}</option>`).join('')}
-      ${a.teacher_id && !list.some(t => t.id === a.teacher_id) ? `<option value="${a.teacher_id}" selected>${esc(tName(a.teacher_id))}</option>` : ''}</select>
+      ${a.teacher_id && !list.some(t => t.id === a.teacher_id) ? `<option value="${a.teacher_id}" selected>${esc(tName(a.teacher_id))}</option>` : ''}</select>`;
+  const minD = self ? ` min="${todayLocal()}"` : '';
+  const body2 = `
     <div class="row g-2 mb-2">
-      <div class="col-6"><label class="form-label small mb-0">สาเหตุ</label>
-        <select id="abR" class="form-select form-select-sm">${[...new Set([...SUB_REASONS, a.reason].filter(Boolean))].map(r => `<option ${r === a.reason ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></div>
-      <div class="col-6"><label class="form-label small mb-0">หมายเหตุ</label>
-        <input id="abN" class="form-control form-control-sm" maxlength="200" value="${esc(a.note)}" placeholder="เช่น ไปอบรมที่ สพม."></div>
+      <div class="col-6"><label class="form-label small mb-0">สาเหตุที่ไม่ได้สอน</label>
+        <select id="abR" class="form-select form-select-sm">${reasons.map(r => `<option ${r === a.reason ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></div>
+      <div class="col-6"><label class="form-label small mb-0">${self ? 'งานที่ฝาก / หมายเหตุ' : 'หมายเหตุ'}</label>
+        <input id="abN" class="form-control form-control-sm" maxlength="200" value="${esc(a.note)}" placeholder="${self ? 'เช่น ให้ทำใบงานหน้า 12' : 'เช่น ไปอบรมที่ สพม.'}"></div>
     </div>
     <div class="row g-2 align-items-end mb-2">
-      <div class="col-6"><label class="form-label small mb-0">ตั้งแต่วันที่</label><input id="abF" type="date" class="form-control form-control-sm" value="${a.date_from}"></div>
-      <div class="col-6"><label class="form-label small mb-0">ถึงวันที่</label><input id="abTo" type="date" class="form-control form-control-sm" value="${open ? '' : a.date_to}" ${open ? 'disabled' : ''}></div>
-      <div class="col-12"><div class="form-check small"><input class="form-check-input" type="checkbox" id="abOpen" ${open ? 'checked' : ''}
-        onchange="el('abTo').disabled = this.checked"><label class="form-check-label" for="abOpen">ยังไม่มีกำหนด (เช่น ย้ายออก รอครูใหม่ — กลับมาแก้ "ถึงวันที่" ทีหลัง)</label></div></div>
+      <div class="col-6"><label class="form-label small mb-0">ตั้งแต่วันที่</label><input id="abF" type="date" class="form-control form-control-sm" value="${a.date_from}"${minD}></div>
+      <div class="col-6"><label class="form-label small mb-0">ถึงวันที่</label><input id="abTo" type="date" class="form-control form-control-sm" value="${open ? '' : a.date_to}" ${open ? 'disabled' : ''}${minD}></div>
+      ${self ? '' : `<div class="col-12"><div class="form-check small"><input class="form-check-input" type="checkbox" id="abOpen" ${open ? 'checked' : ''}
+        onchange="el('abTo').disabled = this.checked"><label class="form-check-label" for="abOpen">ยังไม่มีกำหนด (เช่น ย้ายออก รอครูใหม่ — กลับมาแก้ "ถึงวันที่" ทีหลัง)</label></div></div>`}
     </div>
     <label class="form-label small mb-0">คาบที่ไม่อยู่</label>
     <div class="btn-group btn-group-sm w-100 mb-1" role="group">
@@ -335,8 +399,9 @@ function openAbsenceModal(id) {
          <label class="btn btn-outline-primary" for="abM_${k}">${lab}</label>`).join('')}
     </div>
     <div id="abPs" class="${mode === 'some' ? '' : 'd-none'}">${P.map(x => `<div class="form-check form-check-inline small">
-      <input class="form-check-input" type="checkbox" id="abP${x.no}" value="${x.no}" ${a.periods.includes(x.no) ? 'checked' : ''}><label class="form-check-label" for="abP${x.no}">${x.no}</label></div>`).join('')}</div>`;
-  showModal(id ? 'แก้ไขบันทึกครูไม่มา' : 'บันทึกครูไม่มา', body,
+      <input class="form-check-input" type="checkbox" id="abP${x.no}" value="${x.no}" ${a.periods.includes(x.no) ? 'checked' : ''}><label class="form-check-label" for="abP${x.no}">${x.no}</label></div>`).join('')}</div>
+    ${self ? '<div class="small text-muted mt-2">บันทึกแล้ว ครูคนอื่นจะเห็นคาบของคุณและกด "รับสอนแทน" ได้ จากนั้นผู้จัดตารางอนุมัติ</div>' : ''}`;
+  showModal(self ? (id ? 'แก้ไขการฝากสอน' : 'ฝากสอน') : id ? 'แก้ไขบันทึกครูไม่มา' : 'บันทึกครูไม่มา', body + body2,
     `${id ? `<button class="btn btn-outline-danger btn-sm me-auto" onclick="deleteAbsence(${id})"><i class="bi bi-trash"></i> ลบ</button>` : ''}
      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
      <button class="btn btn-primary btn-sm" onclick="saveAbsence(${id || 0})"><i class="bi bi-save"></i> บันทึก</button>`);
@@ -349,13 +414,16 @@ async function saveAbsence(id) {
                 : m === 'some' ? [...document.querySelectorAll('#abPs input:checked')].map(i => +i.value) : [];
   if (m === 'some' && !periods.length) { alert('เลือกคาบอย่างน้อย 1 คาบ'); return; }
   const body = { teacher_id: +el('abT').value || 0, reason: el('abR').value, note: el('abN').value,
-                 date_from: el('abF').value, date_to: el('abOpen').checked ? OPEN_END : (el('abTo').value || el('abF').value), periods };
+                 date_from: el('abF').value, date_to: el('abOpen')?.checked ? OPEN_END : (el('abTo').value || el('abF').value), periods };
   if (!body.teacher_id) { alert('เลือกครู'); return; }
   try {
     const r = await apiFetch(id ? `/api/tt/absences/${id}` : '/api/tt/absences', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
     edModal.hide();
     if (r.removed_subs) toastEd(`ลบการจัดครูแทนที่ไม่ต้องใช้แล้ว ${r.removed_subs} คาบ`);
-    await loadSubs(); renderSubsBody();
+    else if (!T.can_edit && !id) toastEd('ฝากสอนแล้ว — ครูคนอื่นกดรับสอนแทนได้');
+    await loadSubs();
+    if (!T.can_edit && body.date_from !== SUB.date) { await gotoDate(body.date_from); return; }   // ไปวันที่ฝาก ให้เห็นคาบของตัวเอง
+    renderSubsBody();
   } catch (e) { alert(e.message); }
 }
 
@@ -385,7 +453,7 @@ function lineText() {
     const rows = [];                                                      // คาบติดกัน ห้องเดียวกัน ครูแทนคนเดียวกัน → "คาบ 1-2"
     mine.forEach(n => {
       const s = saved.get(n.key), cls = classLabel({ ...n.l, track: '' });
-      const who = !s ? '❗ยังไม่จัด' : s.sub_id ? tShort(s.sub_id) : `ไม่มีครูแทน${s.note ? ` (${s.note})` : ''}`;
+      const who = !s ? '❗ยังไม่จัด' : s.sub_id ? tShort(s.sub_id) + (isPending(s) ? ' (รออนุมัติ)' : '') : `ไม่มีครูแทน${s.note ? ` (${s.note})` : ''}`;
       const last = rows[rows.length - 1];
       if (last && last.cls === cls && last.who === who && last.p2 === n.p - 1) { last.p2 = n.p; return; }
       rows.push({ p1: n.p, p2: n.p, cls, who });
@@ -398,8 +466,10 @@ function lineText() {
 
 function openLineModal() {
   const left = needsOn(SUB.date).filter(n => !n.skip && !savedOn(SUB.date).some(s => `${s.period}-${s.lesson_id}` === n.key)).length;
+  const pend = savedOn(SUB.date).filter(isPending).length;
   showModal('<i class="bi bi-line"></i> ส่งรายการสอนแทน — ข้อความ / รูปภาพ', `
     ${left ? `<div class="alert alert-warning py-1 px-2 small">ยังไม่ได้จัด ${left} คาบ — ในข้อความจะขึ้นว่า "❗ยังไม่จัด"</div>` : ''}
+    ${pend ? `<div class="alert alert-warning py-1 px-2 small">รออนุมัติ ${pend} คาบ — ในข้อความจะขึ้นว่า "(รออนุมัติ)"</div>` : ''}
     <div class="row g-3">
       <div class="col-md-6">
         <label class="form-label small mb-1">ข้อความ <span class="text-muted">(แก้ได้ รูปเปลี่ยนตาม)</span></label>
@@ -498,7 +568,7 @@ function sheetHTML(needs, savedBy) {
     const s = savedBy.get(n.key);
     return `<tr><td class="c">${i + 1}</td><td class="c">${n.p}</td><td class="c nw">${esc(P[n.p] ? P[n.p].start + '-' + P[n.p].end : '')}</td>
       <td class="c nw">${esc(classLabel(n.l))}</td><td class="nw">${esc(lessonName(n.l))}</td><td class="nw">${esc(n.gone.map(tShort).join(', '))}</td>
-      <td class="nw">${s ? (s.sub_id ? esc(tShort(s.sub_id)) : 'ไม่มีครูแทน') : ''}</td><td></td><td class="sm">${esc(s?.note || '')}</td></tr>`;
+      <td class="nw">${s ? (s.sub_id ? esc(tShort(s.sub_id)) + (isPending(s) ? ' (รออนุมัติ)' : '') : 'ไม่มีครูแทน') : ''}</td><td></td><td class="sm">${esc(s?.note || '')}</td></tr>`;
   }).join('') || '<tr><td colspan="9" class="c">— ไม่มีคาบที่ต้องจัดครูสอนแทน —</td></tr>';
   return `<div class="sub-sheet">
     <div class="ss-c ss-b ss-big">บันทึกการจัดครูสอนแทน</div>
@@ -525,7 +595,7 @@ async function mySubsBanner() {
   const box = document.createElement('div');
   box.id = 'mySubs'; box.className = 'container no-print mb-2';
   box.innerHTML = `<div class="alert alert-warning py-2 mb-0"><b><i class="bi bi-arrow-left-right me-1"></i>คาบสอนแทนของคุณ</b>
-    ${mine.map(s => `<div>${s.date === from ? '<span class="badge bg-danger">วันนี้</span> ' : ''}${esc(formatThaiDateFull(s.date).replace(/ พ\.ศ\. \d+/, ''))}
+    ${mine.map(s => `<div>${s.date === from ? '<span class="badge bg-danger">วันนี้</span> ' : ''}${isPending(s) ? '<span class="badge text-bg-light border">รออนุมัติ</span> ' : ''}${esc(formatThaiDateFull(s.date).replace(/ พ\.ศ\. \d+/, ''))}
       คาบ ${s.period}${P[s.period] ? ` (${esc(P[s.period].start)}-${esc(P[s.period].end)})` : ''} · <b>${esc(s.class_label)} ${esc(s.subject)}</b>
       แทนครู${esc((IDX.teachers[s.absent_id]?.name || data.teacher_names?.[s.absent_id] || '').split(' ')[0])}${s.note ? ` · ${esc(s.note)}` : ''}</div>`).join('')}</div>`;
   el('content').prepend(box);

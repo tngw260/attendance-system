@@ -7,7 +7,9 @@
   tt_lessons   ภาระงานสอน 1 รายการ = วิชา/กิจกรรม + ครู + ชั้น (+ สาย/กลุ่ม) + คาบต่อสัปดาห์
   tt_slots     ช่องในตาราง (วัน 1-5, คาบ 1-7) ที่วางรายการนั้นไว้
   tt_absences  ครูไม่มา (ลา / ไปราชการ / ย้ายออก) ช่วงวันที่ + คาบ (ว่าง = ทั้งวัน)
+               ครูฝากสอนเองได้ (created_by = ผู้บันทึก) เฉพาะของตัวเอง สาเหตุ ลาป่วย / ลากิจ / ไปราชการ
   tt_subs      การจัดครูสอนแทน รายวัน-คาบ-รายการ (เก็บรหัสวิชา/ชั้นไว้ด้วย ประวัติไม่หายเมื่อแก้ตาราง)
+               status pending = ครูกดรับสอนแทนเอง รอแอดมิน/ผู้ช่วยจัดตารางอนุมัติ · approved = จัด/อนุมัติแล้ว
   tt_editors   ผู้ช่วยจัดตาราง (เช่น ฝ่ายวิชาการ) — ไม่ต้องเป็นแอดมินทั้งระบบ
   tt_signatures ภาพลายเซ็นผู้ลงนามท้ายตาราง (หัวหน้าวิชาการ / รอง ผอ. / ผอ.) เก็บในฐานข้อมูล ไม่อยู่ใน public/
                ครูที่ล็อกอินเปิดได้เฉพาะเมื่อเทอมนั้นเผยแพร่และเปิด "ใส่ลายเซ็น" (config.sign_show) ของคนนั้น
@@ -75,7 +77,8 @@ CREATE TABLE IF NOT EXISTS tt_absences (
     periods     TEXT,
     reason      TEXT DEFAULT '',
     note        TEXT DEFAULT '',
-    created_at  TEXT DEFAULT (datetime('now','localtime'))
+    created_at  TEXT DEFAULT (datetime('now','localtime')),
+    created_by  INTEGER
 );
 CREATE TABLE IF NOT EXISTS tt_subs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,6 +91,9 @@ CREATE TABLE IF NOT EXISTS tt_subs (
     class_label TEXT DEFAULT '',
     note        TEXT DEFAULT '',
     updated_at  TEXT DEFAULT (datetime('now','localtime')),
+    status      TEXT DEFAULT 'approved',
+    approved_by TEXT DEFAULT '',
+    requested_at TEXT,
     UNIQUE(date, period, lesson_id)
 );
 CREATE TABLE IF NOT EXISTS tt_editors (
@@ -105,6 +111,8 @@ CREATE INDEX IF NOT EXISTS idx_ttsub_date ON tt_subs(date);
 """
 
 DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}$')
+SELF_REASONS = ('ลาป่วย', 'ลากิจ', 'ไปราชการ')        # สาเหตุที่ครูเลือกได้เมื่อฝากสอนเอง
+SELF_MAX_DAYS = 31                                   # ครูฝากสอนเองได้ครั้งละไม่เกิน 31 วัน
 SIGN_ROLES = ('academic', 'deputy', 'director')      # ท้ายตาราง ซ้าย → ขวา
 SIGN_MAX = 1024 * 1024                               # ภาพลายเซ็นไม่เกิน 1 MB
 SIGN_ADJ_X, SIGN_ADJ_Y = 100, 40                     # เลื่อนลายเซ็นได้ ซ้าย-ขวา ±100pt ขึ้น-ลง ±40pt (ขนาด 50–200%)
@@ -177,12 +185,14 @@ def day_summary(con, date, settings):
         if not gone or not classes or len(gone) < len(tids):
             continue
         s = subs.get((p, l['id']))
+        pending = bool(s and s['status'] == 'pending')
         out['needs'].append(dict(
             period=p, time=f"{times[p]['start']}-{times[p]['end']}" if p in times else '', lesson_id=l['id'],
             subject=l['code'] or l['title'],
             class_label=(s['class_label'] if s and s['class_label'] else
                          ', '.join('ม.' + (c.split('/')[0] if one_room else c) for c in classes)),
-            absent=[names.get(t, '') for t in gone], decided=bool(s),
+            absent=[names.get(t, '') for t in gone], absent_ids=gone, decided=bool(s) and not pending,
+            status='' if not s else 'pending' if pending else 'approved',     # '' = ยังไม่มีใครรับ (ครูกดรับได้)
             sub=names.get(s['sub_id'], '') if s and s['sub_id'] else '', note=s['note'] if s else ''))
     return out
 
@@ -299,6 +309,12 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
 
     with get_db() as con:
         con.executescript(SCHEMA)
+        have = {r['name'] for r in con.execute('PRAGMA table_info(tt_subs)')}
+        for col, ddl in (('status', "TEXT DEFAULT 'approved'"), ('approved_by', "TEXT DEFAULT ''"), ('requested_at', 'TEXT')):
+            if col not in have:                  # ฐานข้อมูลเดิมก่อนมีระบบครูกดรับสอนแทน → ที่จัดไว้แล้วถือว่าอนุมัติ
+                con.execute(f'ALTER TABLE tt_subs ADD COLUMN {col} {ddl}')
+        if 'created_by' not in {r['name'] for r in con.execute('PRAGMA table_info(tt_absences)')}:
+            con.execute('ALTER TABLE tt_absences ADD COLUMN created_by INTEGER')
         # ครั้งเดียว: รายการที่ยังไม่มีเงื่อนไข → เดาคาบคู่จากตารางที่วางไว้
         for l in con.execute('SELECT id, term_id FROM tt_lessons WHERE options IS NULL').fetchall():
             slots = [(s['day'], s['period']) for s in con.execute(
@@ -1587,8 +1603,32 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
 
     # ── สอนแทน ─────────────────────────────────────────────
     # คาบที่ต้องหาครูแทน คำนวณในเบราว์เซอร์จาก "ครูไม่มา" + ตารางที่เผยแพร่ · เซิร์ฟเวอร์เก็บแค่บันทึกไม่มา + ผลการจัด
-    def absence_dict(r):
-        return dict(r, periods=jl(r['periods'], []))
+    def absence_dict(r, u=None, editor=False):
+        """editable = ผู้ใช้คนนี้แก้/ลบได้ (ผู้มีสิทธิ์จัดตาราง หรือครูที่ฝากสอนเองและยังไม่ผ่านไป)"""
+        return dict(r, periods=jl(r['periods'], []),
+                    editable=editor or bool(u and r['created_by'] == u['id'] and r['date_to'] >= datetime.date.today().isoformat()))
+
+    def self_absence_error(con, u, a, old=None):
+        """ครูทั่วไปฝากสอนของตัวเอง → None = ผ่าน หรือข้อความผิดพลาด (old = บันทึกเดิมเมื่อแก้/ลบ)
+        ตอบ 400 ไม่ใช่ 403 — apiFetch แสดง 403 เป็น "สิทธิ์ไม่เพียงพอ" ครูจะไม่เห็นเหตุผล"""
+        me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (u['id'],)).fetchone()
+        if not me:
+            return 'บัญชีนี้ยังไม่ได้ผูกกับชื่อครูในตารางสอน (แจ้งแอดมิน)'
+        today = datetime.date.today().isoformat()
+        if old is not None and (old['created_by'] != u['id'] or old['teacher_id'] != me['id'] or old['date_to'] < today):
+            return 'แก้ได้เฉพาะรายการฝากสอนที่คุณบันทึกเองและยังไม่ผ่านไป'
+        if a is None:
+            return None
+        if a['teacher_id'] != me['id']:
+            return 'ฝากสอนได้เฉพาะของตัวเอง'
+        if a['reason'] not in SELF_REASONS:
+            return 'สาเหตุต้องเป็น ' + ' / '.join(SELF_REASONS)
+        if a['date_from'] < today:
+            return 'ฝากสอนย้อนหลังไม่ได้ (แจ้งผู้จัดตาราง)'
+        if a['date_to'] == OPEN_END or (datetime.date.fromisoformat(a['date_to'])
+                                         - datetime.date.fromisoformat(a['date_from'])).days >= SELF_MAX_DAYS:
+            return f'ฝากสอนได้ครั้งละไม่เกิน {SELF_MAX_DAYS} วัน'
+        return None
 
     def clean_absence(b):
         """→ (ค่า, None) หรือ (None, ข้อความผิดพลาด)"""
@@ -1617,6 +1657,16 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 n += 1
         return n
 
+    def drop_duties_of(con, a):
+        """ครูที่ไม่มา ไปสอนแทนห้องอื่นไม่ได้ → ลบคาบที่ครูคนนี้รับสอนแทนไว้ (รออนุมัติ/อนุมัติแล้ว) ในช่วงที่ไม่มา"""
+        ps = set(jl(a['periods'], []))
+        rows = con.execute('SELECT id, period FROM tt_subs WHERE sub_id=? AND date BETWEEN ? AND ?',
+                           (a['teacher_id'], a['date_from'], a['date_to'])).fetchall()
+        gone = [r['id'] for r in rows if not ps or r['period'] in ps]
+        for i in gone:
+            con.execute('DELETE FROM tt_subs WHERE id=?', (i,))
+        return len(gone)
+
     @app.get('/api/tt/subs')
     @login_required
     def tt_subs_list():
@@ -1624,8 +1674,10 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         f, t = request.args.get('from', ''), request.args.get('to', '')
         if not (DATE_RE.match(f) and DATE_RE.match(t)) or f > t:
             return jsonify(success=False, message='ช่วงวันที่ไม่ถูกต้อง'), 400
+        u = current_user()
+        editor = can_edit_tt(u)
         with get_db() as con:
-            absences = [absence_dict(r) for r in con.execute(
+            absences = [absence_dict(r, u, editor) for r in con.execute(
                 'SELECT * FROM tt_absences WHERE date_from<=? AND date_to>=? ORDER BY date_from, id', (t, f))]
             subs = [dict(r) for r in con.execute(
                 'SELECT * FROM tt_subs WHERE date BETWEEN ? AND ? ORDER BY date, period', (f, t))]
@@ -1638,8 +1690,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.get('/api/tt/today')
     @login_required
     def tt_today():
-        """หน้าแรก: คาบสอนแทนของฉัน (วันนี้ + วันเรียนถัดไป) · แอดมินได้สรุปการจัดครูแทนของวันนี้ด้วย
-        ?date= วันที่ตามเครื่องผู้ใช้ (ไม่ส่ง = วันนี้ของเซิร์ฟเวอร์)"""
+        """หน้าแรก: คาบสอนแทนของฉัน (วันนี้ + วันเรียนถัดไป · รวมที่รออนุมัติ) + จำนวนคาบที่ยังไม่มีครูรับ (ชวนกดรับ)
+        แอดมินได้สรุปการจัดครูแทนของวันนี้ด้วย · ?date= วันที่ตามเครื่องผู้ใช้ (ไม่ส่ง = วันนี้ของเซิร์ฟเวอร์)"""
         u = current_user()
         d = request.args.get('date', '')
         if not DATE_RE.match(d):
@@ -1658,49 +1710,70 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     t = times.get(r['period'])
                     mine.append(dict(date=r['date'], period=r['period'], time=f"{t['start']}-{t['end']}" if t else '',
                                      class_label=r['class_label'], subject=r['subject'], note=r['note'],
-                                     absent=names.get(r['absent_id'], '')))
+                                     absent=names.get(r['absent_id'], ''), status=r['status']))
             summary = day_summary(con, d, s) if can_edit_tt(u) else None
-        return jsonify(date=d, next=nxt, mine=mine, summary=summary)
+            open_needs = []
+            if me:
+                for day in (d, nxt):
+                    sm = summary if summary and day == d else day_summary(con, day, s)
+                    if sm['term'] and published(con, sm['term']['id']):
+                        open_needs += [day for n in sm['needs'] if not n['status']]
+        return jsonify(date=d, next=nxt, mine=mine, summary=summary,
+                       open_today=open_needs.count(d), open_next=open_needs.count(nxt))
 
     @app.post('/api/tt/absences')
-    @tt_edit_required
+    @login_required
     def tt_absence_create():
+        """บันทึกครูไม่มา — ผู้มีสิทธิ์จัดตารางบันทึกให้ใครก็ได้ · ครูทั่วไป "ฝากสอน" ของตัวเอง (self_absence_error)"""
         a, err = clean_absence(request.get_json() or {})
         if err:
             return jsonify(success=False, message=err), 400
+        u = current_user()
+        editor = can_edit_tt(u)
         with get_db() as con:
+            if not editor and (err := self_absence_error(con, u, a)):
+                return jsonify(success=False, message=err), 400
             if not con.execute('SELECT 1 FROM tt_teachers WHERE id=?', (a['teacher_id'],)).fetchone():
                 return jsonify(success=False, message='ไม่พบครู'), 404
-            aid = con.execute("""INSERT INTO tt_absences (teacher_id, date_from, date_to, periods, reason, note)
-                                 VALUES (:teacher_id, :date_from, :date_to, :periods, :reason, :note)""", a).lastrowid
+            aid = con.execute("""INSERT INTO tt_absences (teacher_id, date_from, date_to, periods, reason, note, created_by)
+                                 VALUES (:teacher_id, :date_from, :date_to, :periods, :reason, :note, :by)""",
+                              dict(a, by=u['id'])).lastrowid
+            removed = drop_duties_of(con, a)
             r = con.execute('SELECT * FROM tt_absences WHERE id=?', (aid,)).fetchone()
-        return jsonify(success=True, absence=absence_dict(r))
+        return jsonify(success=True, absence=absence_dict(r, u, editor), removed_subs=removed)
 
     @app.put('/api/tt/absences/<int:aid>')
-    @tt_edit_required
+    @login_required
     def tt_absence_update(aid):
         a, err = clean_absence(request.get_json() or {})
         if err:
             return jsonify(success=False, message=err), 400
+        u = current_user()
+        editor = can_edit_tt(u)
         with get_db() as con:
             old = con.execute('SELECT * FROM tt_absences WHERE id=?', (aid,)).fetchone()
             if not old:
                 return jsonify(success=False, message='ไม่พบบันทึก'), 404
+            if not editor and (err := self_absence_error(con, u, a, old)):
+                return jsonify(success=False, message=err), 400
             if not con.execute('SELECT 1 FROM tt_teachers WHERE id=?', (a['teacher_id'],)).fetchone():
                 return jsonify(success=False, message='ไม่พบครู'), 404
             con.execute("""UPDATE tt_absences SET teacher_id=:teacher_id, date_from=:date_from, date_to=:date_to,
                            periods=:periods, reason=:reason, note=:note WHERE id=:id""", dict(a, id=aid))
-            removed = drop_orphan_subs(con, old['teacher_id'], old['date_from'], old['date_to'])
+            removed = drop_orphan_subs(con, old['teacher_id'], old['date_from'], old['date_to']) + drop_duties_of(con, a)
             r = con.execute('SELECT * FROM tt_absences WHERE id=?', (aid,)).fetchone()
-        return jsonify(success=True, absence=absence_dict(r), removed_subs=removed)
+        return jsonify(success=True, absence=absence_dict(r, u, editor), removed_subs=removed)
 
     @app.delete('/api/tt/absences/<int:aid>')
-    @tt_edit_required
+    @login_required
     def tt_absence_delete(aid):
+        u = current_user()
         with get_db() as con:
             old = con.execute('SELECT * FROM tt_absences WHERE id=?', (aid,)).fetchone()
             if not old:
                 return jsonify(success=False, message='ไม่พบบันทึก'), 404
+            if not can_edit_tt(u) and (err := self_absence_error(con, u, None, old)):
+                return jsonify(success=False, message=err), 400
             con.execute('DELETE FROM tt_absences WHERE id=?', (aid,))
             removed = drop_orphan_subs(con, old['teacher_id'], old['date_from'], old['date_to'])
         return jsonify(success=True, removed_subs=removed)
@@ -1739,11 +1812,114 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 seen.add((p, sid))
             for p, lid in clear:
                 con.execute('DELETE FROM tt_subs WHERE date=? AND period=? AND lesson_id=?', (d, p, lid))
+            by = current_user()['full_name']             # แอดมิน/ผู้ช่วยจัดตารางเลือกเอง = อนุมัติทันที (รวมกรณีเลือกครูที่กดรับไว้)
             for i in items:
-                con.execute("""INSERT INTO tt_subs (date, period, lesson_id, absent_id, sub_id, subject, class_label, note, updated_at)
-                               VALUES (:date, :period, :lesson_id, :absent_id, :sub_id, :subject, :class_label, :note, datetime('now','localtime'))
+                con.execute("""INSERT INTO tt_subs (date, period, lesson_id, absent_id, sub_id, subject, class_label, note, updated_at,
+                                                    status, approved_by)
+                               VALUES (:date, :period, :lesson_id, :absent_id, :sub_id, :subject, :class_label, :note, datetime('now','localtime'),
+                                       'approved', :by)
                                ON CONFLICT(date, period, lesson_id) DO UPDATE SET absent_id=excluded.absent_id,
                                  sub_id=excluded.sub_id, subject=excluded.subject, class_label=excluded.class_label,
-                                 note=excluded.note, updated_at=excluded.updated_at""", dict(i, date=d))
+                                 note=excluded.note, updated_at=excluded.updated_at, status='approved',
+                                 approved_by=excluded.approved_by""", dict(i, date=d, by=by))
             subs = [dict(r) for r in con.execute('SELECT * FROM tt_subs WHERE date=? ORDER BY period', (d,))]
         return jsonify(success=True, subs=subs)
+
+    # ── ครูกดรับสอนแทนเอง → รออนุมัติ ──────────────────────
+    def published(con, term_id):
+        r = con.execute('SELECT published FROM tt_terms WHERE id=?', (term_id,)).fetchone()
+        return bool(r and r['published'])
+
+    def sub_target(b):
+        """{date, period, lesson_id} → (date, period, lesson_id) หรือ None"""
+        try:
+            d, p, lid = str(b.get('date') or ''), int(b.get('period')), int(b.get('lesson_id'))
+        except (TypeError, ValueError):
+            return None
+        return (d, p, lid) if DATE_RE.match(d) else None
+
+    def day_subs(con, d):
+        return [dict(r) for r in con.execute('SELECT * FROM tt_subs WHERE date=? ORDER BY period', (d,))]
+
+    @app.post('/api/tt/subs/volunteer')
+    @login_required
+    def tt_sub_volunteer():
+        """ครูกดรับสอนแทน 1 คาบ {date, period, lesson_id, subject?, class_label?} — คนแรกที่กดได้ (รออนุมัติ)
+        ตรวจ: คาบนั้นยังต้องการครูแทนและยังไม่มีใครรับ · ครูว่าง (ไม่มีสอน/ไม่ได้ลา/ไม่ได้รับห้องอื่นคาบเดียวกัน)"""
+        b = request.get_json() or {}
+        tg = sub_target(b)
+        if not tg:
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        d, p, lid = tg
+        if d < datetime.date.today().isoformat():
+            return jsonify(success=False, message='วันนี้ผ่านไปแล้ว รับสอนแทนย้อนหลังไม่ได้'), 400
+        u = current_user()
+        with get_db() as con:
+            me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (u['id'],)).fetchone()
+            if not me:
+                return jsonify(success=False, message='บัญชีนี้ยังไม่ได้ผูกกับชื่อครูในตารางสอน (แจ้งแอดมิน)'), 400
+            me = me['id']
+            sm = day_summary(con, d, get_settings())
+            need = next((n for n in sm['needs'] if n['period'] == p and n['lesson_id'] == lid), None)
+            if not need or not published(con, sm['term']['id']):
+                return jsonify(success=False, message='คาบนี้ไม่ต้องมีครูสอนแทนแล้ว'), 404
+            if need['status']:
+                who = f"ครู{need['sub'].split(' ')[0]}" if need['sub'] else 'ผู้จัดตาราง (ไม่ใช้ครูแทน)'
+                return jsonify(success=False, message=f'คาบนี้มีผู้รับแล้ว: {who}', subs=day_subs(con, d)), 409
+            if me in need['absent_ids'] or any(a['teacher_id'] == me and (not a['periods'] or p in a['periods'])
+                                               for a in sm['absences']):
+                return jsonify(success=False, message='คุณมีบันทึกไม่มาในคาบนี้'), 409
+            wd = datetime.date.fromisoformat(d).isoweekday()
+            own = [r for r in con.execute("""SELECT l.code, l.title, l.teacher_ids FROM tt_lessons l JOIN tt_slots s ON s.lesson_id=l.id
+                                             WHERE l.term_id=? AND s.day=? AND s.period=?""", (sm['term']['id'], wd, p))
+                   if me in jl(r['teacher_ids'], [])]
+            if own:
+                return jsonify(success=False, message=f"คุณมีสอน {own[0]['code'] or own[0]['title']} ในคาบนี้"), 409
+            if con.execute('SELECT 1 FROM tt_subs WHERE date=? AND period=? AND sub_id=?', (d, p, me)).fetchone():
+                return jsonify(success=False, message='คุณรับสอนแทนห้องอื่นในคาบนี้แล้ว'), 409
+            cur = con.execute("""INSERT INTO tt_subs (date, period, lesson_id, absent_id, sub_id, subject, class_label, note,
+                                                      status, requested_at, updated_at)
+                                  VALUES (?,?,?,?,?,?,?,'','pending',datetime('now','localtime'),datetime('now','localtime'))
+                                  ON CONFLICT(date, period, lesson_id) DO NOTHING""",
+                              (d, p, lid, min(need['absent_ids']), me, squeeze(b.get('subject'), 30) or need['subject'],
+                               squeeze(b.get('class_label'), 40) or need['class_label']))
+            if not cur.rowcount:                         # มีคนกดก่อนเสี้ยววินาที
+                return jsonify(success=False, message='คาบนี้มีผู้รับแล้ว', subs=day_subs(con, d)), 409
+            subs = day_subs(con, d)
+        return jsonify(success=True, subs=subs)
+
+    @app.post('/api/tt/subs/withdraw')
+    @login_required
+    def tt_sub_withdraw():
+        """ครูยกเลิกการกดรับของตัวเอง (เฉพาะที่ยังรออนุมัติ)"""
+        tg = sub_target(request.get_json() or {})
+        if not tg:
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        with get_db() as con:
+            me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (current_user()['id'],)).fetchone()
+            n = con.execute("""DELETE FROM tt_subs WHERE date=? AND period=? AND lesson_id=? AND sub_id=? AND status='pending'""",
+                            (*tg, me['id'] if me else -1)).rowcount
+            subs = day_subs(con, tg[0])
+        if not n:
+            return jsonify(success=False, message='ไม่พบคำขอที่ยกเลิกได้ (อาจได้รับอนุมัติแล้ว — แจ้งผู้จัดตาราง)', subs=subs), 404
+        return jsonify(success=True, subs=subs)
+
+    @app.post('/api/tt/subs/approve')
+    @tt_edit_required
+    def tt_sub_approve():
+        """อนุมัติคำขอรับสอนแทน {date, items: [{period, lesson_id}]} · ไม่อนุมัติ = ลบผ่าน POST /api/tt/subs (clear)"""
+        b = request.get_json() or {}
+        d = str(b.get('date') or '')
+        if not DATE_RE.match(d):
+            return jsonify(success=False, message='วันที่ไม่ถูกต้อง'), 400
+        try:
+            keys = [(int(i['period']), int(i['lesson_id'])) for i in (b.get('items') or [])]
+        except (TypeError, ValueError, KeyError):
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        by = current_user()['full_name']
+        with get_db() as con:
+            n = sum(con.execute("""UPDATE tt_subs SET status='approved', approved_by=?, updated_at=datetime('now','localtime')
+                                    WHERE date=? AND period=? AND lesson_id=? AND status='pending'""", (by, d, p, lid)).rowcount
+                    for p, lid in keys)
+            subs = day_subs(con, d)
+        return jsonify(success=True, approved=n, subs=subs)

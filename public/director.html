@@ -882,6 +882,7 @@ function renderTeachers(t) {
           <td class="text-nowrap">${esc(n.class_label)}</td><td>${esc(n.subject)}</td>
           <td class="text-nowrap">${n.absent.map(x => 'ครู' + esc(String(x).split(' ')[0])).join(', ')}</td>
           <td>${n.decided ? (n.sub ? 'ครู' + esc(n.sub.split(' ')[0]) : 'ไม่มีครูแทน') + (n.note ? ` <span class="text-muted small">(${esc(n.note)})</span>` : '')
+                          : n.status === 'pending' ? 'ครู' + esc(n.sub.split(' ')[0]) + ' <span class="badge text-bg-warning">รออนุมัติ</span>'
                           : '<span class="text-danger fw-bold">ยังไม่จัด</span>'}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="text-muted small mt-2">วันนี้ไม่มีคาบที่ต้องจัดครูสอนแทน</div>');
 }
