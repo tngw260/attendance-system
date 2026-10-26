@@ -27,9 +27,10 @@
     table.cl td.last { border-left: none; }
     .cl-sign { margin-top: 20pt; text-align: right; }
     .cl-sign p { margin: 0; }
+    .adv-edit { font: 13px/1.4 system-ui, sans-serif; text-align: center; margin: 2px 0 4px; }
     @media print {
       body { background: #fff; }
-      .toolbar { display: none !important; }
+      .toolbar, .adv-edit { display: none !important; }
       .cl-page { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
       .cl-page + .cl-page { break-before: page; }
       thead { display: table-header-group; }
@@ -58,7 +59,7 @@ async function getWord() {
   try { await downloadFile('/api/class-list.docx?' + API_Q); } catch (e) { alert(e.message); }
 }
 
-function sheetHTML(sh, sub) {
+function sheetHTML(sh, sub, canEdit) {
   const cols = W.map(pct).concat(Array(CHECK_COLS).fill(pct(WC))).map(w => `<col style="width:${w}">`).join('');
   const blanks = n => Array(n).fill('<td></td>').join('');
   const rows = sh.students.length ? sh.students.map(s => `<tr><td class="c">${escH(s.number)}</td><td class="c">${escH(s.code)}</td>
@@ -66,6 +67,8 @@ function sheetHTML(sh, sub) {
     : `<tr><td colspan="${4 + CHECK_COLS}" class="c">— ยังไม่มีรายชื่อนักเรียนห้องนี้ —</td></tr>`;
   return `<div class="cl-page">
     <div class="cl-head">${sh.header.map(t => `<p>${escH(t)}</p>`).join('')}</div>
+    ${canEdit ? `<div class="adv-edit"><a href="#" onclick="editAdvisors('${sh.level}/${sh.room}', ${escH(JSON.stringify(sh.advisors))}); return false">
+      <i class="bi bi-pencil-square"></i> แก้ชื่อครูที่ปรึกษา ม.${sh.level}${sh.room > 1 ? '/' + sh.room : ''}</a> <span class="text-muted">(แอดมิน · ไม่พิมพ์ออก)</span></div>` : ''}
     <table class="cl"><colgroup>${cols}</colgroup>
       <thead><tr><th>เลขที่</th><th>เลขประจำตัว</th><th colspan="2">ชื่อ - สกุล</th>${Array(CHECK_COLS).fill('<th></th>').join('')}</tr></thead>
       <tbody>${rows}</tbody></table>
@@ -82,14 +85,27 @@ addEventListener('beforeprint', () => fitScreen(false));
 addEventListener('afterprint', () => fitScreen());
 addEventListener('resize', () => fitScreen());
 
-document.addEventListener('DOMContentLoaded', async () => {
-  let d;
-  try { d = await apiFetch('/api/class-list?' + API_Q); }
-  catch (e) { document.getElementById('pages').innerHTML = `<div class="alert alert-danger m-3">${escH(e.message)}</div>`; return; }
+// แอดมิน: ชื่อครูที่ปรึกษาบนหัวใบรายชื่อ (เก็บใน settings.class_advisors ใช้ทุกใบของห้องนั้น)
+async function editAdvisors(cls, cur) {
+  const t = prompt(`ชื่อครูที่ปรึกษา ม.${cls.replace(/\/1$/, '')}\n(เว้นว่าง = ใช้บัญชีครูที่ผูกห้องนี้ในระบบ)`, cur || '');
+  if (t === null) return;
+  try {
+    await apiFetch('/api/class-advisors', { method: 'PUT', body: JSON.stringify({ cls, text: t }) });
+    await render();
+  } catch (e) { alert(e.message); }
+}
+
+async function render() {
+  const d = await apiFetch('/api/class-list?' + API_Q);
   document.title = d.title;
   document.getElementById('docTitle').textContent = d.title;
-  document.getElementById('pages').innerHTML = d.sheets.map(sh => sheetHTML(sh, d.sub)).join('');
+  document.getElementById('pages').innerHTML = d.sheets.map(sh => sheetHTML(sh, d.sub, d.can_edit_advisors)).join('');
   fitScreen();
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try { await render(); }
+  catch (e) { document.getElementById('pages').innerHTML = `<div class="alert alert-danger m-3">${escH(e.message)}</div>`; return; }
   if (Q.get('print') === '1') {                         // ปุ่ม PDF จากหน้าอื่น → เปิดหน้าต่างพิมพ์ให้เลย (เลือก "บันทึกเป็น PDF")
     try { await document.fonts.ready; } catch (e) {}
     setTimeout(() => window.print(), 300);

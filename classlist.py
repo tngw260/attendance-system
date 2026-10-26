@@ -6,6 +6,7 @@
   ไม่ใส่เลขบัตรประชาชน — ครูทุกคนดาวน์โหลดได้ (ข้อมูลส่วนบุคคล)
 รายชื่อมาจากตาราง students ที่นายทะเบียนดูแล → ทุกใบในโรงเรียนตรงกัน
 
+ครูที่ปรึกษาบนหัวกระดาษ: settings.class_advisors (ตั้งต้นจากแบบฟอร์ม แอดมินแก้ได้) → ไม่มีใช้บัญชีครูที่ผูกห้อง
 ใช้ 2 แบบ
   ?level=&room=                    ใบรายชื่อรายห้อง (หน้าเช็คชื่อ)
   ?date=&period=&lesson_id=        ใบรายชื่อสอนแทน (หน้าสอนแทน) เพิ่ม วิชา/ผู้สอน/ครูสอนแทน/วัน-คาบ + ลงชื่อครูสอนแทน
@@ -27,6 +28,16 @@ THAI_MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มี�
                'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
 NAME_PREFIXES = ('เด็กชาย', 'เด็กหญิง', 'นางสาว', 'นาย', 'นาง')
 CHECK_COLS = 9                                       # ช่องว่างท้ายตาราง ตามแบบฟอร์ม
+# ครูที่ปรึกษาตั้งต้น จากแบบฟอร์มของนายทะเบียน ปีการศึกษา 2569 → settings.class_advisors (ครั้งแรกที่เปิดแอป)
+# แอดมินแก้ได้ที่หน้าใบรายชื่อ · ห้องที่ไม่มีในค่าตั้ง ใช้บัญชีครูที่ผูกห้องนั้น (users.assigned_level/room)
+DEFAULT_ADVISORS = {
+    '1/1': 'นางสาวรตนมน พรหมขอม  และนางสาวประภาสิริ ศิษย์นันท์',
+    '2/1': 'นางสาวณัฐธิดา ดวงสมร  และนางสาวเสาวณิต ชาญณรงค์',
+    '3/1': 'นางสาวเกษร บัวผุด  และครูคหกรรม',
+    '4/1': 'นายฐิติวารินทร์ เลี้ยงรักษา  และนายพรเทพ อุ้มชูวัฒนา',
+    '5/1': 'นางสาวจันจิรา ธรรมทีโป  และนางสาวเปี่ยมจิตร นางหลาด',
+    '6/1': 'นายชยุตม์ คงบัน  และนางสาวพจณิชา บุญเรือน',
+}
 
 
 def thai_date(d):
@@ -73,9 +84,10 @@ def class_sheet(con, level, room, year, settings):
         male += g == 'M'
         female += g == 'F'
         students.append(dict(number=r['number'], code=r['student_code'] or '', first=first, last=last))
-    advisors = [r['full_name'] for r in con.execute(
-        """SELECT full_name FROM users WHERE role='teacher' AND assigned_level=? AND (assigned_room=? OR assigned_room IS NULL)
-           ORDER BY id""", (level, room))]
+    advisors = (jl(settings.get('class_advisors'), {}).get(f'{level}/{room}') or '').strip() or '  และ'.join(
+        r['full_name'] for r in con.execute(
+            """SELECT full_name FROM users WHERE role='teacher' AND assigned_level=? AND (assigned_room=? OR assigned_room IS NULL)
+               ORDER BY id""", (level, room)))
     return dict(level=level, room=room, year=year, school=settings.get('school_name', ''),
                 advisors=advisors, students=students, total=len(students), male=male, female=female)
 
@@ -147,7 +159,7 @@ NO_LEFT = '<w:left w:val="nil"/>'
 def header_lines(sh, sub):
     out = [f"รายชื่อนักเรียนชั้นมัธยมศึกษาปีที่ {sh['level']}" + (f"/{sh['room']}" if sh['room'] > 1 else ''),
            f"{sh['school']}  ปีการศึกษา {sh['year']}",
-           ('  และ'.join(sh['advisors']) if sh['advisors'] else '...........................................') + ' (ครูที่ปรึกษา)',
+           (sh['advisors'] or '...........................................') + ' (ครูที่ปรึกษา)',
            f"จำนวนนักเรียนทั้งหมด {sh['total']} คน นักเรียนชายจำนวน {sh['male']} คน นักเรียนหญิงจำนวน {sh['female']} คน"]
     if sub:
         subj = ' '.join(x for x in (sub['code'], sub['subject']) if x) + (f" ({sub['track']})" if sub['track'] else '')
@@ -228,6 +240,11 @@ def build_docx(sheets, sub, title):
 def init(app, get_db, login_required, current_user, get_settings):
     from flask import jsonify, request, send_file
 
+    with get_db() as con:
+        if not con.execute("SELECT 1 FROM settings WHERE key='class_advisors'").fetchone():
+            con.execute("INSERT INTO settings (key, value) VALUES ('class_advisors', ?)",
+                        (json.dumps(DEFAULT_ADVISORS, ensure_ascii=False),))
+
     def teaches(con, me, level, room):
         cls = f'{level}/{room}'
         for r in con.execute("""SELECT l.teacher_ids, l.classes FROM tt_lessons l JOIN tt_terms t ON t.id=l.term_id
@@ -291,7 +308,30 @@ def init(app, get_db, login_required, current_user, get_settings):
         if err:
             return jsonify(success=False, message=err[0]), err[1]
         out_sub = {k: v for k, v in sub.items() if k not in ('teacher_ids', 'sub_id', 'classes')} if sub else None
-        return jsonify(sheets=[dict(sh, header=header_lines(sh, sub)) for sh in sheets], sub=out_sub, title=title)
+        return jsonify(sheets=[dict(sh, header=header_lines(sh, sub)) for sh in sheets], sub=out_sub, title=title,
+                       can_edit_advisors=current_user()['role'] == 'admin')
+
+    @app.put('/api/class-advisors')
+    @login_required
+    def class_advisors_put():
+        """แอดมินแก้ชื่อครูที่ปรึกษาบนหัวใบรายชื่อ {cls: "1/1", text} · text ว่าง = กลับไปใช้บัญชีครูที่ผูกห้อง"""
+        if current_user()['role'] != 'admin':
+            return jsonify(success=False, message='เฉพาะแอดมิน'), 403
+        b = request.get_json() or {}
+        cls = str(b.get('cls') or '')
+        if not parse_class(cls):
+            return jsonify(success=False, message='ห้องไม่ถูกต้อง'), 400
+        text = re.sub(r'[ \t]{3,}', '  ', str(b.get('text') or '').replace('\n', ' ')).strip()[:200]
+        text = re.sub(r'\s*\(?ครูที่ปรึกษา\)?\s*$', '', text)          # วางมาทั้งบรรทัดจากใบเดิม
+        with get_db() as con:
+            cur = jl((con.execute("SELECT value FROM settings WHERE key='class_advisors'").fetchone() or {'value': None})['value'], {})
+            if text:
+                cur[cls] = text
+            else:
+                cur.pop(cls, None)
+            con.execute("INSERT INTO settings (key, value) VALUES ('class_advisors', ?) "
+                        "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (json.dumps(cur, ensure_ascii=False),))
+        return jsonify(success=True, cls=cls, text=text)
 
     @app.get('/api/class-list.docx')
     @login_required
