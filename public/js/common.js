@@ -161,6 +161,28 @@ async function apiFetch(url, options = {}) {
   return data;
 }
 
+// ดาวน์โหลดไฟล์จาก API — ผิดพลาดแจ้งข้อความ (ไม่เปิดหน้า JSON) · ชื่อไฟล์ภาษาไทยจาก Content-Disposition
+async function downloadFile(url) {
+  const res = await fetch(url, { credentials: 'same-origin' });
+  if (res.status === 401) {
+    location.href = '/login.html?next=' + encodeURIComponent(location.pathname + location.search);
+    return;
+  }
+  if (!res.ok) {
+    let msg = 'ดาวน์โหลดไม่สำเร็จ';
+    try { msg = (await res.json()).message || msg; } catch {}
+    throw new Error(msg);
+  }
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = cd.match(/filename\*=UTF-8''([^;]+)/i) || cd.match(/filename="?([^";]+)"?/i);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(await res.blob());
+  a.download = m ? decodeURIComponent(m[1]) : 'download';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+
 function showToast(message, type = 'success') {
   const el = document.getElementById('mainToast');
   if (!el) return;

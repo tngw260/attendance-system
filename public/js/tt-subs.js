@@ -3,7 +3,8 @@
    2) คาบที่ต้องมีครูแทน = คาบของครูที่ไม่มาในตารางภาคเรียนที่เปิดอยู่ (วิชาที่มีครูร่วมสอน / ประชุมครู ไม่ต้องจัด)
    3) แนะนำครู: ว่างคาบนั้น → สอนแทนมาน้อยสุดในภาคเรียน (กระจายให้เท่ากัน) → สาระเดียวกัน → สอนห้องนั้นอยู่ → วันนั้นมีคาบน้อย
    4) พิมพ์ใบบันทึกการสอนแทนรายวัน · ครูเปิดตารางตัวเองเห็นคาบสอนแทน 7 วันข้างหน้า
-   5) ครูทุกคน: "ฝากสอน" ของตัวเอง (ลาป่วย/ลากิจ/ไปราชการ) · กด "รับสอนแทน" คาบที่ว่าง (คนแรกได้) → รอแอดมิน/ผู้ช่วยจัดตารางอนุมัติ */
+   5) ครูทุกคน: "ฝากสอน" ของตัวเอง (ลาป่วย/ลากิจ/ไปราชการ) · กด "รับสอนแทน" คาบที่ว่าง (คนแรกได้) → รอแอดมิน/ผู้ช่วยจัดตารางอนุมัติ
+   6) ใบรายชื่อนักเรียนของคาบ Word / PDF (ครูเจ้าของวิชา ครูที่รับสอนแทน ผู้จัดตาราง) */
 
 const SUB = { date: '', data: null, from: '', to: '' };
 const SUB_REASONS = ['ลาป่วย', 'ลากิจ', 'ไปราชการ', 'อบรม/ประชุม', 'ลาคลอด', 'ย้ายออก/รอครูใหม่', 'อื่น ๆ'];
@@ -185,6 +186,18 @@ async function clearDay() {
   saveSubs({ date: SUB.date, clear: saved.map(s => ({ period: s.period, lesson_id: s.lesson_id })) });
 }
 
+/* ── ใบรายชื่อนักเรียนของคาบ (แบบฟอร์มงานทะเบียน, classlist.py) — ครูเจ้าของวิชา ครูที่รับสอนแทน ผู้จัดตาราง ── */
+const canClassList = (n, s) => T.can_edit || (!!T.me && (n.l.teacher_ids.includes(T.me) || s?.sub_id === T.me));
+function classListLinks(n) {
+  const q = `date=${SUB.date}&period=${n.p}&lesson_id=${n.l.id}`;
+  return `<div class="small mt-1 text-nowrap"><i class="bi bi-people me-1"></i>รายชื่อ:
+    <a href="#" onclick="subClassList('${q}'); return false">Word</a> ·
+    <a href="/class-list.html?${q}&print=1" target="_blank" rel="noopener">PDF</a></div>`;
+}
+async function subClassList(q) {
+  try { await downloadFile('/api/class-list.docx?' + q); } catch (e) { alert(e.message); }
+}
+
 /* ── ครูกดรับสอนแทน / ผู้มีสิทธิ์อนุมัติ ── */
 async function subPost(url, body, ok) {
   try {
@@ -316,7 +329,8 @@ function renderSubsBody() {
       <td class="text-center"><b>${n.p}</b><div class="small text-muted text-nowrap">${esc(time)}</div></td>
       <td class="text-nowrap">${esc(classLabel(n.l))}</td>
       <td><b>${esc(lessonName(n.l))}</b>${n.l.code && T.subjects[n.l.code]?.name ? `<div class="small text-muted">${esc(T.subjects[n.l.code].name)}</div>` : ''}
-        <div class="small text-muted d-md-none">แทน${esc(n.gone.map(tShort).join(', '))}</div></td>
+        <div class="small text-muted d-md-none">แทน${esc(n.gone.map(tShort).join(', '))}</div>
+        ${!n.skip && canClassList(n, s) ? classListLinks(n) : ''}</td>
       <td class="text-nowrap d-none d-md-table-cell">${esc(n.gone.map(tShort).join(', '))}</td>
       <td style="min-width:${admin ? 180 : 110}px">${pick}</td></tr>`;
   }).join('');

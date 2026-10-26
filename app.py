@@ -5133,6 +5133,8 @@ def cli_list_users():
 # ── ตารางสอน (ฝ่ายวิชาการ) — แยกไว้ใน timetable.py ──
 import timetable
 timetable.init(app, get_db, login_required, admin_required, current_user, get_settings)
+import classlist                                     # ใบรายชื่อนักเรียน (แบบฟอร์มงานทะเบียน) Word / PDF
+classlist.init(app, get_db, login_required, current_user, get_settings)
 
 if __name__ == '__main__':
     import sys

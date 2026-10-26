@@ -72,6 +72,16 @@
             <button id="btnPrint" class="btn btn-outline-secondary" onclick="printRollcall()" title="พิมพ์ใบเช็คชื่อเปล่า">
               <i class="bi bi-printer"></i>
             </button>
+            <div class="btn-group">
+              <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" title="ดาวน์โหลดรายชื่อนักเรียน (แบบฟอร์มงานทะเบียน)">
+                <i class="bi bi-people"></i>
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><h6 class="dropdown-header">รายชื่อนักเรียน (แบบฟอร์มงานทะเบียน)</h6></li>
+                <li><a class="dropdown-item" href="#" onclick="classListDownload('docx'); return false"><i class="bi bi-file-earmark-word me-2 text-primary"></i>ดาวน์โหลด Word</a></li>
+                <li><a class="dropdown-item" href="#" onclick="classListDownload('pdf'); return false"><i class="bi bi-file-earmark-pdf me-2 text-danger"></i>PDF / พิมพ์</a></li>
+              </ul>
+            </div>
           </div>
         </div>
         <!-- Hidden inputs ที่ JS อ้างถึง -->

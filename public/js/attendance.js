@@ -218,6 +218,16 @@ function printRollcall() {
   window.open(`/rollcall.html?level=${level}&room=${room}`, '_blank');
 }
 
+// ใบรายชื่อนักเรียนตามแบบฟอร์มงานทะเบียน (classlist.py) — Word ดาวน์โหลดตรง / PDF = หน้าพิมพ์ เปิดหน้าต่างพิมพ์ให้เลย
+async function classListDownload(kind) {
+  const level = document.getElementById('selLevel').value;
+  const room  = document.getElementById('selRoom').value;
+  if (!level || !room) { showToast('เลือกชั้นและห้องก่อน', 'warning'); return; }
+  const q = `level=${level}&room=${room}`;
+  if (kind === 'pdf') { window.open(`/class-list.html?${q}&print=1`, '_blank'); return; }
+  try { await downloadFile(`/api/class-list.docx?${q}`); } catch (e) { showToast(e.message, 'danger'); }
+}
+
 async function saveAttendance() {
   const level = document.getElementById('selLevel').value;
   const room  = document.getElementById('selRoom').value;
