@@ -120,35 +120,47 @@ def sub_context(con, date, period, lesson_id):
 
 # ── Word (.docx) — เขียน XML เอง ไม่ต้องลง python-docx บนเซิร์ฟเวอร์ ──────────────
 FONT = 'TH SarabunPSK'
-PAGE_W, MARGIN_L, MARGIN_R = 11906, 1021, 850       # A4 · ซ้าย 1.8 ซม. ขวา 1.5 ซม.
-TEXT_W = PAGE_W - MARGIN_L - MARGIN_R               # 10035 twips
-COL_NO, COL_CODE, COL_FIRST, COL_LAST = 650, 1450, 2450, 1850
-CELL_LINE = 380                                     # บรรทัดในตาราง 19pt พอดีสระบน-ล่าง · ห้องละ ~33 คนต่อหน้า
-COL_CHECK = (TEXT_W - COL_NO - COL_CODE - COL_FIRST - COL_LAST) // CHECK_COLS
+PAGE_W, MARGIN_L, MARGIN_R = 11906, 680, 567        # A4 · ซ้าย 1.2 ซม. ขวา 1 ซม. (แบบฟอร์ม Excel ขอบ 0.64 ซม.)
+TEXT_W = PAGE_W - MARGIN_L - MARGIN_R               # 10659 twips
+# สัดส่วนเดียวกับแบบฟอร์ม (วัดเทียบความสูงแถว 21pt): เลขที่ 2.3 · เลขประจำตัว 4.5 · ชื่อ 6.3 · สกุล 6.1 เท่าของขนาดตัวอักษร
+COL_NO, COL_CODE, COL_FIRST, COL_LAST = 750, 1450, 2030, 1970
+AVAIL_PT = 770 - 14                                 # ความสูงใช้ได้ A4 − ขอบบนล่าง 1.27 ซม. (เผื่อเส้นตาราง)
+
+
+def fit(n, extra_lines):
+    """ห้องละ 1 หน้าเหมือนแบบฟอร์ม Excel (Fit to page): 16pt ถ้าพอ ไม่งั้นลดทีละ 0.5pt (ไม่ต่ำกว่า 12)
+    คอลัมน์เลขที่/เลขประจำตัว/ชื่อ/สกุล ย่อตามขนาดตัวอักษร → ระยะชื่อ-สกุลคงสัดส่วนแบบฟอร์ม · ช่องว่าง 9 ช่องรับที่เหลือ
+    บรรทัดหัวกระดาษ = 1.3125 เท่า (Word "single" ของ TH Sarabun) · แถวตาราง 1.19 เท่า (19pt ที่ 16pt)"""
+    f = 16.0
+    while f > 12 and (4 + extra_lines) * 1.3125 * f + (n + 1) * 1.19 * f > AVAIL_PT:
+        f -= 0.5
+    cols = [round(w * f / 16) for w in (COL_NO, COL_CODE, COL_FIRST, COL_LAST)]
+    return dict(font=f, row=round(1.19 * f * 20), cols=cols, check=(TEXT_W - sum(cols)) // CHECK_COLS)
 
 
 def _run(text, bold=True, size=16):
     b = '<w:b/><w:bCs/>' if bold else ''
+    sz = int(round(size * 2))
     return (f'<w:r><w:rPr><w:rFonts w:ascii="{FONT}" w:hAnsi="{FONT}" w:cs="{FONT}" w:eastAsia="{FONT}"/>{b}'
-            f'<w:sz w:val="{size * 2}"/><w:szCs w:val="{size * 2}"/><w:lang w:val="th-TH" w:bidi="th-TH"/></w:rPr>'
+            f'<w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/><w:lang w:val="th-TH" w:bidi="th-TH"/></w:rPr>'
             f'<w:t xml:space="preserve">{escape(text)}</w:t></w:r>')
 
 
-def _para(text='', align='center', bold=True, ind=0, page_break=False, keep=False):
+def _para(text='', align='center', bold=True, ind=0, page_break=False, keep=False, size=16):
     kn = '<w:keepNext/>' if keep else ''
     indent = '<w:ind w:left="%d"/>' % ind if ind else ''
     ppr = (f'<w:pPr>{kn}<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>'
            f'{indent}<w:jc w:val="{align}"/></w:pPr>')
     br = '<w:r><w:br w:type="page"/></w:r>' if page_break else ''
-    return f'<w:p>{ppr}{br}{_run(text, bold) if text else ""}</w:p>'
+    return f'<w:p>{ppr}{br}{_run(text, bold, size) if text else ""}</w:p>'
 
 
-def _cell(text, w, align='center', span=1, borders=''):
+def _cell(text, w, align='center', span=1, borders='', size=16, line=380):
     gs = '<w:gridSpan w:val="%d"/>' % span if span > 1 else ''
     bd = '<w:tcBorders>%s</w:tcBorders>' % borders if borders else ''
     tcpr = f'<w:tcPr><w:tcW w:w="{w}" w:type="dxa"/>{gs}{bd}<w:vAlign w:val="center"/></w:tcPr>'
-    p = (f'<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="{CELL_LINE}" w:lineRule="exact"/><w:jc w:val="{align}"/></w:pPr>'
-         f'{_run(text) if text else ""}</w:p>')
+    p = (f'<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="{line}" w:lineRule="exact"/><w:jc w:val="{align}"/></w:pPr>'
+         f'{_run(text, True, size) if text else ""}</w:p>')
     return f'<w:tc>{tcpr}{p}</w:tc>'
 
 
@@ -170,27 +182,34 @@ def header_lines(sh, sub):
 
 
 def sheet_docx_xml(sh, sub, first):
-    body = ''.join(_para(t, page_break=(not first and i == 0), keep=True) for i, t in enumerate(header_lines(sh, sub)))
-    grid = ''.join(f'<w:gridCol w:w="{w}"/>' for w in [COL_NO, COL_CODE, COL_FIRST, COL_LAST] + [COL_CHECK] * CHECK_COLS)
-    head = (f'<w:tr><w:trPr><w:tblHeader/><w:trHeight w:val="{CELL_LINE}" w:hRule="atLeast"/></w:trPr>'
-            + _cell('เลขที่', COL_NO) + _cell('เลขประจำตัว', COL_CODE) + _cell('ชื่อ - สกุล', COL_FIRST + COL_LAST, span=2)
-            + ''.join(_cell('', COL_CHECK) for _ in range(CHECK_COLS)) + '</w:tr>')
+    ft = sh['fit']
+    f, ln, chk = ft['font'], ft['row'], ft['check']
+    c_no, c_code, c_first, c_last = ft['cols']
+    cell = lambda t, w, *a, **k: _cell(t, w, *a, size=f, line=ln, **k)      # noqa: E731
+    body = ''.join(_para(t, page_break=(not first and i == 0), keep=True, size=f) for i, t in enumerate(header_lines(sh, sub)))
+    grid = ''.join(f'<w:gridCol w:w="{w}"/>' for w in ft['cols'] + [chk] * CHECK_COLS)
+    head = (f'<w:tr><w:trPr><w:tblHeader/><w:trHeight w:val="{ln}" w:hRule="atLeast"/></w:trPr>'
+            + cell('เลขที่', c_no) + cell('เลขประจำตัว', c_code) + cell('ชื่อ - สกุล', c_first + c_last, span=2)
+            + ''.join(cell('', chk) for _ in range(CHECK_COLS)) + '</w:tr>')
     rows = ''.join(
-        f'<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="{CELL_LINE}" w:hRule="atLeast"/></w:trPr>'
-        + _cell(str(s['number'] or ''), COL_NO) + _cell(s['code'], COL_CODE)
-        + _cell(s['first'], COL_FIRST, 'left', borders=NO_RIGHT) + _cell(s['last'], COL_LAST, 'left', borders=NO_LEFT)
-        + ''.join(_cell('', COL_CHECK) for _ in range(CHECK_COLS)) + '</w:tr>' for s in sh['students'])
+        f'<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="{ln}" w:hRule="atLeast"/></w:trPr>'
+        + cell(str(s['number'] or ''), c_no) + cell(s['code'], c_code)
+        + cell(s['first'], c_first, 'left', borders=NO_RIGHT) + cell(s['last'], c_last, 'left', borders=NO_LEFT)
+        + ''.join(cell('', chk) for _ in range(CHECK_COLS)) + '</w:tr>' for s in sh['students'])
     if not sh['students']:
-        rows = ('<w:tr>' + _cell('— ยังไม่มีรายชื่อนักเรียนห้องนี้ —', TEXT_W, span=4 + CHECK_COLS) + '</w:tr>')
+        rows = ('<w:tr>' + cell('— ยังไม่มีรายชื่อนักเรียนห้องนี้ —', TEXT_W, span=4 + CHECK_COLS) + '</w:tr>')
     b = '<w:{0} w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
     tbl = (f'<w:tbl><w:tblPr><w:tblW w:w="{TEXT_W}" w:type="dxa"/><w:tblLayout w:type="fixed"/>'
            f'<w:tblBorders>{"".join(b.format(x) for x in ("top", "left", "bottom", "right", "insideH", "insideV"))}</w:tblBorders>'
            f'<w:tblCellMar><w:left w:w="57" w:type="dxa"/><w:right w:w="57" w:type="dxa"/></w:tblCellMar></w:tblPr>'
            f'<w:tblGrid>{grid}</w:tblGrid>{head}{rows}</w:tbl>')
     body += tbl
+    # Word บังคับย่อหน้าต่อท้ายตาราง → ทำให้สูง 1pt ไม่งั้นตารางเต็มหน้าจะมีหน้าว่างเกินมา
+    body += ('<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr>'
+             '<w:r><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:r></w:p>')
     if sub:                                          # ลงชื่อครูสอนแทน ชิดขวา
-        body += (_para('') + _para('ลงชื่อ........................................ครูสอนแทน', 'right')
-                 + _para(f"({sub['sub'] or '........................................'})", 'right', ind=0))
+        body += (_para('', size=f) + _para('ลงชื่อ........................................ครูสอนแทน', 'right', size=f)
+                 + _para(f"({sub['sub'] or '........................................'})", 'right', size=f))
     return body
 
 
@@ -297,6 +316,8 @@ def init(app, get_db, login_required, current_user, get_settings):
                 return None, None, None, ('ดาวน์โหลดได้เฉพาะห้องที่ปรึกษา ห้องที่สอน หรือคาบที่รับสอนแทน', 400)
             year = academic_year(con, year_date, s)
             sheets = [class_sheet(con, lv, rm, year, s) for lv, rm in classes]
+            for sh in sheets:                            # ห้องละ 1 หน้า (ใบสอนแทนมีหัวเพิ่ม 2 บรรทัด + ลงชื่อ 3 บรรทัด)
+                sh['fit'] = fit(sh['total'], 5 if sub else 0)
         cls = '-'.join(f'ม.{lv}-{rm}' for lv, rm in classes)
         title = f"รายชื่อสอนแทน {sub['date']} คาบ{sub['period']} {cls}" if sub else f'รายชื่อนักเรียน {cls}'
         return sheets, sub, title, None

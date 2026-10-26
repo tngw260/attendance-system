@@ -10,17 +10,18 @@
   <link href="/css/docforms.css?v=20260926" rel="stylesheet">
   <link rel="preload" href="/fonts/THSarabunNew-Bold.woff" as="font" type="font/woff" crossorigin>
   <style>
-    /* ใบรายชื่อนักเรียนตามแบบฟอร์มงานทะเบียน (classlist.py) — A4 แนวตั้ง TH Sarabun 16 ตัวหนา
-       ความกว้างคอลัมน์ = สัดส่วนเดียวกับไฟล์ Word (twips: 650 / 1450 / 2450 / 1850 / 403 × 9) */
-    @page { size: A4 portrait; margin: 12.7mm 15mm 12.7mm 18mm; }
+    /* ใบรายชื่อนักเรียนตามแบบฟอร์มงานทะเบียน (classlist.py) — A4 แนวตั้ง TH Sarabun ตัวหนา
+       ขนาดตัวอักษร ความสูงแถว ความกว้างคอลัมน์ มาจาก sheet.fit ของเซิร์ฟเวอร์ (ชุดเดียวกับไฟล์ Word: ห้องละ 1 หน้า) */
+    @page { size: A4 portrait; margin: 12.7mm 10mm 12.7mm 12mm; }
     body { background: #eef1ee; }
     .toolbar { position: sticky; top: 0; z-index: 5; background: #f5f7f1; border-bottom: 2px solid #2f6b3f; padding: .6rem 1rem; }
-    .cl-page { width: 210mm; min-height: 297mm; margin: 14px auto; padding: 12.7mm 15mm 12.7mm 18mm; background: #fff; color: #000;
+    .cl-page { width: 210mm; min-height: 297mm; margin: 14px auto; padding: 12.7mm 10mm 12.7mm 12mm; background: #fff; color: #000;
                box-shadow: 0 2px 14px rgba(0,0,0,.15); box-sizing: border-box;
                font-family: 'THSarabunDoc', 'TH Sarabun New', 'TH SarabunPSK', sans-serif; font-size: 16pt; line-height: 1.2; font-weight: 700; }
-    .cl-head p { margin: 0; text-align: center; }
+    .cl-head p { margin: 0; text-align: center; line-height: 1.3125; white-space: pre-wrap; }   /* วรรคสองเคาะตามแบบฟอร์ม */
     table.cl { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    table.cl th, table.cl td { border: .6pt solid #000; padding: 0 3pt; height: 19pt; line-height: 19pt; vertical-align: middle; font-weight: 700; }
+    table.cl th, table.cl td { border: .6pt solid #000; padding: 0 3pt; vertical-align: middle; font-weight: 700;
+                               height: var(--row, 19pt); line-height: var(--row, 19pt); }
     table.cl th { text-align: center; font-weight: 700; }
     table.cl td.c { text-align: center; }
     table.cl td.first { border-right: none; }
@@ -52,20 +53,21 @@
 const Q = new URLSearchParams(location.search);
 const API_Q = ['level', 'room', 'date', 'period', 'lesson_id'].filter(k => Q.get(k)).map(k => `${k}=${encodeURIComponent(Q.get(k))}`).join('&');
 const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const CHECK_COLS = 9, W = [650, 1450, 2450, 1850], WC = 403, TOTAL = W.reduce((a, b) => a + b) + WC * CHECK_COLS;
-const pct = w => (w / TOTAL * 100).toFixed(2) + '%';
+const CHECK_COLS = 9;
 
 async function getWord() {
   try { await downloadFile('/api/class-list.docx?' + API_Q); } catch (e) { alert(e.message); }
 }
 
 function sheetHTML(sh, sub, canEdit) {
-  const cols = W.map(pct).concat(Array(CHECK_COLS).fill(pct(WC))).map(w => `<col style="width:${w}">`).join('');
+  const ft = sh.fit, widths = ft.cols.concat(Array(CHECK_COLS).fill(ft.check)), total = widths.reduce((a, b) => a + b);
+  const cols = widths.map(w => `<col style="width:${(w / total * 100).toFixed(2)}%">`).join('');
+  const rowPt = ft.row / 20;
   const blanks = n => Array(n).fill('<td></td>').join('');
   const rows = sh.students.length ? sh.students.map(s => `<tr><td class="c">${escH(s.number)}</td><td class="c">${escH(s.code)}</td>
       <td class="first">${escH(s.first)}</td><td class="last">${escH(s.last)}</td>${blanks(CHECK_COLS)}</tr>`).join('')
     : `<tr><td colspan="${4 + CHECK_COLS}" class="c">— ยังไม่มีรายชื่อนักเรียนห้องนี้ —</td></tr>`;
-  return `<div class="cl-page">
+  return `<div class="cl-page" style="font-size:${ft.font}pt; --row:${rowPt}pt">
     <div class="cl-head">${sh.header.map(t => `<p>${escH(t)}</p>`).join('')}</div>
     ${canEdit ? `<div class="adv-edit"><a href="#" onclick="editAdvisors('${sh.level}/${sh.room}', ${escH(JSON.stringify(sh.advisors))}); return false">
       <i class="bi bi-pencil-square"></i> แก้ชื่อครูที่ปรึกษา ม.${sh.level}${sh.room > 1 ? '/' + sh.room : ''}</a> <span class="text-muted">(แอดมิน · ไม่พิมพ์ออก)</span></div>` : ''}
