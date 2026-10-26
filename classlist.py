@@ -18,6 +18,7 @@ import datetime
 import io
 import json
 import re
+import unicodedata
 import zipfile
 from xml.sax.saxutils import escape
 
@@ -127,10 +128,18 @@ COL_NO, COL_CODE, COL_FIRST, COL_LAST = 750, 1450, 2030, 1970
 AVAIL_PT = 770 - 14                                 # ความสูงใช้ได้ A4 − ขอบบนล่าง 1.27 ซม. (เผื่อเส้นตาราง)
 
 
-def fit(n, extra_lines):
+def name_em(text):
+    """ความกว้างโดยประมาณ (เท่าของขนาดตัวอักษร) ของ TH Sarabun ตัวหนา — 0.42 ต่ออักษรฐาน ไม่นับสระบน-ล่าง/วรรณยุกต์"""
+    return 0.42 * sum(1 for ch in text or '' if unicodedata.category(ch) != 'Mn')
+
+
+def fit(n, extra_lines, students=()):
     """ห้องละ 1 หน้าเหมือนแบบฟอร์ม Excel (Fit to page): 16pt ถ้าพอ ไม่งั้นลดทีละ 0.5pt (ไม่ต่ำกว่า 12)
     คอลัมน์เลขที่/เลขประจำตัว/ชื่อ/สกุล ย่อตามขนาดตัวอักษร → ระยะชื่อ-สกุลคงสัดส่วนแบบฟอร์ม · ช่องว่าง 9 ช่องรับที่เหลือ
     บรรทัดหัวกระดาษ = 1.3125 เท่า (Word "single" ของ TH Sarabun) · แถวตาราง 1.19 เท่า (19pt ที่ 16pt)"""
+    # ชื่อยาวเกินช่อง (เช่น ชื่อ-สกุลติดกันในทะเบียน) → ขึ้นบรรทัดใหม่ แถวสูง 2 เท่า — คอลัมน์ย่อตามตัวอักษร จึงไม่ขึ้นกับขนาด
+    wraps = sum(1 for s in students if name_em(s['first']) > COL_FIRST / 320 - 0.4 or name_em(s['last']) > COL_LAST / 320 - 0.4)
+    n += wraps
     f = 16.0
     while f > 12 and (4 + extra_lines) * 1.3125 * f + (n + 1) * 1.19 * f > AVAIL_PT:
         f -= 0.5
@@ -317,7 +326,7 @@ def init(app, get_db, login_required, current_user, get_settings):
             year = academic_year(con, year_date, s)
             sheets = [class_sheet(con, lv, rm, year, s) for lv, rm in classes]
             for sh in sheets:                            # ห้องละ 1 หน้า (ใบสอนแทนมีหัวเพิ่ม 2 บรรทัด + ลงชื่อ 3 บรรทัด)
-                sh['fit'] = fit(sh['total'], 5 if sub else 0)
+                sh['fit'] = fit(sh['total'], 5 if sub else 0, sh['students'])
         cls = '-'.join(f'ม.{lv}-{rm}' for lv, rm in classes)
         title = f"รายชื่อสอนแทน {sub['date']} คาบ{sub['period']} {cls}" if sub else f'รายชื่อนักเรียน {cls}'
         return sheets, sub, title, None

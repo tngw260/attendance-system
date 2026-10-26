@@ -11,14 +11,16 @@
   <link rel="preload" href="/fonts/THSarabunNew-Bold.woff" as="font" type="font/woff" crossorigin>
   <style>
     /* ใบรายชื่อนักเรียนตามแบบฟอร์มงานทะเบียน (classlist.py) — A4 แนวตั้ง TH Sarabun ตัวหนา
-       ขนาดตัวอักษร ความสูงแถว ความกว้างคอลัมน์ มาจาก sheet.fit ของเซิร์ฟเวอร์ (ชุดเดียวกับไฟล์ Word: ห้องละ 1 หน้า) */
-    @page { size: A4 portrait; margin: 12.7mm 10mm 12.7mm 12mm; }
+       ขนาดตัวอักษร ความสูงแถว ความกว้างคอลัมน์ เริ่มจาก sheet.fit ของเซิร์ฟเวอร์ (ชุดเดียวกับไฟล์ Word)
+       แล้ว fitPages() วัดความสูงจริงในเบราว์เซอร์ ย่อต่อจนพอดี 1 หน้า (Safari แถวสูงกว่า Chrome)
+       ขอบกระดาษ = padding ของ .cl-page เอง (@page margin 0) — Safari ไม่ทำตาม @page margin ทำให้ชิดขอบ/ตกขวา */
+    @page { size: A4 portrait; margin: 0; }
     body { background: #eef1ee; }
     .toolbar { position: sticky; top: 0; z-index: 5; background: #f5f7f1; border-bottom: 2px solid #2f6b3f; padding: .6rem 1rem; }
     .cl-page { width: 210mm; min-height: 297mm; margin: 14px auto; padding: 12.7mm 10mm 12.7mm 12mm; background: #fff; color: #000;
                box-shadow: 0 2px 14px rgba(0,0,0,.15); box-sizing: border-box;
                font-family: 'THSarabunDoc', 'TH Sarabun New', 'TH SarabunPSK', sans-serif; font-size: 16pt; line-height: 1.2; font-weight: 700; }
-    .cl-head p { margin: 0; text-align: center; line-height: 1.3125; white-space: pre-wrap; }   /* วรรคสองเคาะตามแบบฟอร์ม */
+    .cl-head p { margin: 0; text-align: center; line-height: var(--head, 21pt); white-space: pre-wrap; }   /* วรรคสองเคาะตามแบบฟอร์ม */
     table.cl { width: 100%; border-collapse: collapse; table-layout: fixed; }
     table.cl th, table.cl td { border: .6pt solid #000; padding: 0 3pt; vertical-align: middle; font-weight: 700;
                                height: var(--row, 19pt); line-height: var(--row, 19pt); }
@@ -32,8 +34,10 @@
     @media print {
       body { background: #fff; }
       .toolbar, .adv-edit { display: none !important; }
-      .cl-page { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
-      .cl-page + .cl-page { break-before: page; }
+      html, body { height: auto; }
+      /* ขอบล่างไม่ใส่เป็น padding: เครื่องพิมพ์ที่กันขอบเอง padding ล่างจะล้นเป็นหน้าว่าง — fitPages() เว้นที่ล่างไว้แล้ว */
+      .cl-page { width: auto; min-height: 0; margin: 0; padding: 12.7mm 10mm 0 12mm; box-shadow: none; zoom: 1 !important; }
+      .cl-page + .cl-page { break-before: page; page-break-before: always; }   /* ขึ้นหน้าก่อนใบถัดไป (ท้ายใบสุดท้ายไม่มีหน้าว่าง) */
       thead { display: table-header-group; }
       tr { break-inside: avoid; }
     }
@@ -44,7 +48,7 @@
   <button class="btn btn-sm btn-outline-secondary" onclick="history.length > 1 ? history.back() : window.close()"><i class="bi bi-arrow-left"></i> กลับ</button>
   <div class="fw-bold flex-fill" id="docTitle">ใบรายชื่อนักเรียน</div>
   <button class="btn btn-sm btn-outline-primary" onclick="getWord()"><i class="bi bi-file-earmark-word"></i> ดาวน์โหลด Word</button>
-  <button class="btn btn-sm btn-success" onclick="window.print()"><i class="bi bi-printer"></i> พิมพ์ / บันทึก PDF</button>
+  <button class="btn btn-sm btn-success" onclick="printNow()"><i class="bi bi-printer"></i> พิมพ์ / บันทึก PDF</button>
 </div>
 <div id="pages"><div class="text-center text-muted py-5"><div class="spinner-border"></div></div></div>
 
@@ -54,6 +58,13 @@ const Q = new URLSearchParams(location.search);
 const API_Q = ['level', 'room', 'date', 'period', 'lesson_id'].filter(k => Q.get(k)).map(k => `${k}=${encodeURIComponent(Q.get(k))}`).join('&');
 const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const CHECK_COLS = 9;
+
+async function printNow() {
+  await fontsReady();
+  fitPages();
+  await nextFrame();
+  window.print();
+}
 
 async function getWord() {
   try { await downloadFile('/api/class-list.docx?' + API_Q); } catch (e) { alert(e.message); }
@@ -67,7 +78,7 @@ function sheetHTML(sh, sub, canEdit) {
   const rows = sh.students.length ? sh.students.map(s => `<tr><td class="c">${escH(s.number)}</td><td class="c">${escH(s.code)}</td>
       <td class="first">${escH(s.first)}</td><td class="last">${escH(s.last)}</td>${blanks(CHECK_COLS)}</tr>`).join('')
     : `<tr><td colspan="${4 + CHECK_COLS}" class="c">— ยังไม่มีรายชื่อนักเรียนห้องนี้ —</td></tr>`;
-  return `<div class="cl-page" style="font-size:${ft.font}pt; --row:${rowPt}pt">
+  return `<div class="cl-page" data-font="${ft.font}" style="font-size:${ft.font}pt; --row:${rowPt}pt">
     <div class="cl-head">${sh.header.map(t => `<p>${escH(t)}</p>`).join('')}</div>
     ${canEdit ? `<div class="adv-edit"><a href="#" onclick="editAdvisors('${sh.level}/${sh.room}', ${escH(JSON.stringify(sh.advisors))}); return false">
       <i class="bi bi-pencil-square"></i> แก้ชื่อครูที่ปรึกษา ม.${sh.level}${sh.room > 1 ? '/' + sh.room : ''}</a> <span class="text-muted">(แอดมิน · ไม่พิมพ์ออก)</span></div>` : ''}
@@ -76,6 +87,30 @@ function sheetHTML(sh, sub, canEdit) {
       <tbody>${rows}</tbody></table>
     ${sub ? `<div class="cl-sign"><p>ลงชื่อ........................................ครูสอนแทน</p><p>(${escH(sub.sub || '........................................')})</p></div>` : ''}
   </div>`;
+}
+
+// ย่อตัวอักษรจนแต่ละห้องพอดี 1 หน้า: ความสูงใช้ได้ = 297 − ขอบบนล่าง 2 × 12.7 มม. (≈ 1026 px)
+// เผื่อ 24 px ให้เครื่องพิมพ์ที่ตั้งขอบของตัวเองเพิ่ม (ความกว้างใน print เป็น auto จึงไม่ตกขวา)
+// ตอนพิมพ์ WebKit/Safari ปัดความสูงแถวขึ้นเป็นจุดเต็ม + เส้นขอบ → สูงกว่าบนจอ ~3–8% → แถว/บรรทัดเป็นจุดเต็ม + คูณเผื่อ PRINT_GROW
+const PAGE_AVAIL_PX = (297 - 2 * 12.7) * 96 / 25.4 - 24;
+const PRINT_GROW = 1.05;
+function printHeight(page) {
+  const h = sel => { const e = page.querySelector(sel); return e ? e.getBoundingClientRect().height : 0; };
+  return h('.cl-head') + h('table.cl') + (page.querySelector('.cl-sign') ? h('.cl-sign') + 27 : 0);   // 27px = margin-top 20pt
+}
+function fitPages() {
+  document.querySelectorAll('.cl-page').forEach(page => {
+    page.style.zoom = '';
+    let f = parseFloat(page.dataset.font);
+    const apply = () => {
+      page.style.fontSize = f + 'pt';
+      page.style.setProperty('--row', Math.ceil(1.19 * f) + 'pt');
+      page.style.setProperty('--head', Math.ceil(1.3125 * f) + 'pt');
+    };
+    apply();
+    while (printHeight(page) * PRINT_GROW > PAGE_AVAIL_PX && f > 11) { f -= 0.5; apply(); }
+  });
+  fitScreen();
 }
 
 // มือถือ: ย่อกระดาษ A4 ให้พอดีจอ (ตอนพิมพ์คืนขนาดจริง)
@@ -102,15 +137,28 @@ async function render() {
   document.title = d.title;
   document.getElementById('docTitle').textContent = d.title;
   document.getElementById('pages').innerHTML = d.sheets.map(sh => sheetHTML(sh, d.sub, d.can_edit_advisors)).join('');
-  fitScreen();
+  await fontsReady();
+  fitPages();
 }
+
+// รอฟอนต์ที่ฝังโหลดเสร็จจริง (font-display:block = ระหว่างโหลดตัวหนังสือล่องหน → พิมพ์เร็วไปได้หน้าขาว)
+async function fontsReady() {
+  try {
+    await Promise.race([
+      Promise.all(['700 16pt THSarabunDoc', '400 16pt THSarabunDoc'].map(f => document.fonts.load(f, 'กขค'))),
+      new Promise(r => setTimeout(r, 4000)),
+    ]);
+    await document.fonts.ready;
+  } catch (e) {}
+}
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
 document.addEventListener('DOMContentLoaded', async () => {
   try { await render(); }
   catch (e) { document.getElementById('pages').innerHTML = `<div class="alert alert-danger m-3">${escH(e.message)}</div>`; return; }
   if (Q.get('print') === '1') {                         // ปุ่ม PDF จากหน้าอื่น → เปิดหน้าต่างพิมพ์ให้เลย (เลือก "บันทึกเป็น PDF")
-    try { await document.fonts.ready; } catch (e) {}
-    setTimeout(() => window.print(), 300);
+    await nextFrame();                                   // ให้เบราว์เซอร์วาดหน้าเสร็จก่อน
+    setTimeout(() => window.print(), 400);
   }
 });
 </script>
