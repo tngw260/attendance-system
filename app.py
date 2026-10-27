@@ -405,6 +405,9 @@ def init_db():
             con.execute('ALTER TABLE students ADD COLUMN parent_phone TEXT')
         if 'address' not in scols:
             con.execute('ALTER TABLE students ADD COLUMN address TEXT')
+        # นักเรียนเรียนยืดหยุ่น (ไม่ได้มาเรียนประจำ) — ไม่บันทึกขาด ไม่นับในยอดเช็คชื่อถ้าไม่มา ไม่อยู่ในใบรายชื่อ
+        if 'flexible' not in scols:
+            con.execute('ALTER TABLE students ADD COLUMN flexible INTEGER DEFAULT 0')
 
         # Migrate: home_visits - add fill_code/submitted/confirmed (สำหรับลิงก์ให้นักเรียนกรอก)
         hvcols = [r['name'] for r in con.execute('PRAGMA table_info(home_visits)').fetchall()]
@@ -1043,7 +1046,7 @@ def api_students_export():
     ws.title = 'รายชื่อนักเรียน'
 
     headers = ['เลขที่', 'รหัสนักเรียน', 'ชื่อ-นามสกุล', 'ชั้น (1-6)', 'ห้อง', 'เพศ',
-               'วันเกิด (YYYY-MM-DD)', 'เลขบัตรประชาชน (13 หลัก)']
+               'วันเกิด (YYYY-MM-DD)', 'เลขบัตรประชาชน (13 หลัก)', 'เรียนยืดหยุ่น (ใช่/ว่าง)']
     hfill = PatternFill(fill_type='solid', fgColor='1A5276')
     hfont = Font(bold=True, color='FFFFFF')
     for col, h in enumerate(headers, 1):
@@ -1053,13 +1056,13 @@ def api_students_export():
 
     with get_db() as con:
         rows = con.execute("""
-            SELECT number, student_code, name, class_level, room, gender, birthdate, national_id
+            SELECT number, student_code, name, class_level, room, gender, birthdate, national_id, flexible
             FROM students ORDER BY class_level, room, number, name
         """).fetchall()
     for r in rows:
         ws.append([r['number'], r['student_code'], r['name'], r['class_level'],
-                   r['room'], r['gender'], r['birthdate'], r['national_id']])
-    for col, w in zip(ws.columns, [8, 16, 32, 12, 8, 8, 16, 20]):
+                   r['room'], r['gender'], r['birthdate'], r['national_id'], 'ใช่' if r['flexible'] else None])
+    for col, w in zip(ws.columns, [8, 16, 32, 12, 8, 8, 16, 20, 18]):
         ws.column_dimensions[col[0].column_letter].width = w
 
     buf = io.BytesIO(); wb.save(buf); buf.seek(0)
@@ -1073,6 +1076,7 @@ def api_students_export():
 def api_bulk_update():
     """อัพเดทข้อมูลนักเรียนเก่าจาก Excel — match ตาม student_code (priority) หรือ name+class+room
     คอลัมน์ที่ใช้ update: number, name, gender, birthdate, national_id (ยกเว้นช่องว่าง)
+    + คอลัมน์ที่ 9 "เรียนยืดหยุ่น" (ถ้ามีหัวคอลัมน์นี้): ใช่ = เรียนยืดหยุ่น · ว่าง = มาเรียนปกติ
     """
     if 'file' not in request.files:
         return jsonify(success=False, message='ไม่พบไฟล์'), 400
@@ -1083,10 +1087,12 @@ def api_bulk_update():
     try:
         wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
         ws = wb.active
-        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        allrows = list(ws.iter_rows(min_row=1, values_only=True))
         wb.close()
     except Exception as e:
         return jsonify(success=False, message=f'เปิดไฟล์ไม่ได้: {e}'), 400
+    header, rows = (allrows[0] if allrows else ()), allrows[1:]
+    has_flex = len(header) > 8 and 'ยืดหยุ่น' in str(header[8] or '')
 
     updated = 0
     not_found = []
@@ -1147,6 +1153,9 @@ def api_bulk_update():
                 if gender:          updates['gender'] = gender
                 if birthdate:       updates['birthdate'] = birthdate
                 if national_id:     updates['national_id'] = national_id
+                if has_flex:
+                    v = str(row[8]).strip().lower() if len(row) > 8 and row[8] is not None else ''
+                    updates['flexible'] = 1 if v in ('ใช่', 'y', 'yes', '1', 'true', '✓', '/', 'x') else 0
 
                 if not updates:
                     skipped += 1
@@ -1188,7 +1197,7 @@ def api_student_get(sid):
         s = con.execute(
             'SELECT id, number, student_code, name, class_level, room, gender, photo, '
             'birthdate, national_id, parent_code, '
-            'parent_name, parent_relation, parent_phone, address FROM students WHERE id=?',
+            'parent_name, parent_relation, parent_phone, address, COALESCE(flexible, 0) AS flexible FROM students WHERE id=?',
             (sid,)).fetchone()
     if not s:
         return jsonify(error='ไม่พบนักเรียน'), 404
@@ -1263,9 +1272,9 @@ def api_student_create():
 
     with get_db() as con:
         cur = con.execute(
-            'INSERT INTO students (number, student_code, name, class_level, room, gender, birthdate, national_id) '
-            'VALUES (?,?,?,?,?,?,?,?)',
-            (number, student_code, name, level, room, gender, birthdate, national_id)
+            'INSERT INTO students (number, student_code, name, class_level, room, gender, birthdate, national_id, flexible) '
+            'VALUES (?,?,?,?,?,?,?,?,?)',
+            (number, student_code, name, level, room, gender, birthdate, national_id, 1 if b.get('flexible') else 0)
         )
         sid = cur.lastrowid
         audit_log(con, 'create_student', 'student', sid,
@@ -1342,6 +1351,8 @@ def api_student_update(sid):
             updates['parent_phone'] = (b.get('parent_phone') or '').strip() or None
         if 'address' in b:
             updates['address'] = (b.get('address') or '').strip() or None
+        if 'flexible' in b:
+            updates['flexible'] = 1 if b.get('flexible') else 0
 
         if not updates:
             return jsonify(success=False, message='ไม่มีข้อมูลให้อัพเดท'), 400
@@ -1374,7 +1385,7 @@ def api_attendance_get():
 
     with get_db() as con:
         rows = con.execute("""
-            SELECT s.id, s.number, s.student_code, s.name, s.gender,
+            SELECT s.id, s.number, s.student_code, s.name, s.gender, COALESCE(s.flexible, 0) AS flexible,
                    a.status AS status,
                    a.note,
                    CASE WHEN a.id IS NOT NULL THEN 1 ELSE 0 END AS is_recorded,
@@ -1419,7 +1430,19 @@ def api_attendance_post():
             return jsonify(success=False, message='ไม่มีสิทธิ์บันทึกบางรายการ'), 403
 
     with get_db() as con:
+        # เรียนยืดหยุ่น: ไม่บันทึก "ขาด" (ลบบันทึกเดิมของวันนั้นถ้ามี) → ไม่หักคะแนน ไม่ติดรายงานขาดบ่อย
+        ids = [r['student_id'] for r in records]
+        flex = {row['id'] for row in con.execute(
+            f"SELECT id FROM students WHERE flexible=1 AND id IN ({','.join('?' * len(ids))})", ids)} if ids else set()
+        flex_skip = 0
         for r in records:
+            if r['student_id'] in flex and r['status'] == 'absent':
+                old = con.execute('SELECT id FROM attendance WHERE student_id=? AND date=?', (r['student_id'], date)).fetchone()
+                if old:
+                    con.execute("DELETE FROM behavior_logs WHERE source='attendance' AND source_id=?", (old['id'],))
+                    con.execute('DELETE FROM attendance WHERE id=?', (old['id'],))
+                flex_skip += 1
+                continue
             cur = con.execute("""
                 INSERT INTO attendance (student_id, date, status, note, recorded_by)
                 VALUES (?,?,?,?,?)
@@ -1433,7 +1456,10 @@ def api_attendance_post():
                                  (r['student_id'], date)).fetchone()['id']
             apply_attendance_behavior(con, r['student_id'], att_id, date, r['status'], settings, uid)
 
-    return jsonify(success=True, message=f"บันทึกการเช็คชื่อ {len(records)} คน สำเร็จ")
+    msg = f"บันทึกการเช็คชื่อ {len(records) - flex_skip} คน สำเร็จ"
+    if flex_skip:
+        msg += f' (เรียนยืดหยุ่น {flex_skip} คน ไม่บันทึกขาด)'
+    return jsonify(success=True, message=msg)
 
 # ── UNIFORM CHECK (ตรวจเครื่องแต่งกาย) ────────────────────
 
@@ -1637,6 +1663,10 @@ def api_attendance_scan():
     try: sid = int(sid)
     except (TypeError, ValueError):
         return jsonify(success=False, message='student_id ไม่ถูกต้อง'), 400
+    if status == 'absent':
+        with get_db() as con:
+            if con.execute('SELECT 1 FROM students WHERE id=? AND flexible=1', (sid,)).fetchone():
+                return jsonify(success=False, message='นักเรียนเรียนยืดหยุ่น ไม่บันทึกขาด'), 400
 
     with get_db() as con:
         student = con.execute('SELECT * FROM students WHERE id=?', (sid,)).fetchone()
@@ -1862,7 +1892,7 @@ def api_line_summary():
     with get_db() as con:
         # นักเรียนทั้งหมดในห้อง
         students = con.execute("""
-            SELECT id, number, name FROM students
+            SELECT id, number, name, COALESCE(flexible, 0) AS flexible FROM students
             WHERE class_level=? AND room=?
             ORDER BY number, name
         """, (int(level), int(room))).fetchall()
@@ -1897,7 +1927,8 @@ def api_line_summary():
     for s in students:
         att = att_map.get(s['id'])
         if not att:
-            unmarked.append(dict(s))
+            if not s['flexible']:                      # เรียนยืดหยุ่นที่ไม่ได้มา ไม่นับว่ายังไม่เช็ค
+                unmarked.append(dict(s))
             continue
         info = dict(s, note=att.get('note'), made_up=bool(att.get('makeup_id')))
         if att['status'] == 'present': present.append(info)
@@ -1921,7 +1952,7 @@ def api_line_summary():
         school_name=settings.get('school_name', 'โรงเรียน'),
         date=date,
         level=int(level), room=int(room),
-        total=len(students),
+        total=sum(1 for s in students if not s['flexible'] or s['id'] in att_map),
         present=present, absent=absent, late=late,
         leave=leave, activity=activity, unmarked=unmarked,
         uniform_violations=uniform_violations,
@@ -2353,8 +2384,10 @@ def api_dashboard():
     where, params, _, _ = user_class_filter(u)
 
     with get_db() as con:
-        total = con.execute(f'SELECT COUNT(*) AS n FROM students s WHERE 1=1 {where}',
-                            params).fetchone()['n']
+        # ยอดที่ต้องเช็ค: ไม่นับเด็กเรียนยืดหยุ่นที่วันนี้ไม่ได้มา (ไม่มีบันทึก)
+        total = con.execute(f"""SELECT COUNT(*) AS n FROM students s
+                               WHERE (COALESCE(s.flexible,0)=0 OR EXISTS (SELECT 1 FROM attendance a WHERE a.student_id=s.id AND a.date=?))
+                               {where}""", [today] + params).fetchone()['n']
 
         stats = con.execute(f"""
             SELECT COUNT(*) AS checked,
@@ -2369,7 +2402,7 @@ def api_dashboard():
 
         classes = con.execute(f"""
             SELECT s.class_level, s.room,
-                   COUNT(DISTINCT s.id) AS total,
+                   COUNT(DISTINCT CASE WHEN (COALESCE(s.flexible,0)=0 OR a.id IS NOT NULL) THEN s.id END) AS total,
                    COUNT(DISTINCT a.student_id) AS checked
             FROM students s
             LEFT JOIN attendance a ON s.id=a.student_id AND a.date=?
@@ -2701,7 +2734,9 @@ def api_director():
     fourteen = (today_d - datetime.timedelta(days=13)).isoformat()
 
     with get_db() as con:
-        total = con.execute('SELECT COUNT(*) AS n FROM students').fetchone()['n']
+        total = con.execute("""SELECT COUNT(*) AS n FROM students s
+                               WHERE COALESCE(s.flexible,0)=0 OR EXISTS (SELECT 1 FROM attendance a WHERE a.student_id=s.id AND a.date=?)""",
+                            (today,)).fetchone()['n']
 
         today_stats = con.execute("""
             SELECT
@@ -2741,7 +2776,7 @@ def api_director():
         # สรุปรายชั้น (ม.1-ม.6) สำหรับวันนี้
         by_level = con.execute("""
             SELECT s.class_level,
-                   COUNT(DISTINCT s.id) AS total,
+                   COUNT(DISTINCT CASE WHEN (COALESCE(s.flexible,0)=0 OR a.id IS NOT NULL) THEN s.id END) AS total,
                    COUNT(DISTINCT CASE WHEN a.status='present'  THEN s.id END) AS present,
                    COUNT(DISTINCT CASE WHEN a.status='absent'   THEN s.id END) AS absent,
                    COUNT(DISTINCT CASE WHEN a.status='late'     THEN s.id END) AS late,

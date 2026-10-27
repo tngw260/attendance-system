@@ -105,7 +105,8 @@ function renderStudents(students, level, room, date) {
         <i class="bi bi-people-fill me-2"></i>ม.${level}/${room} — ${formatThaiDateShort(date)}
         ${alreadyRecorded ? '<span class="badge bg-success ms-2" style="font-size:.8rem;">บันทึกแล้ว</span>' : ''}
       </div>
-      <span class="text-muted" style="font-size:.9rem;">${students.length} คน</span>
+      <span class="text-muted" style="font-size:.9rem;">${students.length} คน${students.some(s => s.flexible)
+        ? ` · <span class="badge bg-warning text-dark">เรียนยืดหยุ่น ${students.filter(s => s.flexible).length} — ไม่มาไม่ต้องเช็ค</span>` : ''}</span>
     </div>
     <div class="student-list">`;
 
@@ -118,7 +119,8 @@ function renderStudents(students, level, room, date) {
       { key: 'activity', label: 'ไปกิจกรรม',  cls: 'purple'  },
     ];
 
-    const btnHtml = statuses.map(st => {
+    // เรียนยืดหยุ่น: ไม่มีปุ่ม "ขาด" (ไม่มา = ไม่ต้องเช็ค ไม่นับขาด) — มาเรียนวันไหนก็เช็คได้ตามปกติ
+    const btnHtml = statuses.filter(st => !(s.flexible && st.key === 'absent')).map(st => {
       const active = s.status === st.key;
       return `<button type="button"
         class="btn btn-sm ${active ? `btn-${st.cls}` : `btn-outline-${st.cls}`} status-btn"
@@ -128,10 +130,10 @@ function renderStudents(students, level, room, date) {
     const scoreColor = s.score >= 80 ? 'success' : s.score >= 60 ? 'warning' : 'danger';
     const statusAttr = s.status || '';
     html += `
-      <div class="student-row ${s.status ? 'status-'+s.status : 'status-none'}" data-id="${s.id}" data-status="${statusAttr}">
+      <div class="student-row ${s.status ? 'status-'+s.status : 'status-none'}" data-id="${s.id}" data-status="${statusAttr}" data-flex="${s.flexible ? 1 : 0}">
         <div class="student-num">${s.number ?? ''}</div>
         <div class="flex-grow-1">
-          <div class="student-name">${s.name}</div>
+          <div class="student-name">${s.name}${s.flexible ? ' <span class="badge bg-warning text-dark" style="font-size:.72rem;">เรียนยืดหยุ่น</span>' : ''}</div>
           <div class="d-flex align-items-center gap-2">
             ${s.student_code ? `<span class="student-code">${s.student_code}</span>` : ''}
             <a href="/behavior.html?id=${s.id}" class="badge bg-${scoreColor}" style="text-decoration:none;"
@@ -184,6 +186,7 @@ function updateCounters() {
   let counts = { present: 0, absent: 0, late: 0, leave: 0, activity: 0, none: 0 };
   rows.forEach(r => {
     const st = r.dataset.status;
+    if (!st && r.dataset.flex === '1') return;          // เรียนยืดหยุ่นที่ไม่มา ไม่นับว่ายังไม่เช็ค
     if (!st) counts.none++;
     else if (counts[st] !== undefined) counts[st]++;
   });
@@ -200,6 +203,7 @@ function updateCounters() {
 function setAll(status) {
   const colors = { present: 'success', absent: 'danger', late: 'warning', leave: 'info', activity: 'purple' };
   document.querySelectorAll('.student-row').forEach(row => {
+    if (row.dataset.flex === '1') return;               // เรียนยืดหยุ่น เช็คทีละคนเมื่อมาเรียน
     row.dataset.status = status;
     row.className = `student-row status-${status}`;
     row.querySelectorAll('.status-btn').forEach(b => {
@@ -207,7 +211,7 @@ function setAll(status) {
       b.className = `btn btn-sm ${s === status ? `btn-${colors[s]}` : `btn-outline-${colors[s]}`} status-btn`;
     });
   });
-  currentStudents.forEach(s => s.status = status);
+  currentStudents.forEach(s => { if (!s.flexible) s.status = status; });
   updateCounters();
 }
 
@@ -239,7 +243,7 @@ async function saveAttendance() {
   let skipped = 0;
   rows.forEach(row => {
     const status = row.dataset.status;
-    if (!status) { skipped++; return; }  // ข้ามคนที่ยังไม่เลือก
+    if (!status) { if (row.dataset.flex !== '1') skipped++; return; }  // ข้ามคนที่ยังไม่เลือก (เรียนยืดหยุ่นไม่ต้องเตือน)
     const note = row.querySelector('.note-input')?.value.trim() || null;
     records.push({ student_id: +row.dataset.id, status, note });
   });

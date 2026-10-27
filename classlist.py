@@ -4,6 +4,7 @@
   หัว 4 บรรทัด  รายชื่อนักเรียนชั้นมัธยมศึกษาปีที่ N / โรงเรียน… ปีการศึกษา … / … (ครูที่ปรึกษา) / จำนวนนักเรียนทั้งหมด … ชาย … หญิง …
   ตาราง        เลขที่ · เลขประจำตัว · ชื่อ | สกุล (ไม่มีเส้นคั่นกลาง) + ช่องว่าง 9 ช่อง · TH SarabunPSK 16 ตัวหนา · A4 แนวตั้ง
   ไม่ใส่เลขบัตรประชาชน — ครูทุกคนดาวน์โหลดได้ (ข้อมูลส่วนบุคคล)
+  นักเรียนเรียนยืดหยุ่น (students.flexible) ไม่อยู่ในตาราง แต่จำนวนบนหัวกระดาษนับทุกคนตามทะเบียน
 รายชื่อมาจากตาราง students ที่นายทะเบียนดูแล → ทุกใบในโรงเรียนตรงกัน
 
 ครูที่ปรึกษาบนหัวกระดาษ: settings.class_advisors (ตั้งต้นจากแบบฟอร์ม แอดมินแก้ได้) → ไม่มีใช้บัญชีครูที่ผูกห้อง
@@ -76,21 +77,24 @@ def academic_year(con, date, settings):
 
 
 def class_sheet(con, level, room, year, settings):
-    rows = con.execute("""SELECT number, student_code, name, gender FROM students
+    rows = con.execute("""SELECT number, student_code, name, gender, COALESCE(flexible, 0) AS flexible FROM students
                           WHERE class_level=? AND room=? ORDER BY number, name""", (level, room)).fetchall()
     students, male, female = [], 0, 0
-    for r in rows:
+    for r in rows:                                   # จำนวนบนหัวกระดาษนับทุกคนตามทะเบียน (รวมเรียนยืดหยุ่น)
         first, last = split_name(r['name'])
         g = gender_of(r['gender'], r['name'])
         male += g == 'M'
         female += g == 'F'
+        if r['flexible']:                            # เรียนยืดหยุ่น: ไม่อยู่ในตาราง (ครูสั่ง 27 ต.ค. 69)
+            continue
         students.append(dict(number=r['number'], code=r['student_code'] or '', first=first, last=last))
     advisors = (jl(settings.get('class_advisors'), {}).get(f'{level}/{room}') or '').strip() or '  และ'.join(
         r['full_name'] for r in con.execute(
             """SELECT full_name FROM users WHERE role='teacher' AND assigned_level=? AND (assigned_room=? OR assigned_room IS NULL)
                ORDER BY id""", (level, room)))
     return dict(level=level, room=room, year=year, school=settings.get('school_name', ''),
-                advisors=advisors, students=students, total=len(students), male=male, female=female)
+                advisors=advisors, students=students, total=len(rows), male=male, female=female,
+                flexible=len(rows) - len(students))
 
 
 def parse_class(c):
@@ -326,7 +330,7 @@ def init(app, get_db, login_required, current_user, get_settings):
             year = academic_year(con, year_date, s)
             sheets = [class_sheet(con, lv, rm, year, s) for lv, rm in classes]
             for sh in sheets:                            # ห้องละ 1 หน้า (ใบสอนแทนมีหัวเพิ่ม 2 บรรทัด + ลงชื่อ 3 บรรทัด)
-                sh['fit'] = fit(sh['total'], 5 if sub else 0, sh['students'])
+                sh['fit'] = fit(len(sh['students']), 5 if sub else 0, sh['students'])   # แถวจริง (ไม่รวมเรียนยืดหยุ่น)
         cls = '-'.join(f'ม.{lv}-{rm}' for lv, rm in classes)
         title = f"รายชื่อสอนแทน {sub['date']} คาบ{sub['period']} {cls}" if sub else f'รายชื่อนักเรียน {cls}'
         return sheets, sub, title, None

@@ -36,6 +36,7 @@ function openAddStudent() {
             gender: fd.get('gender') || null,
             birthdate: fd.get('birthdate') || null,
             national_id: fd.get('national_id') || null,
+            flexible: fd.get('flexible') === 'on',
           })
         });
         showToast(res.message);
@@ -49,6 +50,7 @@ function openAddStudent() {
           e.target.gender.value = '';
           e.target.birthdate.value = '';
           e.target.national_id.value = '';
+          e.target.flexible.checked = false;
           if (next > 0) e.target.number.value = next;
           e.target.name.focus();
         } else {
@@ -85,6 +87,7 @@ async function openEditStudent(sid) {
               gender:       fd.get('gender') || null,
               birthdate:    fd.get('birthdate') || null,
               national_id:  fd.get('national_id') || null,
+              flexible:     fd.get('flexible') === 'on',
             })
           });
           showToast(res.message);
@@ -104,6 +107,7 @@ async function openEditStudent(sid) {
     f.gender.value       = s.gender || '';
     f.birthdate.value    = s.birthdate || '';
     f.national_id.value  = s.national_id || '';
+    f.flexible.checked   = !!s.flexible;
     // ครูเปลี่ยน class/room ไม่ได้
     if (currentUser?.role === 'teacher' && currentUser?.assigned_level) {
       f.class_level.disabled = true;
@@ -504,6 +508,7 @@ function renderTable(students) {
             <div>
               <span class="fw-bold">ม.${g.level}/${g.room}</span>
               <span class="badge bg-primary ms-1">${g.students.length} คน</span>
+              ${g.students.some(s => s.flexible) ? `<span class="badge bg-warning text-dark ms-1">เรียนยืดหยุ่น ${g.students.filter(s => s.flexible).length}</span>` : ''}
             </div>
             <button class="btn btn-sm btn-outline-success" onclick="bulkGenCodes(${g.level}, ${g.room})">
               <i class="bi bi-qr-code-scan me-1"></i>สร้างรหัสผู้ปกครองทั้งห้อง
@@ -548,7 +553,7 @@ function renderTable(students) {
           <td class="text-center">${s.number ?? ''}</td>
           <td>${photoCell}</td>
           <td class="text-muted">${s.student_code ?? '-'}</td>
-          <td>${s.name}</td>
+          <td>${s.name}${s.flexible ? ' <span class="badge bg-warning text-dark" title="ไม่มาเรียนประจำ — ไม่นับขาด ไม่อยู่ในใบรายชื่อ">เรียนยืดหยุ่น</span>' : ''}</td>
           <td>${s.gender ?? ''}</td>
           <td>${parentBadge}</td>
           <td class="text-end">
