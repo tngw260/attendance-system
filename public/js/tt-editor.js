@@ -439,7 +439,7 @@ function renderEditor() {
           ${draftReport() ? act('showDraftReport(draftReport())', 'clipboard-check', 'รายงานการร่างภาคเรียน') : ''}
           <li><hr class="dropdown-divider"></li>
           ${act('openShareModal()', 'line', 'ส่งลิงก์จัดตารางทาง LINE')}
-          ${T.is_admin ? act('openEditorsModal()', 'person-plus', 'ผู้ช่วยจัดตาราง (ฝ่ายวิชาการ)') : ''}
+          ${T.is_admin ? act('openEditorsModal()', 'person-gear', 'สิทธิ์ผู้ช่วยจัดตาราง / ผู้จัดสอนแทน') : ''}
         </ul>
       </div>
       <button class="btn btn-sm btn-outline-secondary" onclick="openTermModal()" title="ตั้งค่า / เผยแพร่ภาคเรียน"><i class="bi bi-calendar-week"></i> ${esc(T.term.name)}${T.term.published ? ' <span class="badge bg-success">เผยแพร่แล้ว</span>' : ' <span class="badge bg-warning text-dark">ร่าง</span>'}</button>
@@ -923,30 +923,42 @@ function openShareModal() {
      <button class="btn btn-success btn-sm" onclick="copyLine()"><i class="bi bi-clipboard-check"></i> ก๊อปข้อความ</button>`);
 }
 
+// สิทธิ์ตารางสอน 3 ระดับ (แอดมินตั้ง): ครู (ดู/ฝากสอน/รับสอนแทน) · ผู้จัดสอนแทน · ผู้ช่วยจัดตาราง (จัดตาราง + สอนแทน)
 async function openEditorsModal() {
   let r;
   try { r = await apiFetch('/api/tt/editors'); } catch (e) { alert(e.message); return; }
-  const on = new Set(r.editors);
+  const tt = new Set(r.editors), sub = new Set(r.sub_editors || []);
   const admins = r.users.filter(u => u.role === 'admin'), others = r.users.filter(u => u.role !== 'admin');
-  showModal('<i class="bi bi-person-plus"></i> ผู้ช่วยจัดตาราง', `
-    <div class="small text-muted mb-2">ติ๊กครูที่ให้จัดตารางสอน / จัดครูสอนแทน / เผยแพร่ได้ (เช่น หัวหน้าวิชาการ) —
-      ไม่ได้เป็นแอดมินทั้งระบบ แก้ข้อมูลนักเรียน บัญชีผู้ใช้ หรือการตั้งค่าอื่นไม่ได้</div>
+  const level = u => tt.has(u.id) ? 'tt' : sub.has(u.id) ? 'sub' : '';
+  showModal('<i class="bi bi-person-gear"></i> สิทธิ์ตารางสอน / สอนแทน', `
+    <div class="small mb-2">
+      <div><b>ครู</b> — ดูตาราง · ฝากสอนของตัวเอง · กดรับสอนแทน (ต้องผูกบัญชีกับชื่อในตาราง)</div>
+      <div><b>ผู้จัดสอนแทน</b> — + บันทึกครูไม่มาแทนคนอื่น · จัดครูแทน · อนุมัติคำขอรับสอนแทน (แก้ตารางสอนไม่ได้)</div>
+      <div><b>ผู้ช่วยจัดตาราง</b> — + จัดตาราง จัดอัตโนมัติ เผยแพร่ (เช่น หัวหน้าวิชาการ)</div>
+      <div class="text-muted">ทุกระดับไม่ใช่แอดมินทั้งระบบ — แก้ข้อมูลนักเรียน บัญชีผู้ใช้ หรือการตั้งค่าอื่นไม่ได้</div></div>
     <div class="list-group mb-2" style="max-height:45vh; overflow:auto">
-      ${others.map(u => `<label class="list-group-item d-flex gap-2 align-items-center">
-        <input class="form-check-input m-0 edU" type="checkbox" value="${u.id}" ${on.has(u.id) ? 'checked' : ''}>
-        <span>${esc(u.full_name)} <span class="text-muted small">(${esc(u.username)})</span></span></label>`).join('')
+      ${others.map(u => `<div class="list-group-item d-flex gap-2 align-items-center flex-wrap">
+        <div class="flex-fill">${esc(u.full_name)} <span class="text-muted small">(${esc(u.username)})</span>
+          <div class="small ${u.teacher ? 'text-success' : 'text-danger'}">${u.teacher ? `<i class="bi bi-link-45deg"></i> ผูกกับชื่อ ${esc(u.teacher)}`
+            : '<i class="bi bi-exclamation-circle"></i> ยังไม่ผูกกับชื่อในตาราง — ฝากสอน/รับสอนแทนเองไม่ได้'}</div></div>
+        <select class="form-select form-select-sm edLv" data-id="${u.id}" style="width:auto">
+          <option value="" ${level(u) === '' ? 'selected' : ''}>ครู</option>
+          <option value="sub" ${level(u) === 'sub' ? 'selected' : ''}>ผู้จัดสอนแทน</option>
+          <option value="tt" ${level(u) === 'tt' ? 'selected' : ''}>ผู้ช่วยจัดตาราง</option></select></div>`).join('')
         || '<div class="list-group-item text-muted small">ยังไม่มีบัญชีครู — สร้างบัญชีที่หน้า "จัดการผู้ใช้" ก่อน</div>'}
     </div>
-    <div class="small text-muted">แอดมินจัดได้อยู่แล้ว: ${admins.map(u => esc(u.full_name)).join(', ') || '-'}</div>`,
+    <div class="small text-muted">แอดมินทำได้ทุกอย่างอยู่แล้ว: ${admins.map(u => esc(u.full_name)).join(', ') || '-'}
+      · ผูกบัญชีกับชื่อครู: จัดตาราง → แก้ชื่อครู/เงื่อนไขครู → "บัญชีผู้ใช้ในระบบ"</div>`,
     `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
      <button class="btn btn-primary btn-sm" onclick="saveEditors()"><i class="bi bi-save"></i> บันทึก</button>`);
 }
 async function saveEditors() {
-  const ids = [...document.querySelectorAll('.edU:checked')].map(x => +x.value);
+  const pick = v => [...document.querySelectorAll('.edLv')].filter(x => x.value === v).map(x => +x.dataset.id);
+  const ids = pick('tt'), subIds = pick('sub');
   try {
-    await apiFetch('/api/tt/editors', { method: 'PUT', body: JSON.stringify({ user_ids: ids }) });
+    await apiFetch('/api/tt/editors', { method: 'PUT', body: JSON.stringify({ user_ids: ids, sub_ids: subIds }) });
     edModal.hide();
-    toastEd(ids.length ? `ตั้งผู้ช่วยจัดตาราง ${ids.length} คนแล้ว — ส่งลิงก์ให้ได้ที่ เครื่องมือ → ส่งลิงก์` : 'ไม่มีผู้ช่วยจัดตารางแล้ว');
+    toastEd(`บันทึกแล้ว — ผู้ช่วยจัดตาราง ${ids.length} คน · ผู้จัดสอนแทน ${subIds.length} คน (มีผลเมื่อเปิดหน้าใหม่)`);
   } catch (e) { alert(e.message); }
 }
 

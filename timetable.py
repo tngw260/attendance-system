@@ -9,13 +9,14 @@
   tt_absences  ครูไม่มา (ลา / ไปราชการ / ย้ายออก) ช่วงวันที่ + คาบ (ว่าง = ทั้งวัน)
                ครูฝากสอนเองได้ (created_by = ผู้บันทึก) เฉพาะของตัวเอง สาเหตุ ลาป่วย / ลากิจ / ไปราชการ
   tt_subs      การจัดครูสอนแทน รายวัน-คาบ-รายการ (เก็บรหัสวิชา/ชั้นไว้ด้วย ประวัติไม่หายเมื่อแก้ตาราง)
-               status pending = ครูกดรับสอนแทนเอง รอแอดมิน/ผู้ช่วยจัดตารางอนุมัติ · approved = จัด/อนุมัติแล้ว
+               status pending = ครูกดรับสอนแทนเอง รอผู้จัดสอนแทนอนุมัติ · approved = จัด/อนุมัติแล้ว
   tt_editors   ผู้ช่วยจัดตาราง (เช่น ฝ่ายวิชาการ) — ไม่ต้องเป็นแอดมินทั้งระบบ
+  tt_sub_editors ผู้จัดสอนแทน — บันทึกครูไม่มาแทนคนอื่น จัด/อนุมัติครูสอนแทน แต่แก้ตารางสอนไม่ได้
   tt_signatures ภาพลายเซ็นผู้ลงนามท้ายตาราง (หัวหน้าวิชาการ / รอง ผอ. / ผอ.) เก็บในฐานข้อมูล ไม่อยู่ใน public/
                ครูที่ล็อกอินเปิดได้เฉพาะเมื่อเทอมนั้นเผยแพร่และเปิด "ใส่ลายเซ็น" (config.sign_show) ของคนนั้น
 
 สิทธิ์: แอดมิน + ผู้ช่วยจัดตาราง แก้ตาราง/สอนแทน/เผยแพร่ได้ · ลบภาคเรียน นำเข้า ผูกบัญชี ตั้งผู้ช่วย = แอดมินเท่านั้น
-       ครูทุกคนดูได้
+       ผู้จัดสอนแทน = เฉพาะงานสอนแทน (can_manage_subs) · ครูทุกคนดูได้ ฝากสอนของตัวเอง และกดรับสอนแทนได้
 """
 import datetime
 import json
@@ -97,6 +98,10 @@ CREATE TABLE IF NOT EXISTS tt_subs (
     UNIQUE(date, period, lesson_id)
 );
 CREATE TABLE IF NOT EXISTS tt_editors (
+    user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    added_at    TEXT DEFAULT (datetime('now','localtime'))
+);
+CREATE TABLE IF NOT EXISTS tt_sub_editors (
     user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     added_at    TEXT DEFAULT (datetime('now','localtime'))
 );
@@ -343,6 +348,24 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             return f(*a, **kw)
         return wrapper
 
+    def can_manage_subs(u):
+        """งานสอนแทน (บันทึกครูไม่มาให้ใครก็ได้ · จัด/อนุมัติครูแทน): แอดมิน ผู้ช่วยจัดตาราง หรือผู้จัดสอนแทน (tt_sub_editors)"""
+        if can_edit_tt(u):
+            return True
+        with get_db() as con:
+            return bool(con.execute('SELECT 1 FROM tt_sub_editors WHERE user_id=?', (u['id'],)).fetchone())
+
+    def tt_subs_required(f):
+        @wraps(f)
+        def wrapper(*a, **kw):
+            u = current_user()
+            if not u:
+                return jsonify(error='unauthorized'), 401
+            if not can_manage_subs(u):
+                return jsonify(error='forbidden', message='ต้องเป็นผู้จัดสอนแทน (แอดมินตั้งได้)'), 403
+            return f(*a, **kw)
+        return wrapper
+
     def link_users(con):
         """ผูกครูในตารางกับบัญชีผู้ใช้ที่ชื่อตรงกัน (ทำเฉพาะคนที่ยังไม่ได้ผูก)"""
         users = con.execute('SELECT id, full_name FROM users').fetchall()
@@ -387,6 +410,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (u['id'],)).fetchone()
         data['me'] = me['id'] if me else None
         data['can_edit'] = can_edit_tt(u)
+        data['can_subs'] = can_manage_subs(u)              # จัด/อนุมัติสอนแทน (รวมผู้จัดสอนแทนที่แก้ตารางไม่ได้)
         data['is_admin'] = u['role'] == 'admin'           # ลบภาคเรียน / ผูกบัญชี / ตั้งผู้ช่วย
         s = get_settings()
         data['term']['start_date'], data['term']['end_date'] = term_dates(data['term']['name'], s)
@@ -515,25 +539,38 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.get('/api/tt/editors')
     @admin_required
     def tt_editors_get():
-        """รายชื่อบัญชีทั้งหมด + ใครเป็นผู้ช่วยจัดตาราง"""
+        """รายชื่อบัญชีทั้งหมด + ใครเป็นผู้ช่วยจัดตาราง / ผู้จัดสอนแทน + บัญชีผูกกับชื่อครูในตารางหรือยัง"""
         with get_db() as con:
             ids = [r['user_id'] for r in con.execute('SELECT user_id FROM tt_editors')]
-            users = [dict(r) for r in con.execute('SELECT id, full_name, username, role FROM users ORDER BY role, full_name')]
-        return jsonify(editors=ids, users=users)
+            subs = [r['user_id'] for r in con.execute('SELECT user_id FROM tt_sub_editors')]
+            linked = {r['user_id']: r['name'] for r in con.execute('SELECT user_id, name FROM tt_teachers WHERE user_id IS NOT NULL')}
+            users = [dict(r, teacher=linked.get(r['id'], '')) for r in
+                     con.execute('SELECT id, full_name, username, role FROM users ORDER BY role, full_name')]
+        return jsonify(editors=ids, sub_editors=subs, users=users)
 
     @app.put('/api/tt/editors')
     @admin_required
     def tt_editors_put():
-        """{user_ids: [..]} = ผู้ช่วยจัดตารางทั้งหมด (แทนที่รายชื่อเดิม)"""
+        """{user_ids: [..], sub_ids?: [..]} = ผู้ช่วยจัดตาราง / ผู้จัดสอนแทนทั้งหมด (แทนที่รายชื่อเดิม · ไม่ส่ง sub_ids = ไม่แตะ)"""
+        b = request.get_json(silent=True) or {}
         try:
-            ids = sorted({int(x) for x in ((request.get_json(silent=True) or {}).get('user_ids') or [])})
+            ids = sorted({int(x) for x in (b.get('user_ids') or [])})
+            sub_ids = sorted({int(x) for x in (b.get('sub_ids') or [])}) if 'sub_ids' in b else None
         except (TypeError, ValueError):
             return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
         with get_db() as con:
-            ids = [i for i in ids if con.execute("SELECT 1 FROM users WHERE id=? AND role<>'admin'", (i,)).fetchone()]
+            ok = lambda i: con.execute("SELECT 1 FROM users WHERE id=? AND role<>'admin'", (i,)).fetchone()   # noqa: E731
+            ids = [i for i in ids if ok(i)]
             con.execute('DELETE FROM tt_editors')
             con.executemany('INSERT INTO tt_editors (user_id) VALUES (?)', [(i,) for i in ids])
-        return jsonify(success=True, editors=ids)
+            if sub_ids is not None:                      # ผู้ช่วยจัดตารางจัดสอนแทนได้อยู่แล้ว ไม่ต้องซ้ำ
+                sub_ids = [i for i in sub_ids if ok(i) and i not in ids]
+                con.execute('DELETE FROM tt_sub_editors')
+                con.executemany('INSERT INTO tt_sub_editors (user_id) VALUES (?)', [(i,) for i in sub_ids])
+            else:
+                con.execute('DELETE FROM tt_sub_editors WHERE user_id IN (SELECT user_id FROM tt_editors)')
+                sub_ids = [r['user_id'] for r in con.execute('SELECT user_id FROM tt_sub_editors')]
+        return jsonify(success=True, editors=ids, sub_editors=sub_ids)
 
     @app.get('/api/tt/users')
     @admin_required
@@ -1675,7 +1712,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         if not (DATE_RE.match(f) and DATE_RE.match(t)) or f > t:
             return jsonify(success=False, message='ช่วงวันที่ไม่ถูกต้อง'), 400
         u = current_user()
-        editor = can_edit_tt(u)
+        editor = can_manage_subs(u)
         with get_db() as con:
             absences = [absence_dict(r, u, editor) for r in con.execute(
                 'SELECT * FROM tt_absences WHERE date_from<=? AND date_to>=? ORDER BY date_from, id', (t, f))]
@@ -1711,7 +1748,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     mine.append(dict(date=r['date'], period=r['period'], time=f"{t['start']}-{t['end']}" if t else '',
                                      class_label=r['class_label'], subject=r['subject'], note=r['note'],
                                      absent=names.get(r['absent_id'], ''), status=r['status']))
-            summary = day_summary(con, d, s) if can_edit_tt(u) else None
+            summary = day_summary(con, d, s) if can_manage_subs(u) else None
             open_needs = []
             if me:
                 for day in (d, nxt):
@@ -1724,12 +1761,12 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.post('/api/tt/absences')
     @login_required
     def tt_absence_create():
-        """บันทึกครูไม่มา — ผู้มีสิทธิ์จัดตารางบันทึกให้ใครก็ได้ · ครูทั่วไป "ฝากสอน" ของตัวเอง (self_absence_error)"""
+        """บันทึกครูไม่มา — ผู้จัดสอนแทนบันทึกให้ใครก็ได้ · ครูทั่วไป "ฝากสอน" ของตัวเอง (self_absence_error)"""
         a, err = clean_absence(request.get_json() or {})
         if err:
             return jsonify(success=False, message=err), 400
         u = current_user()
-        editor = can_edit_tt(u)
+        editor = can_manage_subs(u)
         with get_db() as con:
             if not editor and (err := self_absence_error(con, u, a)):
                 return jsonify(success=False, message=err), 400
@@ -1749,7 +1786,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         if err:
             return jsonify(success=False, message=err), 400
         u = current_user()
-        editor = can_edit_tt(u)
+        editor = can_manage_subs(u)
         with get_db() as con:
             old = con.execute('SELECT * FROM tt_absences WHERE id=?', (aid,)).fetchone()
             if not old:
@@ -1772,14 +1809,14 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             old = con.execute('SELECT * FROM tt_absences WHERE id=?', (aid,)).fetchone()
             if not old:
                 return jsonify(success=False, message='ไม่พบบันทึก'), 404
-            if not can_edit_tt(u) and (err := self_absence_error(con, u, None, old)):
+            if not can_manage_subs(u) and (err := self_absence_error(con, u, None, old)):
                 return jsonify(success=False, message=err), 400
             con.execute('DELETE FROM tt_absences WHERE id=?', (aid,))
             removed = drop_orphan_subs(con, old['teacher_id'], old['date_from'], old['date_to'])
         return jsonify(success=True, removed_subs=removed)
 
     @app.post('/api/tt/subs')
-    @tt_edit_required
+    @tt_subs_required
     def tt_subs_save():
         """บันทึกการจัดครูแทนของ 1 วัน
         {date, items: [{period, lesson_id, absent_id, sub_id | null, subject, class_label, note}], clear: [{period, lesson_id}]}
@@ -1812,7 +1849,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 seen.add((p, sid))
             for p, lid in clear:
                 con.execute('DELETE FROM tt_subs WHERE date=? AND period=? AND lesson_id=?', (d, p, lid))
-            by = current_user()['full_name']             # แอดมิน/ผู้ช่วยจัดตารางเลือกเอง = อนุมัติทันที (รวมกรณีเลือกครูที่กดรับไว้)
+            by = current_user()['full_name']             # ผู้จัดสอนแทนเลือกเอง = อนุมัติทันที (รวมกรณีเลือกครูที่กดรับไว้)
             for i in items:
                 con.execute("""INSERT INTO tt_subs (date, period, lesson_id, absent_id, sub_id, subject, class_label, note, updated_at,
                                                     status, approved_by)
@@ -1905,7 +1942,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         return jsonify(success=True, subs=subs)
 
     @app.post('/api/tt/subs/approve')
-    @tt_edit_required
+    @tt_subs_required
     def tt_sub_approve():
         """อนุมัติคำขอรับสอนแทน {date, items: [{period, lesson_id}]} · ไม่อนุมัติ = ลบผ่าน POST /api/tt/subs (clear)"""
         b = request.get_json() or {}

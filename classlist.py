@@ -13,7 +13,7 @@
   ?date=&period=&lesson_id=        ใบรายชื่อสอนแทน (หน้าสอนแทน) เพิ่ม วิชา/ผู้สอน/ครูสอนแทน/วัน-คาบ + ลงชื่อครูสอนแทน
                                    วิชาเรียนรวมหลายชั้น = ชั้นละหน้า
 สิทธิ์: แอดมิน/ผู้ช่วยจัดตาราง · ครูที่ไม่ได้ผูกห้อง (เหมือนใบเช็คชื่อเดิม) · ห้องที่ปรึกษา · ห้องที่สอนในตารางที่เผยแพร่
-       · ใบสอนแทน: ครูเจ้าของวิชาและครูที่รับสอนแทนคาบนั้น
+       · ใบสอนแทน: ครูเจ้าของวิชา ครูที่รับสอนแทนคาบนั้น และผู้จัดสอนแทน
 """
 import datetime
 import io
@@ -309,6 +309,8 @@ def init(app, get_db, login_required, current_user, get_settings):
         me = me['id'] if me else None
         if sub and me and (me in sub['teacher_ids'] or me == sub['sub_id']):
             return True
+        if sub and con.execute('SELECT 1 FROM tt_sub_editors WHERE user_id=?', (u['id'],)).fetchone():
+            return True                                  # ผู้จัดสอนแทน: ใบรายชื่อของคาบสอนแทนทุกคาบ
         for lv, rm in classes:
             if not (not u.get('assigned_level')                              # ครูไม่ได้ผูกห้อง (กติกาเดียวกับใบเช็คชื่อเดิม)
                     or (u['assigned_level'] == lv and (not u.get('assigned_room') or u['assigned_room'] == rm))

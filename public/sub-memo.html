@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>บันทึกข้อความสอนแทน</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <!-- ฟอนต์ TH Sarabun New ที่ฝังในเว็บ (THSarabunDoc) — พิมพ์ทุกเครื่องได้ขนาดเท่ากัน -->
+  <link href="/css/docforms.css?v=20260926" rel="stylesheet">
+  <link rel="preload" href="/fonts/THSarabunNew-Regular.woff" as="font" type="font/woff" crossorigin>
+  <style>
+    /* บันทึกข้อความ "การสอนแทน/แลกเปลี่ยนคาบสอน" ตามแบบฟอร์มโรงเรียน (submemo.py) — A4 แนวตั้ง ขอบ 0.5 นิ้ว
+       ขนาดตัวอักษร/ความกว้างช่องมาจากเซิร์ฟเวอร์ (ชุดเดียวกับไฟล์ Word) แล้ว fitPages() ย่อต่อจนพอดี 1 หน้า
+       ขอบกระดาษ = padding ของ .memo เอง (@page margin 0) — Safari ไม่ทำตาม @page margin */
+    @page { size: A4 portrait; margin: 0; }
+    body { background: #eef1ee; }
+    .toolbar { position: sticky; top: 0; z-index: 5; background: #f5f7f1; border-bottom: 2px solid #2f6b3f; padding: .6rem 1rem; }
+    .memo { width: 210mm; min-height: 297mm; margin: 14px auto; padding: 12.7mm; background: #fff; color: #000;
+            box-shadow: 0 2px 14px rgba(0,0,0,.15); box-sizing: border-box; overflow: hidden;   /* อะไรล้นขอบ Safari จะย่อทั้งหน้า */
+            font-family: 'THSarabunDoc', 'TH Sarabun New', 'TH SarabunPSK', sans-serif; line-height: 1.34; }
+    .memo[contenteditable="true"] { outline: 2px dashed #e0a800; outline-offset: -6px; }
+    .m-h { font-size: var(--h); }
+    .m-b { font-size: var(--b); }
+    .m-top { position: relative; padding-top: 26pt; }
+    .m-top img { position: absolute; left: 0; top: 0; height: 15mm; }
+    .m-title { text-align: center; font-weight: 700; }
+    .blank { height: calc(var(--h) * 1.34); }
+    .m-date { padding-left: 49.02%; }
+    u.v { text-decoration: underline dotted; text-underline-offset: .18em; }
+    .m-info { display: flex; }
+    .m-info b { width: 13.55%; flex: 0 0 auto; }
+    .m-para { text-indent: 6.90%; margin: 0; }
+    .ln { display: flex; white-space: nowrap; }
+    /* ช่องในแถว = % ของความกว้างหน้า (Safari พิมพ์ใหญ่กว่าบนจอ ~6% ถ้าเป็น pt จะล้นขวา) · ข้อความยาวกว่าช่อง = ช่องขยาย ช่องอื่นหด */
+    .ln .fill { display: flex; flex: 0 1 auto; }
+    .dots { flex: 1 1 auto; width: 0; min-width: .5em; overflow: hidden; }   /* width 0 = ไม่ดันช่องให้กว้างตามข้อความจุด */
+    .dots::after { content: '................................................................................................................................................................................................'; }
+    .fv { margin-left: .22em; }                   /* เว้นวรรคหลังป้าย (ช่องว่างท้าย span ใน flex ถูกตัดทิ้ง) */
+    .m-sub { padding-left: 4.78%; }
+    .m-row { font-size: var(--r); }
+    .m-close { display: flex; align-items: flex-start; break-inside: avoid; }
+    .m-left { width: 49.51%; flex: 0 0 auto; }
+    .m-box { width: 44.98%; flex: 0 0 auto; border: 1pt solid #000; padding: 5pt 0 7pt; text-align: center; }
+    .m-left .sg { font-size: var(--s); margin-top: calc(var(--s) * 1.34); }
+    .sg .r { display: flex; white-space: nowrap; }
+    .sg .d { flex: 0 0 auto; width: 10em; overflow: hidden; }
+    .sg .c { display: flex; justify-content: center; overflow: visible; white-space: pre; }   /* ชื่อ  นามสกุล เว้น 2 เคาะ */
+    .sg .hid { visibility: hidden; }
+    .m-box .sg .r { justify-content: center; }
+    .circle { font-family: 'Segoe UI Symbol', 'Apple Symbols', sans-serif; font-size: 1.1em; }
+    .hint { font: 13px/1.4 system-ui, sans-serif; }
+    @media print {
+      body { background: #fff; }
+      .toolbar, .no-print { display: none !important; }
+      html, body { height: auto; }
+      /* ขอบล่างไม่ใส่เป็น padding: เครื่องพิมพ์ที่กันขอบเอง padding ล่างจะล้นเป็นหน้าว่าง — fitPages() เว้นที่ล่างไว้แล้ว */
+      .memo { width: auto; min-height: 0; margin: 0; padding: 12.7mm 12.7mm 0; box-shadow: none; zoom: 1 !important; outline: none !important; }
+      .memo + .memo { break-before: page; page-break-before: always; }
+    }
+  </style>
+</head>
+<body>
+<div class="toolbar d-flex flex-wrap gap-2 align-items-center">
+  <button class="btn btn-sm btn-outline-secondary" onclick="history.length > 1 ? history.back() : window.close()"><i class="bi bi-arrow-left"></i> กลับ</button>
+  <div class="fw-bold flex-fill" id="docTitle">บันทึกข้อความสอนแทน</div>
+  <button class="btn btn-sm btn-outline-secondary" id="btnEdit" onclick="toggleEdit()" title="แก้ข้อความบนหน้านี้ก่อนพิมพ์ (ไม่บันทึกลงระบบ)"><i class="bi bi-pencil"></i> แก้ข้อความ</button>
+  <button class="btn btn-sm btn-outline-primary" onclick="getWord()"><i class="bi bi-file-earmark-word"></i> ดาวน์โหลด Word</button>
+  <button class="btn btn-sm btn-success" onclick="printNow()"><i class="bi bi-printer"></i> พิมพ์ / บันทึก PDF</button>
+</div>
+<div id="editHint" class="alert alert-warning hint text-center m-2 py-1 no-print" style="display:none;">
+  คลิกที่ข้อความบนกระดาษเพื่อแก้ได้เลย (เช่น ห้องเรียน คำนำหน้าชื่อ) — แก้เฉพาะใบที่พิมพ์ ไม่บันทึกลงระบบ · โหลดหน้าใหม่ = กลับเป็นข้อมูลจากระบบ</div>
+<div id="pages"><div class="text-center text-muted py-5"><div class="spinner-border"></div></div></div>
+
+<script src="/js/common.js"></script>
+<script>
+const Q = new URLSearchParams(location.search);
+const API_Q = ['date', 'absence_id'].filter(k => Q.get(k)).map(k => `${k}=${encodeURIComponent(Q.get(k))}`).join('&');
+const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const NO_PREFIX = 'นาย/นาง/นางสาว';
+const FIELDS = ['วันที่', 'รหัส-วิชา', 'ชั้น', 'เวลา', 'ถึง', 'รวม', 'คาบ  ห้องเรียน'];
+const W_TWIPS = 10466;                          // ความกว้างเนื้อหา A4 ขอบ 0.5 นิ้ว (เท่ากับ submemo.W) — ช่องต่าง ๆ คิดเป็น % ของค่านี้
+const SUB_FILL = (8288 - 500) / (W_TWIPS - 500) * 100;   // ชื่อครูสอนแทน + จุด ถึง "เข้าสอนแทน ดังนี้" (เท่าแท็บใน Word)
+
+async function printNow() {
+  await fontsReady();
+  fitPages();
+  await nextFrame();
+  window.print();
+}
+
+async function getWord() {
+  try { await downloadFile('/api/sub-memo.docx?' + API_Q); } catch (e) { alert(e.message); }
+}
+
+function toggleEdit() {
+  const on = document.querySelector('.memo')?.contentEditable !== 'true';
+  document.querySelectorAll('.memo').forEach(p => { p.contentEditable = on ? 'true' : 'false'; p.spellcheck = false; });
+  document.getElementById('editHint').style.display = on ? '' : 'none';
+  document.getElementById('btnEdit').classList.toggle('active', on);
+}
+
+// ลงชื่อ……label / (ชื่อ) — ชื่อกึ่งกลางใต้เส้นจุด · center = จัดให้เส้นจุดอยู่กลางกรอบ (ใส่ช่องว่างเท่า "ลงชื่อ" ด้านขวา)
+function signHTML(label, name, center) {
+  const hidSign = '<span class="hid">ลงชื่อ</span>';
+  return `<div class="sg"><div class="r"><span>ลงชื่อ</span><span class="d dots"></span>${label ? `<span>${escH(label)}</span>` : ''}${center ? hidSign : ''}</div>
+    <div class="r">${hidSign}<span class="d c"><span>(${escH(name || '.'.repeat(40))})</span></span>${center ? hidSign : ''}</div></div>`;
+}
+
+function memoHTML(m, acad, dir) {
+  const fld = (lab, v, w) => `<span class="fill" style="flex-basis:${(w / W_TWIPS * 100).toFixed(2)}%"><span>${escH(lab)}</span>${v ? `<span class="fv">${escH(v)}</span>` : ''}<span class="dots"></span></span>`;
+  const rowHTML = r => {
+    const vals = r ? [r.date, r.subject, r.cls, r.start, r.end, String(r.n), ''] : FIELDS.map(() => '');
+    return `<div class="ln m-row">${FIELDS.map((lab, i) => fld(lab, vals[i], m.widths[i])).join('')}</div>`;
+  };
+  const blocks = m.blocks.map(b => {
+    const head = b.kind === 'none'
+      ? `<div class="m-sub">ไม่มีครูสอนแทน (มอบหมายงาน/รวมห้อง) ดังนี้</div>`
+      : `<div class="ln m-sub"><span class="fill" style="flex-basis:${SUB_FILL.toFixed(2)}%"><span>${escH(b.name || NO_PREFIX)}</span><span class="dots"></span></span><span>เข้าสอนแทน ดังนี้</span></div>`;
+    return head + (b.rows.length ? b.rows : [null, null, null]).map(rowHTML).join('');
+  }).join('');
+  const md = m.memo_date, uv = t => `<u class="v">&nbsp;${escH(t)}&nbsp;</u>`;
+  return `<div class="memo" data-h="${m.size.head}" data-b="${m.size.body}" data-s="${m.size.sign}" data-r="${m.size.row}">
+    <div class="m-h">
+      <div class="m-top"><img src="/img/garuda.png" alt="ครุฑ"><div class="m-title">บันทึกข้อความ</div></div>
+      <div class="blank"></div>
+      <div class="m-date">วันที่ ${uv(md.day)} เดือน ${uv(md.month)} พ.ศ. ${uv(md.year)}</div>
+      <div class="blank"></div>
+      <div class="m-info"><b>ส่วนราชการ</b><span>${escH(m.school)}</span></div>
+      <div class="m-info"><b>เรื่อง</b><span>การสอนแทน/แลกเปลี่ยนคาบสอน</span></div>
+      <div class="m-info"><b>เรียน</b><span>${escH(dir.title)}</span></div>
+    </div>
+    <div class="m-b">
+      <p class="m-para">${m.para.map(([t, v]) => v ? uv(t) : escH(t)).join('')}</p>
+      ${blocks}
+      <div class="m-close">
+        <div class="m-left"><div>จึงเรียนมาเพื่อโปรดพิจารณาอนุญาต</div>${m.signers.map(s => signHTML(s.label, s.name)).join('')}</div>
+        <div class="m-box m-h">
+          <div>ได้ตรวจสอบวิชาที่สอนแทนแล้ว</div><div class="blank"></div>
+          ${signHTML('', acad.name, true)}<div>${escH(acad.title)}</div><div class="blank"></div>
+          <div><span class="circle">○</span> อนุญาต &nbsp;&nbsp;&nbsp;&nbsp; <span class="circle">○</span> ไม่อนุญาต</div><div class="blank"></div>
+          ${signHTML('', dir.name, true)}<div>${escH(dir.full_title)}</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ย่อทั้งใบจนพอดี 1 หน้า: ความสูงใช้ได้ = 297 − ขอบบนล่าง 2 × 12.7 มม. (≈ 1026 px) เผื่อ 24 px ให้เครื่องพิมพ์ที่ตั้งขอบเอง
+// ตอนพิมพ์ WebKit/Safari ตัวอักษรใหญ่กว่าบนจอเทียบกับกระดาษ ~6% (ตัดบรรทัดเพิ่ม) → คูณเผื่อ PRINT_GROW
+const PAGE_AVAIL_PX = (297 - 2 * 12.7) * 96 / 25.4 - 24;
+const PRINT_GROW = 1.06;
+function fitPages() {
+  document.querySelectorAll('.memo').forEach(page => {
+    page.style.zoom = '';
+    const base = ['h', 'b', 's', 'r'].map(k => [k, parseFloat(page.dataset[k])]);
+    const apply = f => base.forEach(([k, v]) => page.style.setProperty('--' + k, (v * f).toFixed(2) + 'pt'));
+    const inner = () => [...page.children].reduce((a, c) => a + c.getBoundingClientRect().height, 0);
+    let f = 1;
+    apply(f);
+    while (inner() * PRINT_GROW > PAGE_AVAIL_PX && f > 0.8) { f -= 0.02; apply(f); }
+  });
+  fitScreen();
+}
+
+// มือถือ: ย่อกระดาษ A4 ให้พอดีจอ (ตอนพิมพ์คืนขนาดจริง)
+function fitScreen(on = true) {
+  const z = on && innerWidth < 830 ? String((innerWidth - 12) / 800) : '';
+  document.querySelectorAll('.memo').forEach(p => { p.style.zoom = z; });
+}
+addEventListener('beforeprint', () => fitScreen(false));
+addEventListener('afterprint', () => fitScreen());
+addEventListener('resize', () => fitScreen());
+
+async function render() {
+  const d = await apiFetch('/api/sub-memo?' + API_Q);
+  document.title = d.title;
+  document.getElementById('docTitle').textContent = d.title;
+  document.getElementById('pages').innerHTML = d.memos.length ? d.memos.map(m => memoHTML(m, d.academic, d.director)).join('')
+    : '<div class="text-center text-muted py-5"><i class="bi bi-calendar-check fs-1 d-block mb-2"></i>วันนี้ไม่มีครูที่ต้องมีคนสอนแทน</div>';
+  await fontsReady();
+  fitPages();
+  return d.memos.length;
+}
+
+// รอฟอนต์ที่ฝังโหลดเสร็จจริง (font-display:block = ระหว่างโหลดตัวหนังสือล่องหน → พิมพ์เร็วไปได้หน้าขาว)
+async function fontsReady() {
+  try {
+    await Promise.race([
+      Promise.all(['700 16pt THSarabunDoc', '400 16pt THSarabunDoc'].map(f => document.fonts.load(f, 'กขค'))),
+      new Promise(r => setTimeout(r, 4000)),
+    ]);
+    await document.fonts.ready;
+    await Promise.all([...document.images].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; setTimeout(r, 4000); })));
+  } catch (e) {}
+}
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+document.addEventListener('DOMContentLoaded', async () => {
+  let n;
+  try { n = await render(); }
+  catch (e) { document.getElementById('pages').innerHTML = `<div class="alert alert-danger m-3">${escH(e.message)}</div>`; return; }
+  if (n && Q.get('print') === '1') {                    // ปุ่มพิมพ์จากแท็บสอนแทน → เปิดหน้าต่างพิมพ์ให้เลย (เลือก "บันทึกเป็น PDF")
+    await nextFrame();
+    setTimeout(() => window.print(), 400);
+  }
+});
+</script>
+</body>
+</html>

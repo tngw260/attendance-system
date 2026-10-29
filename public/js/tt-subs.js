@@ -2,8 +2,10 @@
    1) บันทึกครูไม่มา (ลา / ไปราชการ / ย้ายออก) ทั้งวัน บางคาบ หรือหลายวัน
    2) คาบที่ต้องมีครูแทน = คาบของครูที่ไม่มาในตารางภาคเรียนที่เปิดอยู่ (วิชาที่มีครูร่วมสอน / ประชุมครู ไม่ต้องจัด)
    3) แนะนำครู: ว่างคาบนั้น → สอนแทนมาน้อยสุดในภาคเรียน (กระจายให้เท่ากัน) → สาระเดียวกัน → สอนห้องนั้นอยู่ → วันนั้นมีคาบน้อย
-   4) พิมพ์ใบบันทึกการสอนแทนรายวัน · ครูเปิดตารางตัวเองเห็นคาบสอนแทน 7 วันข้างหน้า
-   5) ครูทุกคน: "ฝากสอน" ของตัวเอง (ลาป่วย/ลากิจ/ไปราชการ) · กด "รับสอนแทน" คาบที่ว่าง (คนแรกได้) → รอแอดมิน/ผู้ช่วยจัดตารางอนุมัติ
+   4) พิมพ์ = บันทึกข้อความ "การสอนแทน" ตามแบบฟอร์มโรงเรียน (sub-memo.html / submemo.py) ครูที่ไม่มาคนละใบ
+      ปุ่ม 📄 ข้างชื่อครูที่ไม่มา = เปิดใบของคนนั้น (Word / PDF) · ครูเปิดตารางตัวเองเห็นคาบสอนแทน 7 วันข้างหน้า
+   5) ครูทุกคน: "ฝากสอน" ของตัวเอง (ลาป่วย/ลากิจ/ไปราชการ) · กด "รับสอนแทน" คาบที่ว่าง (คนแรกได้) → รอผู้จัดสอนแทนอนุมัติ
+      ผู้จัดสอนแทน (T.can_subs) = แอดมิน ผู้ช่วยจัดตาราง หรือครูที่แอดมินตั้งให้จัดเฉพาะสอนแทน (แก้ตารางไม่ได้)
    6) ใบรายชื่อนักเรียนของคาบ Word / PDF (ครูเจ้าของวิชา ครูที่รับสอนแทน ผู้จัดตาราง) */
 
 const SUB = { date: '', data: null, from: '', to: '' };
@@ -187,13 +189,16 @@ async function clearDay() {
 }
 
 /* ── ใบรายชื่อนักเรียนของคาบ (แบบฟอร์มงานทะเบียน, classlist.py) — ครูเจ้าของวิชา ครูที่รับสอนแทน ผู้จัดตาราง ── */
-const canClassList = (n, s) => T.can_edit || (!!T.me && (n.l.teacher_ids.includes(T.me) || s?.sub_id === T.me));
+const canClassList = (n, s) => T.can_subs || (!!T.me && (n.l.teacher_ids.includes(T.me) || s?.sub_id === T.me));
 function classListLinks(n) {
   const q = `date=${SUB.date}&period=${n.p}&lesson_id=${n.l.id}`;
   return `<div class="small mt-1 text-nowrap"><i class="bi bi-people me-1"></i>รายชื่อ:
     <a href="#" onclick="subClassList('${q}'); return false">Word</a> ·
     <a href="/class-list.html?${q}&print=1" target="_blank" rel="noopener">PDF</a></div>`;
 }
+// บันทึกข้อความสอนแทนของครูที่ไม่มา 1 รายการ (ลาหลายวัน = ใบเดียว) — ครูทุกคนเปิดได้
+function openMemo(id) { window.open(`/sub-memo.html?absence_id=${id}&date=${SUB.date}`, '_blank'); }
+
 async function subClassList(q) {
   try { await downloadFile('/api/class-list.docx?' + q); } catch (e) { alert(e.message); }
 }
@@ -238,8 +243,7 @@ async function rejectSub(key) {
 /* ── หน้าจอ ── */
 async function renderSubs() {
   if (!SUB.date) { SUB.date = todayLocal(); if (wdOf(SUB.date) === 0 || wdOf(SUB.date) === 6) SUB.date = nextSchoolDay(SUB.date, 1); }
-  el('content').innerHTML = `<div class="container sub-screen"><div id="subBody"><div class="text-center text-muted py-5"><div class="spinner-border"></div></div></div></div>
-    <div class="sub-print" id="subPrint"></div>`;
+  el('content').innerHTML = `<div class="container sub-screen"><div id="subBody"><div class="text-center text-muted py-5"><div class="spinner-border"></div></div></div></div>`;
   try { await loadSubs(); } catch (e) { el('subBody').innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; return; }
   renderSubsBody();
 }
@@ -256,7 +260,7 @@ async function gotoDate(d) {
 function renderSubsBody() {
   const box = el('subBody');
   if (!box) return;
-  const date = SUB.date, admin = !!T.can_edit, hol = holidayOn(date), wd = wdOf(date);
+  const date = SUB.date, admin = !!T.can_subs, hol = holidayOn(date), wd = wdOf(date);
   const needs = needsOn(date), saved = savedOn(date), counts = subCounts(date);
   const savedBy = new Map(saved.map(s => [`${s.period}-${s.lesson_id}`, s]));
   const assigned = new Map(saved.map(s => [`${s.period}-${s.lesson_id}`, s.sub_id]));
@@ -278,6 +282,9 @@ function renderSubsBody() {
     ${hol ? `<span class="badge ${hol.type === 'holiday' ? 'bg-danger' : 'bg-info'}">${hol.type === 'holiday' ? 'วันหยุด' : hol.type === 'exam' ? 'สอบ' : 'กิจกรรม'}: ${esc(hol.name)}</span>` : ''}
     ${wd === 0 || wd === 6 ? '<span class="badge bg-secondary">วันเสาร์-อาทิตย์</span>' : ''}
     ${!inTerm(date) ? `<span class="badge bg-secondary">ปิดภาคเรียน (ภาคเรียน ${esc(T.term.name)} ${shortDate(T.term.start_date)} – ${shortDate(T.term.end_date)})</span>` : ''}
+    <span class="ms-auto d-flex gap-1">
+      ${T.is_admin ? `<button class="btn btn-sm btn-outline-secondary" onclick="openEditorsModal()" title="ตั้งว่าใครจัด/อนุมัติสอนแทนได้"><i class="bi bi-person-gear"></i> สิทธิ์</button>` : ''}
+      <a class="btn btn-sm btn-outline-secondary" href="/subs-guide.html" target="_blank" rel="noopener"><i class="bi bi-book"></i> คู่มือ</a></span>
   </div></div><div class="row g-2">`;
 
   // ซ้าย: ครูไม่มา + สรุป
@@ -290,6 +297,7 @@ function renderSubsBody() {
       ${abs.length ? abs.map(a => `<div class="sub-abs d-flex align-items-start gap-2">
           <div class="flex-fill"><b>${esc(tName(a.teacher_id))}</b> <span class="badge text-bg-warning">${esc(a.reason || 'ไม่มา')}</span>
             <div class="small text-muted">${esc(periodLabel(a.periods))} · ${esc(spanLabel(a))}${a.note ? ' · ' + esc(a.note) : ''}</div></div>
+          <button class="btn btn-sm btn-link p-0" onclick="openMemo(${a.id})" title="บันทึกข้อความขออนุญาตสอนแทน (Word / PDF)"><i class="bi bi-file-earmark-text"></i></button>
           ${admin || a.editable ? `<button class="btn btn-sm btn-link p-0" onclick="openAbsenceModal(${a.id})" title="แก้ไข"><i class="bi bi-pencil-square"></i></button>` : ''}
         </div>`).join('') : '<div class="small text-muted py-1">— ไม่มี —</div>'}
     </div></div>
@@ -358,7 +366,6 @@ function renderSubsBody() {
   </div></div></div>
   <div class="col-12 d-lg-none">${statsHTML(counts)}</div></div>`;   // มือถือ: สรุปไว้ท้ายสุด
   box.innerHTML = html;
-  el('subPrint').innerHTML = sheetHTML(needs.filter(n => !n.skip), savedBy);
 }
 
 function statsHTML(counts) {
@@ -376,7 +383,7 @@ function statsHTML(counts) {
 
 /* ── ฟอร์มบันทึกครูไม่มา ── */
 function openAbsenceModal(id) {
-  const self = !T.can_edit;                                  // ครูทั่วไป = ฝากสอนของตัวเอง (สาเหตุ 3 อย่าง ไม่ย้อนหลัง)
+  const self = !T.can_subs;                                  // ครูทั่วไป = ฝากสอนของตัวเอง (สาเหตุ 3 อย่าง ไม่ย้อนหลัง)
   const start = self && SUB.date < todayLocal() ? todayLocal() : SUB.date;
   const a = id ? SUB.data.absences.find(x => x.id === id)
                : { teacher_id: self ? T.me : '', date_from: start, date_to: start, periods: [], reason: 'ลาป่วย', note: '' };
@@ -434,9 +441,9 @@ async function saveAbsence(id) {
     const r = await apiFetch(id ? `/api/tt/absences/${id}` : '/api/tt/absences', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
     edModal.hide();
     if (r.removed_subs) toastEd(`ลบการจัดครูแทนที่ไม่ต้องใช้แล้ว ${r.removed_subs} คาบ`);
-    else if (!T.can_edit && !id) toastEd('ฝากสอนแล้ว — ครูคนอื่นกดรับสอนแทนได้');
+    else if (!T.can_subs && !id) toastEd('ฝากสอนแล้ว — ครูคนอื่นกดรับสอนแทนได้ · พิมพ์บันทึกข้อความได้ที่ปุ่ม 📄 ข้างชื่อ');
     await loadSubs();
-    if (!T.can_edit && body.date_from !== SUB.date) { await gotoDate(body.date_from); return; }   // ไปวันที่ฝาก ให้เห็นคาบของตัวเอง
+    if (!T.can_subs && body.date_from !== SUB.date) { await gotoDate(body.date_from); return; }   // ไปวันที่ฝาก ให้เห็นคาบของตัวเอง
     renderSubsBody();
   } catch (e) { alert(e.message); }
 }
@@ -568,33 +575,6 @@ async function copyLine() {
   catch (e) { ta.select(); document.execCommand('copy'); }          // เบราว์เซอร์ในแอป LINE บางรุ่นไม่ให้ใช้ clipboard API
   el('lineOpen').classList.remove('d-none');
   toastEd('ก๊อปแล้ว — วางในกลุ่มไลน์ได้เลย');
-}
-
-/* ── ใบบันทึกการสอนแทน (A4 แนวตั้ง) ── */
-function sheetHTML(needs, savedBy) {
-  const date = SUB.date, P = Object.fromEntries(periodsOf().map(x => [x.no, x]));
-  const d = dateOf(date), school = T.school.name || '';
-  const abs = absencesOn(date);
-  const signer = (T.term.config.signers || [])[0];
-  const dirTitle = T.school.director_title || 'ผู้อำนวยการ';
-  const dirFull = school.startsWith('โรงเรียน') ? dirTitle.replace(/โรงเรียน$/, '') + school : dirTitle + school;
-  const rows = needs.map((n, i) => {
-    const s = savedBy.get(n.key);
-    return `<tr><td class="c">${i + 1}</td><td class="c">${n.p}</td><td class="c nw">${esc(P[n.p] ? P[n.p].start + '-' + P[n.p].end : '')}</td>
-      <td class="c nw">${esc(classLabel(n.l))}</td><td class="nw">${esc(lessonName(n.l))}</td><td class="nw">${esc(n.gone.map(tShort).join(', '))}</td>
-      <td class="nw">${s ? (s.sub_id ? esc(tShort(s.sub_id)) + (isPending(s) ? ' (รออนุมัติ)' : '') : 'ไม่มีครูแทน') : ''}</td><td></td><td class="sm">${esc(s?.note || '')}</td></tr>`;
-  }).join('') || '<tr><td colspan="9" class="c">— ไม่มีคาบที่ต้องจัดครูสอนแทน —</td></tr>';
-  return `<div class="sub-sheet">
-    <div class="ss-c ss-b ss-big">บันทึกการจัดครูสอนแทน</div>
-    <div class="ss-c">${esc(school)} ภาคเรียนที่ ${esc(T.term.name)}</div>
-    <div class="ss-c">${formatThaiDateFull(date).replace(/ที่ (\d+) /, 'ที่ $1 เดือน')}</div>
-    <div class="ss-abs"><b>ครูที่ไม่ได้ปฏิบัติการสอน</b> ${abs.length ? abs.map((a, i) => `${i + 1}) ${esc(tName(a.teacher_id))} (${esc(a.reason || 'ไม่มา')}${a.periods.length ? ' ' + esc(periodLabel(a.periods)) : ''})`).join('  ') : '-'}</div>
-    <table class="ss-table"><thead><tr><th>ที่</th><th>คาบ</th><th>เวลา</th><th>ชั้น</th><th>วิชา</th><th>ครูผู้สอน</th><th>ครูสอนแทน</th><th style="width:26mm">ลงชื่อ</th><th>หมายเหตุ</th></tr></thead>
-      <tbody>${rows}</tbody></table>
-    <div class="ss-signs">
-      <div>ลงชื่อ...............................................ผู้จัด<br>(${esc(signer ? signer.name : '')}${signer ? '' : '...............................................'})<br>${esc(signer ? signer.title : 'หัวหน้ากลุ่มบริหารงานวิชาการ')}</div>
-      <div>ลงชื่อ...............................................ทราบ<br>(${esc(T.school.director || '...............................................')})<br>${esc(dirFull)}</div>
-    </div></div>`;
 }
 
 /* ── ครูเปิดตารางตัวเอง: เตือนคาบสอนแทน 7 วันข้างหน้า ── */
