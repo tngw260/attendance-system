@@ -255,33 +255,39 @@ async function rejectSub(key) {
 }
 
 /* ── แลกคาบ: ครูที่ไม่มาเลือกครูคู่แลก + คาบของครูคนนั้นที่จะไปสอนคืน (ภายใน 3 สัปดาห์ ในภาคเรียนเดียวกัน) ── */
-const SWAP = { n: null, data: null };
+const SWAP = { n: null, data: null, a: null, mgr: false };
 async function openSwapModal(key) {
   const n = needsOn(SUB.date).find(x => x.key === key);
   if (!n) return;
-  const start = todayLocal() > SUB.date ? todayLocal() : SUB.date;
-  try { SWAP.data = await apiFetch(`/api/tt/subs?from=${todayLocal()}&to=${addDays(start, 21)}`); } catch (e) { alert(e.message); return; }
-  SWAP.n = n; SWAP.to = addDays(start, 21);
+  // ครูที่ไม่มากดเอง (A = ฉัน) · ผู้จัดสอนแทนบันทึกแทน (A = ครูที่ไม่มาคาบนี้ อนุมัติทันที เลือกคาบสอนคืนย้อนหลังได้)
+  const mgr = !!T.can_subs;
+  SWAP.mgr = mgr; SWAP.a = mgr ? n.absent : T.me;
+  const end = addDays(todayLocal() > SUB.date ? todayLocal() : SUB.date, 21);
+  SWAP.from = mgr ? addDays(SUB.date, -14) : todayLocal();
+  try { SWAP.data = await apiFetch(`/api/tt/subs?from=${SWAP.from}&to=${end}`); } catch (e) { alert(e.message); return; }
+  SWAP.n = n; SWAP.to = end;
   const saved = savedOn(SUB.date), assigned = new Map(saved.map(s => [`${s.period}-${s.lesson_id}`, s.sub_id]));
-  const cands = candidatesFor(n, SUB.date, assigned, subCounts(SUB.date)).filter(c => c.ok && c.t.id !== T.me);
+  const cands = candidatesFor(n, SUB.date, assigned, subCounts(SUB.date)).filter(c => c.ok && c.t.id !== SWAP.a);
+  const who = mgr ? tShort(SWAP.a) : 'คุณ';
   showModal('🔁 แลกคาบ', `
-    <div class="small mb-2">คาบของคุณ: <b>${esc(formatThaiDateFull(SUB.date))} คาบ ${n.p} ${esc(classLabel(n.l))} ${esc(lessonName(n.l))}</b><br>
-      ครูคู่แลกสอนคาบนี้แทนคุณ แล้วคุณไปสอนคาบของครูคนนั้นคืน (แบบฟอร์มหน้า 2 "การแลกเปลี่ยนคาบสอน")</div>
+    <div class="small mb-2">คาบของ${esc(who)}: <b>${esc(formatThaiDateFull(SUB.date))} คาบ ${n.p} ${esc(classLabel(n.l))} ${esc(lessonName(n.l))}</b><br>
+      ครูคู่แลกสอนคาบนี้แทน${esc(who)} แล้ว${esc(who)}ไปสอนคาบของครูคนนั้นคืน (แบบฟอร์มหน้า 2 "การแลกเปลี่ยนคาบสอน")</div>
     <label class="form-label small mb-0">ครูคู่แลก <span class="text-muted">(ว่างคาบนี้)</span></label>
     <select id="swB" class="form-select form-select-sm mb-2" onchange="fillSwapSlots()">
       <option value="">— เลือกครู —</option>${cands.map(c => `<option value="${c.t.id}">${esc(tShort(c.t.id))}${c.why.length ? ' · ' + esc(c.why.join(' · ')) : ''}</option>`).join('')}</select>
-    <label class="form-label small mb-0">คาบของครูคู่แลกที่คุณจะไปสอนคืน <span class="text-muted">(คุณว่าง · ภายใน ${esc(shortDate(SWAP.to))})</span></label>
+    <label class="form-label small mb-0">คาบของครูคู่แลกที่${esc(who)}จะไปสอนคืน <span class="text-muted">(${esc(who)}ว่าง · ${esc(shortDate(SWAP.from))} – ${esc(shortDate(SWAP.to))})</span></label>
     <select id="swSlot" class="form-select form-select-sm mb-2" disabled><option value="">— เลือกครูคู่แลกก่อน —</option></select>
-    <div class="small text-muted">ส่งแล้วครูคู่แลกต้องกด <b>ยืนยัน</b> ในแท็บสอนแทน จากนั้นผู้จัดสอนแทนอนุมัติ · ยกเลิกเองได้ก่อนอนุมัติ</div>
+    <div class="small text-muted">${mgr ? 'บันทึกการแลกที่ครูตกลงกันแล้ว — <b>อนุมัติทันที</b> (ไม่ต้องรอครูคู่แลกยืนยัน)'
+      : 'ส่งแล้วครูคู่แลกต้องกด <b>ยืนยัน</b> ในแท็บสอนแทน จากนั้นผู้จัดสอนแทนอนุมัติ · ยกเลิกเองได้ก่อนอนุมัติ'}</div>
     ${cands.length ? '' : '<div class="alert alert-warning small py-1 mt-2 mb-0">ไม่มีครูที่ว่างคาบนี้</div>'}`,
     `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
-     <button class="btn btn-primary btn-sm" onclick="sendSwap()"><i class="bi bi-send"></i> ส่งคำขอแลก</button>`);
+     <button class="btn btn-primary btn-sm" onclick="sendSwap()"><i class="bi bi-${mgr ? 'check-lg' : 'send'}"></i> ${mgr ? 'บันทึกการแลก' : 'ส่งคำขอแลก'}</button>`);
 }
 // คาบสอนของครู B ที่ฉันว่าง: ไม่มีสอน ไม่ได้ลา ไม่ได้สอนแทน/สอนคืนที่อื่น และยังไม่ถูกใช้แลก
 function swapSlots(bid) {
-  const me = T.me, R = SWAP.data, out = [];
+  const me = SWAP.a, R = SWAP.data, out = [];
   const absent = (d, p) => R.absences.some(a => a.teacher_id === me && a.date_from <= d && d <= a.date_to && (!a.periods.length || a.periods.includes(p)));
-  for (let d = todayLocal(); d <= SWAP.to; d = addDays(d, 1)) {
+  for (let d = SWAP.from; d <= SWAP.to; d = addDays(d, 1)) {
     const wd = wdOf(d);
     if (wd < 1 || wd > 5 || !inTerm(d) || R.holidays.some(h => h.date === d && h.type === 'holiday')) continue;
     periodsOf().forEach(({ no: p }) => {
@@ -309,9 +315,10 @@ async function sendSwap() {
   const bid = +el('swB').value, v = el('swSlot').value;
   if (!bid || !v) { alert('เลือกครูคู่แลก และคาบที่จะไปสอนคืน'); return; }
   const [sd, sp, sl] = v.split('|'), n = SWAP.n;
-  const r = await subPost('/api/tt/subs/swap', { ...subKey(n), sub_id: bid, swap_date: sd, swap_period: +sp, swap_lesson_id: +sl },
-    `ส่งคำขอแลกคาบแล้ว — รอ${tShort(bid)}ยืนยัน`);
-  if (r) edModal.hide();
+  const r = await subPost('/api/tt/subs/swap', { ...subKey(n), sub_id: bid, swap_date: sd, swap_period: +sp, swap_lesson_id: +sl,
+    ...(SWAP.mgr ? { absent_id: SWAP.a } : {}) },
+    SWAP.mgr ? `บันทึกการแลกคาบแล้ว (อนุมัติ) — ${tShort(SWAP.a)}สอนคืน ${shortDate(sd)} คาบ ${sp}` : `ส่งคำขอแลกคาบแล้ว — รอ${tShort(bid)}ยืนยัน`);
+  if (r) { edModal.hide(); if (SWAP.mgr) { await loadSubs(); renderSubsBody(); } }
 }
 async function answerSwap(key, accept) {
   const n = needsOn(SUB.date).find(x => x.key === key), s = savedOn(SUB.date).find(x => `${x.period}-${x.lesson_id}` === key);
@@ -411,6 +418,7 @@ function renderSubsBody() {
           <option value="none" ${s && !s.sub_id ? 'selected' : ''}>✗ ไม่มีครูแทน (มอบงาน/รวมห้อง)</option>
           <optgroup label="ว่าง — เรียงตามความเหมาะสม">${cands.filter(c => c.ok).map(opt).join('')}</optgroup>
           <optgroup label="ไม่ว่าง">${cands.filter(c => !c.ok).map(opt).join('')}</optgroup></select>
+        ${!s ? `<button class="btn btn-sm btn-link p-0 mt-1 text-decoration-none" onclick="openSwapModal('${n.key}')">🔁 แลกคาบ</button>` : ''}
         ${s && !notFinal(s) ? (isSwap(s) ? swapInfo : '') + `<input class="form-control form-control-sm mt-1" placeholder="หมายเหตุ เช่น ให้ทำใบงาน หน้า 12" value="${esc(s.note)}" onchange="setSubNote('${n.key}', this.value)">` : ''}`;
     } else if (!s) {                                             // ยังไม่มีใครรับ → ครูที่ว่างกดรับได้
       const me = canPick ? candidatesFor(n, date, assigned, counts).find(c => c.t.id === T.me) : null;
