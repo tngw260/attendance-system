@@ -36,7 +36,8 @@ PAGE_W, PAGE_H, MARGIN = 11906, 16838, 720
 W = PAGE_W - 2 * MARGIN                             # 10466
 AVAIL_PT = (PAGE_H - 2 * MARGIN) / 20 - 30           # เผื่อ ~1 ซม. (Word วางบรรทัดหลวมกว่าที่ประมาณเล็กน้อย)
 LINE = 1.34                                         # บรรทัด single ของ TH SarabunPSK ≈ 1.34 เท่าตัวอักษร (วัดจากแบบฟอร์ม)
-TOP_PT = 26                                         # ย่อหน้าว่างใต้ครุฑ (ครุฑสูง 1.5 ซม. ทับครึ่งบรรทัด "บันทึกข้อความ")
+TOP_PT = 6                                          # ย่อหน้าว่างที่ยึดครุฑ (ครุฑสูง 1.5 ซม. อยู่ระดับเดียวกับ "บันทึกข้อความ")
+TITLE_PT = 29                                       # "บันทึกข้อความ" 29pt ตัวหนา ตามระเบียบงานสารบรรณ (ครูสั่งให้ใหญ่ขึ้น 29 ต.ค. 69 · ไม่ย่อตาม k)
 INFO_TAB = 1418                                     # ส่วนราชการ / เรื่อง / เรียน
 DATE_IND = 5130                                     # บรรทัดวันที่เริ่มกลางหน้า
 FIRST_IND = 722                                     # ย่อหน้า "ด้วย…"
@@ -210,7 +211,7 @@ def layout(m):
 
     def height(k):
         head, body, sign = 16 * k, 15 * k, 14 * k
-        h = TOP_PT + head * LINE * 7                                  # บันทึกข้อความ ว่าง วันที่ ว่าง ส่วนราชการ เรื่อง เรียน
+        h = TOP_PT + TITLE_PT * LINE + head * LINE * 6                # บันทึกข้อความ | ว่าง วันที่ ว่าง ส่วนราชการ เรื่อง เรียน
         h += body * LINE * math.ceil(para_em * 1.05 / (W / (20 * body)) + 0.15)       # ตัดคำไทยเหลือท้ายบรรทัด ~5%
         h += body * LINE * nlines
         left = body * LINE + len(m['signers']) * 3 * sign * LINE
@@ -302,7 +303,7 @@ def memo_xml(m, n, boss):
     h, b, s, rs = sz['head'], sz['body'], sz['sign'], sz['row']
     md = m['memo_date']
     x = _p(_garuda(n), exact=TOP_PT * 20, brk=n > 1)
-    x += _p(_r('บันทึกข้อความ', h, True), 'center')
+    x += _p(_r('บันทึกข้อความ', TITLE_PT, True), 'center')
     x += _p(_r(' ', h))
     x += _p(_r('วันที่ ', h) + _r(f" {md['day']} ", h, u=True) + _r(' เดือน ', h) + _r(f" {md['month']} ", h, u=True)
             + _r(' พ.ศ. ', h) + _r(f" {md['year']} ", h, u=True), ind=f'<w:ind w:left="{DATE_IND}"/>')
