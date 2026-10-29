@@ -1960,3 +1960,48 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     for p, lid in keys)
             subs = day_subs(con, d)
         return jsonify(success=True, approved=n, subs=subs)
+
+    # ── รีเซตสถิติสอนแทน (แอดมิน) — ล้างข้อมูลทดลองของภาคเรียน เช่น ก่อนเปิดเทอม / หลังสาธิตในที่ประชุม ──
+    def reset_scope(con, term_id):
+        """บันทึกครูไม่มาที่เริ่มในช่วงภาคเรียน + การจัดครูแทนในช่วงภาคเรียน → (ช่วงวันที่, absences, จำนวนคาบ) หรือ None
+        บันทึกไม่มาที่เริ่มก่อนเปิดภาคเรียน (เช่น ย้ายออก ไม่มีกำหนด) ไม่ลบ"""
+        t = con.execute('SELECT name FROM tt_terms WHERE id=?', (term_id,)).fetchone()
+        f, e = term_dates(t['name'], get_settings()) if t else ('', '')
+        if not f:
+            return None
+        names = {r['id']: r['name'] for r in con.execute('SELECT id, name FROM tt_teachers')}
+        absences = [dict(id=r['id'], teacher=names.get(r['teacher_id'], ''), date_from=r['date_from'], date_to=r['date_to'],
+                         reason=r['reason']) for r in con.execute(
+            'SELECT * FROM tt_absences WHERE date_from BETWEEN ? AND ? ORDER BY date_from, id', (f, e))]
+        n = con.execute('SELECT COUNT(*) FROM tt_subs WHERE date BETWEEN ? AND ?', (f, e)).fetchone()[0]
+        return (f, e), absences, n
+
+    @app.get('/api/tt/subs/reset')
+    @admin_required
+    def tt_subs_reset_preview():
+        try:
+            tid = int(request.args.get('term_id', ''))
+        except ValueError:
+            return jsonify(success=False, message='ไม่พบภาคเรียน'), 400
+        with get_db() as con:
+            sc = reset_scope(con, tid)
+        if not sc:
+            return jsonify(success=False, message='ภาคเรียนนี้ไม่มีช่วงวันที่ (ตั้งที่หน้าตั้งค่า)'), 400
+        (f, e), absences, n = sc
+        return jsonify(date_from=f, date_to=e, absences=absences, subs=n)
+
+    @app.post('/api/tt/subs/reset')
+    @admin_required
+    def tt_subs_reset():
+        try:
+            tid = int((request.get_json(silent=True) or {}).get('term_id') or 0)
+        except (TypeError, ValueError):
+            tid = 0
+        with get_db() as con:
+            sc = reset_scope(con, tid)
+            if not sc:
+                return jsonify(success=False, message='ไม่พบภาคเรียน'), 400
+            (f, e), absences, n = sc
+            con.execute('DELETE FROM tt_subs WHERE date BETWEEN ? AND ?', (f, e))
+            con.execute('DELETE FROM tt_absences WHERE date_from BETWEEN ? AND ?', (f, e))
+        return jsonify(success=True, absences=len(absences), subs=n)

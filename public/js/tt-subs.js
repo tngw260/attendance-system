@@ -284,6 +284,7 @@ function renderSubsBody() {
     ${!inTerm(date) ? `<span class="badge bg-secondary">ปิดภาคเรียน (ภาคเรียน ${esc(T.term.name)} ${shortDate(T.term.start_date)} – ${shortDate(T.term.end_date)})</span>` : ''}
     <span class="ms-auto d-flex gap-1">
       ${T.is_admin ? `<button class="btn btn-sm btn-outline-secondary" onclick="openEditorsModal()" title="ตั้งว่าใครจัด/อนุมัติสอนแทนได้"><i class="bi bi-person-gear"></i> สิทธิ์</button>` : ''}
+      ${T.is_admin ? `<button class="btn btn-sm btn-outline-danger" onclick="openResetModal()" title="ล้างข้อมูลสอนแทนทดลองของภาคเรียนนี้ เริ่มนับสถิติใหม่"><i class="bi bi-arrow-counterclockwise"></i> รีเซตสถิติ</button>` : ''}
       <a class="btn btn-sm btn-outline-secondary" href="/subs-guide.html" target="_blank" rel="noopener"><i class="bi bi-book"></i> คู่มือ</a></span>
   </div></div><div class="row g-2">`;
 
@@ -575,6 +576,30 @@ async function copyLine() {
   catch (e) { ta.select(); document.execCommand('copy'); }          // เบราว์เซอร์ในแอป LINE บางรุ่นไม่ให้ใช้ clipboard API
   el('lineOpen').classList.remove('d-none');
   toastEd('ก๊อปแล้ว — วางในกลุ่มไลน์ได้เลย');
+}
+
+/* ── รีเซตสถิติสอนแทน (แอดมิน): ลบบันทึกครูไม่มา + การจัดครูแทนของภาคเรียนที่เปิดอยู่ ใช้ล้างข้อมูลทดลอง ── */
+async function openResetModal() {
+  let r;
+  try { r = await apiFetch(`/api/tt/subs/reset?term_id=${T.term.id}`); } catch (e) { alert(e.message); return; }
+  const list = r.absences.map(a => `<li>${esc('ครู' + a.teacher)} — ${esc(a.reason || 'ไม่มา')} · ${esc(spanLabel(a))}</li>`).join('');
+  showModal('<i class="bi bi-arrow-counterclockwise"></i> รีเซตสถิติสอนแทน', `
+    <div class="small mb-2">ลบข้อมูลสอนแทนทั้งหมดของภาคเรียน <b>${esc(T.term.name)}</b> (${shortDate(r.date_from)} – ${shortDate(r.date_to)})
+      แล้วสถิติ "จำนวนคาบสอนแทน" จะเริ่มนับใหม่ตั้งแต่ต้นภาคเรียน — ใช้ล้างข้อมูลทดลอง เช่น ก่อนเปิดเทอม หรือหลังสาธิตในที่ประชุม</div>
+    <div class="fw-bold">จะลบ: บันทึกครูไม่มา / ฝากสอน ${r.absences.length} รายการ · การจัดครูแทน ${r.subs} คาบ</div>
+    ${list ? `<ul class="small mb-2" style="max-height:35vh; overflow:auto">${list}</ul>` : '<div class="small text-muted mb-2">— ไม่มีบันทึกครูไม่มา —</div>'}
+    <div class="alert alert-warning small py-1 mb-0">ลบแล้วกู้คืนไม่ได้ · บันทึกที่เริ่มก่อนเปิดภาคเรียน (เช่น ย้ายออก ไม่มีกำหนด) ไม่ถูกลบ</div>`,
+    `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+     <button class="btn btn-danger btn-sm" onclick="doReset()" ${r.absences.length || r.subs ? '' : 'disabled'}><i class="bi bi-trash"></i> ลบทั้งหมด</button>`);
+}
+async function doReset() {
+  if (!confirm('ยืนยันลบข้อมูลสอนแทนทั้งหมดของภาคเรียน ' + T.term.name + ' ?')) return;
+  try {
+    const r = await apiFetch('/api/tt/subs/reset', { method: 'POST', body: JSON.stringify({ term_id: T.term.id }) });
+    edModal.hide();
+    toastEd(`รีเซตแล้ว — ลบบันทึกครูไม่มา ${r.absences} รายการ · การจัดครูแทน ${r.subs} คาบ`);
+    await renderSubs();
+  } catch (e) { alert(e.message); }
 }
 
 /* ── ครูเปิดตารางตัวเอง: เตือนคาบสอนแทน 7 วันข้างหน้า ── */
