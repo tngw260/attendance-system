@@ -125,9 +125,11 @@ const itemOf = (n, sid, note) => ({ period: n.p, lesson_id: n.l.id, absent_id: n
 /* ── โหลด / บันทึก ── */
 async function loadSubs() {
   // นับความถี่การสอนแทนตั้งแต่ต้นภาคเรียนนี้ (ทำให้กระจายงานเท่ากันทั้งเทอม)
-  SUB.from = T.term.start_date && T.term.start_date <= SUB.date ? T.term.start_date : termStart(SUB.date);
+  // ช่วงปิดเทอม (ก่อนเปิดภาคเรียนของตารางที่เปิดอยู่) = นับของภาคเรียนที่กำลังจะเปิด ไม่ใช่เทอมที่ผ่านมา
+  SUB.from = T.term.start_date || termStart(SUB.date);
+  SUB.lo = SUB.from < SUB.date ? SUB.from : SUB.date;           // โหลดข้อมูลครอบวันที่ที่เลือกด้วย
   SUB.to = addDays(SUB.date, 14);
-  SUB.data = await apiFetch(`/api/tt/subs?from=${SUB.from}&to=${SUB.to}`);
+  SUB.data = await apiFetch(`/api/tt/subs?from=${SUB.lo}&to=${SUB.to}`);
 }
 
 async function saveSubs(body) {
@@ -333,7 +335,7 @@ async function gotoDate(d) {
   SUB.date = d;
   const want = termAt(d);                                    // ข้ามไปวันของอีกเทอม → ใช้ตารางเทอมนั้น
   if (want && want.id !== T.term.id) { await loadTerm(want.id); return; }
-  if (d < SUB.from || d > SUB.to) { await renderSubs(); return; }
+  if (d < SUB.lo || d > SUB.to) { await renderSubs(); return; }
   renderSubsBody();
 }
 
