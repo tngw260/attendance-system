@@ -10,6 +10,9 @@
                ครูฝากสอนเองได้ (created_by = ผู้บันทึก) เฉพาะของตัวเอง สาเหตุ ลาป่วย / ลากิจ / ไปราชการ
   tt_subs      การจัดครูสอนแทน รายวัน-คาบ-รายการ (เก็บรหัสวิชา/ชั้นไว้ด้วย ประวัติไม่หายเมื่อแก้ตาราง)
                status pending = ครูกดรับสอนแทนเอง รอผู้จัดสอนแทนอนุมัติ · approved = จัด/อนุมัติแล้ว
+               kind swap = แลกคาบ (แบบฟอร์มหน้า 2): ครูที่ไม่มา (absent_id) ขอให้ครู B (sub_id) สอนคาบนี้ แล้วไปสอนคาบ
+               swap_date/swap_period/swap_lesson_id ของ B คืน · status offer = รอ B ยืนยัน → pending → approved
+               ไม่นับเป็นสถิติสอนแทน (ได้คืนแล้ว)
   tt_editors   ผู้ช่วยจัดตาราง (เช่น ฝ่ายวิชาการ) — ไม่ต้องเป็นแอดมินทั้งระบบ
   tt_sub_editors ผู้จัดสอนแทน — บันทึกครูไม่มาแทนคนอื่น จัด/อนุมัติครูสอนแทน แต่แก้ตารางสอนไม่ได้
   tt_signatures ภาพลายเซ็นผู้ลงนามท้ายตาราง (หัวหน้าวิชาการ / รอง ผอ. / ผอ.) เก็บในฐานข้อมูล ไม่อยู่ใน public/
@@ -95,6 +98,12 @@ CREATE TABLE IF NOT EXISTS tt_subs (
     status      TEXT DEFAULT 'approved',
     approved_by TEXT DEFAULT '',
     requested_at TEXT,
+    kind        TEXT DEFAULT 'sub',
+    swap_date   TEXT,
+    swap_period INTEGER,
+    swap_lesson_id INTEGER,
+    swap_subject TEXT DEFAULT '',
+    swap_class_label TEXT DEFAULT '',
     UNIQUE(date, period, lesson_id)
 );
 CREATE TABLE IF NOT EXISTS tt_editors (
@@ -178,6 +187,9 @@ def day_summary(con, date, settings):
     times = {p['no']: p for p in cfg.get('periods', [])}
     one_room = all(c.endswith('/1') for c in cfg.get('classes', []))
     subs = {(s['period'], s['lesson_id']): s for s in con.execute('SELECT * FROM tt_subs WHERE date=?', (date,))}
+    # คาบที่ครูอีกคนมาสอนคืนจากการแลกคาบ (เช่น ครู B ไม่มาวันนั้น แต่ครู A สอนคาบนี้คืนให้อยู่แล้ว)
+    backs = {(r['swap_period'], r['swap_lesson_id']): r for r in con.execute(
+        "SELECT * FROM tt_subs WHERE kind='swap' AND swap_date=? AND status<>'offer'", (date,))}
 
     def away(tid, p):
         return any(a['teacher_id'] == tid and (not a['periods'] or p in a['periods']) for a in absences)
@@ -190,15 +202,18 @@ def day_summary(con, date, settings):
         if not gone or not classes or len(gone) < len(tids):
             continue
         s = subs.get((p, l['id']))
-        pending = bool(s and s['status'] == 'pending')
+        bk = backs.get((p, l['id'])) if not s else None
+        pending = bool(s and s['status'] in ('pending', 'offer')) or bool(bk and bk['status'] == 'pending')
+        who = s['sub_id'] if s else bk['absent_id'] if bk else None
         out['needs'].append(dict(
             period=p, time=f"{times[p]['start']}-{times[p]['end']}" if p in times else '', lesson_id=l['id'],
             subject=l['code'] or l['title'],
             class_label=(s['class_label'] if s and s['class_label'] else
                          ', '.join('ม.' + (c.split('/')[0] if one_room else c) for c in classes)),
-            absent=[names.get(t, '') for t in gone], absent_ids=gone, decided=bool(s) and not pending,
-            status='' if not s else 'pending' if pending else 'approved',     # '' = ยังไม่มีใครรับ (ครูกดรับได้)
-            sub=names.get(s['sub_id'], '') if s and s['sub_id'] else '', note=s['note'] if s else ''))
+            absent=[names.get(t, '') for t in gone], absent_ids=gone, decided=bool(s or bk) and not pending,
+            status='' if not (s or bk) else 'pending' if pending else 'approved',     # '' = ยังไม่มีใครรับ (ครูกดรับได้)
+            swap=bool(s and s['kind'] == 'swap') or bool(bk),
+            sub=names.get(who, '') if who else '', note=s['note'] if s else 'แลกคาบ (สอนคืน)' if bk else ''))
     return out
 
 # ชื่อกลุ่มสาระจากอักษรนำรหัสวิชา
@@ -315,7 +330,9 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     with get_db() as con:
         con.executescript(SCHEMA)
         have = {r['name'] for r in con.execute('PRAGMA table_info(tt_subs)')}
-        for col, ddl in (('status', "TEXT DEFAULT 'approved'"), ('approved_by', "TEXT DEFAULT ''"), ('requested_at', 'TEXT')):
+        for col, ddl in (('status', "TEXT DEFAULT 'approved'"), ('approved_by', "TEXT DEFAULT ''"), ('requested_at', 'TEXT'),
+                         ('kind', "TEXT DEFAULT 'sub'"), ('swap_date', 'TEXT'), ('swap_period', 'INTEGER'),
+                         ('swap_lesson_id', 'INTEGER'), ('swap_subject', "TEXT DEFAULT ''"), ('swap_class_label', "TEXT DEFAULT ''")):
             if col not in have:                  # ฐานข้อมูลเดิมก่อนมีระบบครูกดรับสอนแทน → ที่จัดไว้แล้วถือว่าอนุมัติ
                 con.execute(f'ALTER TABLE tt_subs ADD COLUMN {col} {ddl}')
         if 'created_by' not in {r['name'] for r in con.execute('PRAGMA table_info(tt_absences)')}:
@@ -1695,11 +1712,14 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         return n
 
     def drop_duties_of(con, a):
-        """ครูที่ไม่มา ไปสอนแทนห้องอื่นไม่ได้ → ลบคาบที่ครูคนนี้รับสอนแทนไว้ (รออนุมัติ/อนุมัติแล้ว) ในช่วงที่ไม่มา"""
+        """ครูที่ไม่มา ไปสอนแทนห้องอื่นไม่ได้ → ลบคาบที่ครูคนนี้รับสอนแทนไว้ (รออนุมัติ/อนุมัติแล้ว) ในช่วงที่ไม่มา
+        + การแลกคาบที่ครูคนนี้ต้องไปสอนคืนในช่วงที่ไม่มา (แลกไม่ได้แล้ว คาบเดิมกลับมาว่าง)"""
         ps = set(jl(a['periods'], []))
         rows = con.execute('SELECT id, period FROM tt_subs WHERE sub_id=? AND date BETWEEN ? AND ?',
                            (a['teacher_id'], a['date_from'], a['date_to'])).fetchall()
-        gone = [r['id'] for r in rows if not ps or r['period'] in ps]
+        rows += con.execute("""SELECT id, swap_period AS period FROM tt_subs WHERE kind='swap' AND absent_id=?
+                               AND swap_date BETWEEN ? AND ?""", (a['teacher_id'], a['date_from'], a['date_to'])).fetchall()
+        gone = {r['id'] for r in rows if not ps or r['period'] in ps}
         for i in gone:
             con.execute('DELETE FROM tt_subs WHERE id=?', (i,))
         return len(gone)
@@ -1716,8 +1736,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         with get_db() as con:
             absences = [absence_dict(r, u, editor) for r in con.execute(
                 'SELECT * FROM tt_absences WHERE date_from<=? AND date_to>=? ORDER BY date_from, id', (t, f))]
-            subs = [dict(r) for r in con.execute(
-                'SELECT * FROM tt_subs WHERE date BETWEEN ? AND ? ORDER BY date, period', (f, t))]
+            subs = [dict(r) for r in con.execute("""SELECT * FROM tt_subs WHERE date BETWEEN ? AND ?
+                                                     OR (kind='swap' AND swap_date BETWEEN ? AND ?) ORDER BY date, period""", (f, t, f, t))]
             holidays = [dict(r) for r in con.execute(
                 'SELECT date, name, type FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date', (f, t))]
             # ชื่อครูทุกคน — ครูที่ย้ายออกแล้วไม่อยู่ในตารางเทอมนี้ แต่ยังมีบันทึกไม่มา/สอนแทนเก่า
@@ -1737,17 +1757,29 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         s = get_settings()
         with get_db() as con:
             me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (u['id'],)).fetchone()
-            mine = []
+            mine, swap_offers = [], []
             if me:
                 names = {r['id']: r['name'] for r in con.execute('SELECT id, name FROM tt_teachers')}
+                def slot_time(day, p):
+                    term = term_for_date(con, day, s)
+                    t = {x['no']: x for x in jl(term['config'], {}).get('periods', [])}.get(p) if term else None
+                    return f"{t['start']}-{t['end']}" if t else ''
                 for r in con.execute('SELECT * FROM tt_subs WHERE sub_id=? AND date IN (?,?) ORDER BY date, period',
                                      (me['id'], d, nxt)).fetchall():
-                    term = term_for_date(con, r['date'], s)
-                    times = {p['no']: p for p in jl(term['config'], {}).get('periods', [])} if term else {}
-                    t = times.get(r['period'])
-                    mine.append(dict(date=r['date'], period=r['period'], time=f"{t['start']}-{t['end']}" if t else '',
+                    mine.append(dict(date=r['date'], period=r['period'], time=slot_time(r['date'], r['period']),
                                      class_label=r['class_label'], subject=r['subject'], note=r['note'],
-                                     absent=names.get(r['absent_id'], ''), status=r['status']))
+                                     absent=names.get(r['absent_id'], ''), status=r['status'], kind=r['kind'] or 'sub'))
+                # แลกคาบ: วันที่ฉันต้องไปสอนคาบของครูคู่แลกคืน (หลังครูคู่แลกยืนยันแล้ว)
+                for r in con.execute("""SELECT * FROM tt_subs WHERE kind='swap' AND absent_id=? AND status<>'offer'
+                                        AND swap_date IN (?,?)""", (me['id'], d, nxt)).fetchall():
+                    mine.append(dict(date=r['swap_date'], period=r['swap_period'], time=slot_time(r['swap_date'], r['swap_period']),
+                                     class_label=r['swap_class_label'], subject=r['swap_subject'], note='สอนคืน (แลกคาบ)',
+                                     absent=names.get(r['sub_id'], ''), status=r['status'], kind='payback'))
+                mine.sort(key=lambda x: (x['date'], x['period']))
+                swap_offers = [dict(date=r['date'], period=r['period'], subject=r['subject'], class_label=r['class_label'],
+                                    absent=names.get(r['absent_id'], '')) for r in con.execute(
+                    "SELECT * FROM tt_subs WHERE kind='swap' AND status='offer' AND sub_id=? AND date>=? ORDER BY date, period",
+                    (me['id'], d))]
             summary = day_summary(con, d, s) if can_manage_subs(u) else None
             open_needs = []
             if me:
@@ -1755,7 +1787,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     sm = summary if summary and day == d else day_summary(con, day, s)
                     if sm['term'] and published(con, sm['term']['id']):
                         open_needs += [day for n in sm['needs'] if not n['status']]
-        return jsonify(date=d, next=nxt, mine=mine, summary=summary,
+        return jsonify(date=d, next=nxt, mine=mine, summary=summary, swap_offers=swap_offers,
                        open_today=open_needs.count(d), open_next=open_needs.count(nxt))
 
     @app.post('/api/tt/absences')
@@ -1856,9 +1888,14 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                                VALUES (:date, :period, :lesson_id, :absent_id, :sub_id, :subject, :class_label, :note, datetime('now','localtime'),
                                        'approved', :by)
                                ON CONFLICT(date, period, lesson_id) DO UPDATE SET absent_id=excluded.absent_id,
-                                 sub_id=excluded.sub_id, subject=excluded.subject, class_label=excluded.class_label,
+                                 subject=excluded.subject, class_label=excluded.class_label,
                                  note=excluded.note, updated_at=excluded.updated_at, status='approved',
-                                 approved_by=excluded.approved_by""", dict(i, date=d, by=by))
+                                 approved_by=excluded.approved_by,
+                                 kind=CASE WHEN tt_subs.sub_id IS excluded.sub_id THEN tt_subs.kind ELSE 'sub' END,
+                                 swap_date=CASE WHEN tt_subs.sub_id IS excluded.sub_id THEN tt_subs.swap_date END,
+                                 swap_period=CASE WHEN tt_subs.sub_id IS excluded.sub_id THEN tt_subs.swap_period END,
+                                 swap_lesson_id=CASE WHEN tt_subs.sub_id IS excluded.sub_id THEN tt_subs.swap_lesson_id END,
+                                 sub_id=excluded.sub_id""", dict(i, date=d, by=by))
             subs = [dict(r) for r in con.execute('SELECT * FROM tt_subs WHERE date=? ORDER BY period', (d,))]
         return jsonify(success=True, subs=subs)
 
@@ -1874,6 +1911,26 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         except (TypeError, ValueError):
             return None
         return (d, p, lid) if DATE_RE.match(d) else None
+
+    def teacher_busy(con, tid, d, p, skip_id=None):
+        """ครู tid ไม่ว่างวันที่ d คาบ p → เหตุผล หรือ None (มีสอน / ไม่มา / สอนแทนห้องอื่น / สอนคืนจากการแลกคาบ)"""
+        term = term_for_date(con, d, get_settings())
+        wd = datetime.date.fromisoformat(d).isoweekday()
+        if term:
+            for r in con.execute("""SELECT l.code, l.title, l.teacher_ids FROM tt_lessons l JOIN tt_slots s ON s.lesson_id=l.id
+                                    WHERE l.term_id=? AND s.day=? AND s.period=?""", (term['id'], wd, p)):
+                if tid in jl(r['teacher_ids'], []):
+                    return f"มีสอน {r['code'] or r['title']}"
+        for a in con.execute('SELECT periods FROM tt_absences WHERE teacher_id=? AND date_from<=? AND date_to>=?', (tid, d, d)):
+            ps = jl(a['periods'], [])
+            if not ps or p in ps:
+                return 'มีบันทึกไม่มา'
+        if con.execute('SELECT 1 FROM tt_subs WHERE date=? AND period=? AND sub_id=? AND id IS NOT ?', (d, p, tid, skip_id)).fetchone():
+            return 'สอนแทนห้องอื่นแล้ว'
+        if con.execute("SELECT 1 FROM tt_subs WHERE kind='swap' AND swap_date=? AND swap_period=? AND absent_id=? AND id IS NOT ?",
+                       (d, p, tid, skip_id)).fetchone():
+            return 'สอนคืนจากการแลกคาบ'
+        return None
 
     def day_subs(con, d):
         return [dict(r) for r in con.execute('SELECT * FROM tt_subs WHERE date=? ORDER BY period', (d,))]
@@ -1903,17 +1960,12 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             if need['status']:
                 who = f"ครู{need['sub'].split(' ')[0]}" if need['sub'] else 'ผู้จัดตาราง (ไม่ใช้ครูแทน)'
                 return jsonify(success=False, message=f'คาบนี้มีผู้รับแล้ว: {who}', subs=day_subs(con, d)), 409
-            if me in need['absent_ids'] or any(a['teacher_id'] == me and (not a['periods'] or p in a['periods'])
-                                               for a in sm['absences']):
+            if me in need['absent_ids']:
                 return jsonify(success=False, message='คุณมีบันทึกไม่มาในคาบนี้'), 409
-            wd = datetime.date.fromisoformat(d).isoweekday()
-            own = [r for r in con.execute("""SELECT l.code, l.title, l.teacher_ids FROM tt_lessons l JOIN tt_slots s ON s.lesson_id=l.id
-                                             WHERE l.term_id=? AND s.day=? AND s.period=?""", (sm['term']['id'], wd, p))
-                   if me in jl(r['teacher_ids'], [])]
-            if own:
-                return jsonify(success=False, message=f"คุณมีสอน {own[0]['code'] or own[0]['title']} ในคาบนี้"), 409
-            if con.execute('SELECT 1 FROM tt_subs WHERE date=? AND period=? AND sub_id=?', (d, p, me)).fetchone():
-                return jsonify(success=False, message='คุณรับสอนแทนห้องอื่นในคาบนี้แล้ว'), 409
+            busy = teacher_busy(con, me, d, p)
+            if busy:
+                msg = {'มีบันทึกไม่มา': 'คุณมีบันทึกไม่มาในคาบนี้', 'สอนแทนห้องอื่นแล้ว': 'คุณรับสอนแทนห้องอื่นในคาบนี้แล้ว'}
+                return jsonify(success=False, message=msg.get(busy) or f'คุณ{busy}ในคาบนี้'), 409
             cur = con.execute("""INSERT INTO tt_subs (date, period, lesson_id, absent_id, sub_id, subject, class_label, note,
                                                       status, requested_at, updated_at)
                                   VALUES (?,?,?,?,?,?,?,'','pending',datetime('now','localtime'),datetime('now','localtime'))
@@ -1928,18 +1980,117 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     @app.post('/api/tt/subs/withdraw')
     @login_required
     def tt_sub_withdraw():
-        """ครูยกเลิกการกดรับของตัวเอง (เฉพาะที่ยังรออนุมัติ)"""
+        """ครูยกเลิกการกดรับของตัวเอง (เฉพาะที่ยังรออนุมัติ) · ครูที่ขอแลกคาบยกเลิกคำขอแลกของตัวเองได้ก่อนอนุมัติ"""
         tg = sub_target(request.get_json() or {})
         if not tg:
             return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
         with get_db() as con:
             me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (current_user()['id'],)).fetchone()
-            n = con.execute("""DELETE FROM tt_subs WHERE date=? AND period=? AND lesson_id=? AND sub_id=? AND status='pending'""",
-                            (*tg, me['id'] if me else -1)).rowcount
+            mid = me['id'] if me else -1
+            n = con.execute("""DELETE FROM tt_subs WHERE date=? AND period=? AND lesson_id=?
+                               AND ((sub_id=? AND status='pending') OR (kind='swap' AND absent_id=? AND status IN ('offer', 'pending')))""",
+                            (*tg, mid, mid)).rowcount
             subs = day_subs(con, tg[0])
         if not n:
             return jsonify(success=False, message='ไม่พบคำขอที่ยกเลิกได้ (อาจได้รับอนุมัติแล้ว — แจ้งผู้จัดตาราง)', subs=subs), 404
         return jsonify(success=True, subs=subs)
+
+    # ── แลกคาบ: ครูที่ไม่มาเลือกครูคู่แลก + คาบที่จะสอนคืน → ครูคู่แลกยืนยัน → ผู้จัดสอนแทนอนุมัติ ─────
+    @app.post('/api/tt/subs/swap')
+    @login_required
+    def tt_sub_swap():
+        """{date, period, lesson_id, sub_id, swap_date, swap_period, swap_lesson_id} — คาบนี้ของฉัน (ครูที่ไม่มา) ให้ครู sub_id สอน
+        แลกกับคาบ swap_* ของครูคนนั้นที่ฉันจะไปสอนคืน · ตอบ 400/409 พร้อมเหตุผล (ไม่ใช้ 403 — apiFetch ซ่อนข้อความ)"""
+        b = request.get_json() or {}
+        tg = sub_target(b)
+        try:
+            sid, sp, sl = int(b.get('sub_id')), int(b.get('swap_period')), int(b.get('swap_lesson_id'))
+        except (TypeError, ValueError):
+            tg = None
+        sd = str(b.get('swap_date') or '')
+        if not tg or not DATE_RE.match(sd):
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        d, p, lid = tg
+        today = datetime.date.today().isoformat()
+        if d < today or sd < today:
+            return jsonify(success=False, message='แลกคาบย้อนหลังไม่ได้'), 400
+        if (sd, sp) == (d, p):
+            return jsonify(success=False, message='คาบที่สอนคืนต้องเป็นคนละคาบกัน'), 400
+        s_ = get_settings()
+        with get_db() as con:
+            me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (current_user()['id'],)).fetchone()
+            if not me:
+                return jsonify(success=False, message='บัญชีนี้ยังไม่ได้ผูกกับชื่อครูในตารางสอน (แจ้งแอดมิน)'), 400
+            me = me['id']
+            names = {r['id']: r['name'] for r in con.execute('SELECT id, name FROM tt_teachers')}
+            if sid == me or sid not in names:
+                return jsonify(success=False, message='เลือกครูคู่แลก'), 400
+            sm = day_summary(con, d, s_)
+            need = next((n for n in sm['needs'] if n['period'] == p and n['lesson_id'] == lid), None)
+            if not need or not published(con, sm['term']['id']):
+                return jsonify(success=False, message='คาบนี้ไม่ต้องมีครูสอนแทนแล้ว'), 404
+            if me not in need['absent_ids']:
+                return jsonify(success=False, message='แลกได้เฉพาะคาบของตัวเองที่ฝากสอนไว้'), 400
+            if need['status']:
+                return jsonify(success=False, message='คาบนี้มีผู้รับแล้ว', subs=day_subs(con, d)), 409
+            first = names[sid].split(' ')[0]
+            if (why := teacher_busy(con, sid, d, p)):
+                return jsonify(success=False, message=f'ครู{first}ไม่ว่างคาบนี้ ({why})'), 409
+            # คาบที่จะสอนคืน: คาบสอนของครูคู่แลก ในภาคเรียนที่เผยแพร่ ไม่ใช่วันหยุด และฉันว่าง
+            term2 = term_for_date(con, sd, s_)
+            wd2 = datetime.date.fromisoformat(sd).isoweekday()
+            hol = con.execute("SELECT 1 FROM holidays WHERE date=? AND type='holiday'", (sd,)).fetchone()
+            if not term2 or not published(con, term2['id']) or wd2 > 5 or hol:
+                return jsonify(success=False, message='วันที่สอนคืนไม่มีการเรียนการสอน'), 400
+            l2 = con.execute("""SELECT l.* FROM tt_lessons l JOIN tt_slots s ON s.lesson_id=l.id
+                                WHERE l.id=? AND l.term_id=? AND s.day=? AND s.period=?""", (sl, term2['id'], wd2, sp)).fetchone()
+            if not l2 or sid not in jl(l2['teacher_ids'], []) or me in jl(l2['teacher_ids'], []) or not jl(l2['classes'], []):
+                return jsonify(success=False, message=f'คาบที่สอนคืนต้องเป็นคาบสอนของครู{first}'), 400
+            if (why := teacher_busy(con, me, sd, sp)):
+                return jsonify(success=False, message=f'คุณไม่ว่างคาบที่จะสอนคืน ({why})'), 409
+            if con.execute("SELECT 1 FROM tt_subs WHERE kind='swap' AND swap_date=? AND swap_period=? AND swap_lesson_id=?",
+                           (sd, sp, sl)).fetchone():
+                return jsonify(success=False, message='คาบที่สอนคืนนี้ถูกใช้แลกไปแล้ว'), 409
+            cfg2 = jl(term2['config'], {})
+            one_room = all(c.endswith('/1') for c in cfg2.get('classes', []))
+            cls2 = ', '.join('ม.' + (c.split('/')[0] if one_room else c) for c in jl(l2['classes'], []))
+            cur = con.execute("""INSERT INTO tt_subs (date, period, lesson_id, absent_id, sub_id, subject, class_label, note, status,
+                                                      requested_at, updated_at, kind, swap_date, swap_period, swap_lesson_id,
+                                                      swap_subject, swap_class_label)
+                                 VALUES (?,?,?,?,?,?,?,'','offer',datetime('now','localtime'),datetime('now','localtime'),
+                                         'swap',?,?,?,?,?)
+                                 ON CONFLICT(date, period, lesson_id) DO NOTHING""",
+                              (d, p, lid, me, sid, need['subject'], need['class_label'], sd, sp, sl,
+                               l2['code'] or l2['title'], cls2))
+            if not cur.rowcount:
+                return jsonify(success=False, message='คาบนี้มีผู้รับแล้ว', subs=day_subs(con, d)), 409
+            subs = day_subs(con, d)
+        return jsonify(success=True, subs=subs)
+
+    @app.post('/api/tt/subs/swap/answer')
+    @login_required
+    def tt_sub_swap_answer():
+        """ครูคู่แลกตอบคำขอ {date, period, lesson_id, accept} — ยืนยัน = รอผู้จัดสอนแทนอนุมัติ · ไม่รับ = คาบกลับมาว่าง"""
+        b = request.get_json() or {}
+        tg = sub_target(b)
+        if not tg:
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        with get_db() as con:
+            me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (current_user()['id'],)).fetchone()
+            r = con.execute("""SELECT * FROM tt_subs WHERE date=? AND period=? AND lesson_id=? AND kind='swap' AND status='offer'
+                               AND sub_id=?""", (*tg, me['id'] if me else -1)).fetchone()
+            if not r:
+                return jsonify(success=False, message='ไม่พบคำขอแลกคาบ (อาจถูกยกเลิกแล้ว)', subs=day_subs(con, tg[0])), 404
+            if not b.get('accept'):
+                con.execute('DELETE FROM tt_subs WHERE id=?', (r['id'],))
+                return jsonify(success=True, accepted=False, subs=day_subs(con, tg[0]))
+            if (why := teacher_busy(con, r['sub_id'], r['date'], r['period'], r['id'])):
+                return jsonify(success=False, message=f'คุณไม่ว่างคาบนี้แล้ว ({why}) — กด "ไม่รับ" ได้'), 409
+            if (why := teacher_busy(con, r['absent_id'], r['swap_date'], r['swap_period'], r['id'])):
+                return jsonify(success=False, message=f'ครูที่ขอแลกไม่ว่างคาบที่จะสอนคืนแล้ว ({why})'), 409
+            con.execute("UPDATE tt_subs SET status='pending', updated_at=datetime('now','localtime') WHERE id=?", (r['id'],))
+            subs = day_subs(con, tg[0])
+        return jsonify(success=True, accepted=True, subs=subs)
 
     @app.post('/api/tt/subs/approve')
     @tt_subs_required

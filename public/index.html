@@ -334,9 +334,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     html += `<div class="alert alert-warning d-flex gap-2 align-items-start mb-3">
       <i class="bi bi-arrow-left-right fs-4"></i>
       <div class="flex-fill"><div class="fw-bold mb-1">คาบสอนแทนของคุณ</div>
-        ${r.mine.map(s => `<div>${dayLabel(s.date)}${s.status === 'pending' ? ' <span class="badge text-bg-light border">รออนุมัติ</span>' : ''} คาบ ${s.period}${s.time ? ` (${esc(s.time)})` : ''} · <b>${esc(s.class_label)} ${esc(s.subject)}</b>
+        ${r.mine.map(s => `<div>${dayLabel(s.date)}${s.status === 'offer' ? ' <span class="badge text-bg-info">ขอแลกคาบ รอคุณยืนยัน</span>' : s.status === 'pending' ? ' <span class="badge text-bg-light border">รออนุมัติ</span>' : ''}${s.kind === 'payback' ? ' <span class="badge text-bg-primary">🔁 สอนคืน</span>' : s.kind === 'swap' ? ' <span class="badge text-bg-primary">🔁 แลกคาบ</span>' : ''} คาบ ${s.period}${s.time ? ` (${esc(s.time)})` : ''} · <b>${esc(s.class_label)} ${esc(s.subject)}</b>
           แทน${esc(first(s.absent))}${s.note ? ` · ${esc(s.note)}` : ''}</div>`).join('')}</div>
       <a href="/timetable.html" class="btn btn-sm btn-warning text-nowrap">ตารางสอน</a></div>`;
+  }
+  if (r.swap_offers && r.swap_offers.length) {                // แลกคาบ: มีครูขอแลกคาบกับฉัน รอฉันยืนยัน
+    const o = r.swap_offers[0];
+    html += `<div class="alert alert-primary d-flex gap-2 align-items-start mb-3">
+      <span class="fs-4">🔁</span>
+      <div class="flex-fill"><div class="fw-bold mb-1">มีคำขอแลกคาบรอคุณยืนยัน ${r.swap_offers.length} คาบ</div>
+        ${r.swap_offers.map(x => `<div class="small">${esc(first(x.absent))} ขอให้สอน คาบ ${x.period} ${esc(x.class_label)} ${esc(x.subject)} (${new Date(x.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })})</div>`).join('')}</div>
+      <a href="/timetable.html?tab=sub&date=${o.date}" class="btn btn-sm btn-primary text-nowrap">ดู / ยืนยัน</a></div>`;
   }
   if (!r.summary && (r.open_today || r.open_next)) {          // ครูทั่วไป: ชวนกดรับสอนแทน
     const go = r.open_today ? r.date : r.next;

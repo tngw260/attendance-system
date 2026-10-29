@@ -50,6 +50,13 @@
     .m-box .sg .r { justify-content: center; }
     .circle { font-family: 'Segoe UI Symbol', 'Apple Symbols', sans-serif; font-size: 1.1em; }
     .hint { font: 13px/1.4 system-ui, sans-serif; }
+    /* หน้า 2 การแลกเปลี่ยนคาบสอน (มีเมื่อมีการแลกคาบ) */
+    .p2-title { text-align: center; font-weight: 700; font-size: 18pt; }
+    .p2 p { margin: 0; font-size: 16pt; }
+    table.swap-t { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 15pt; margin-top: 21pt; }
+    table.swap-t th, table.swap-t td { border: .75pt solid #000; padding: 0 4pt; height: 23pt; vertical-align: middle; overflow: hidden; white-space: nowrap; }
+    table.swap-t th { background: #d9d9d9; font-weight: 700; text-align: left; -webkit-print-color-adjust: exact; print-color-adjust: exact; }   /* พื้นเทาตอนพิมพ์ */
+    table.swap-t td.c { text-align: center; }
     @media print {
       body { background: #fff; }
       .toolbar, .no-print { display: none !important; }
@@ -147,6 +154,29 @@ function memoHTML(m, acad, dep, dir) {
   </div>`;
 }
 
+// หน้า 2 การแลกเปลี่ยนคาบสอน — ตาราง ที่ | คาบสอนปกติ | คาบที่ขอแลก | ผู้สอนแทน (แถวว่างไว้เขียนเพิ่มเหมือนแบบฟอร์ม)
+const SWAP_COLS = [493, 1120, 807, 759, 1281, 1120, 807, 1281, 2798], SWAP_ROWS = 10;   // เท่า submemo.py
+function swapHTML(m) {
+  const sp = m.swap_para, uv = t => `<u class="v">&nbsp;${escH(t)}&nbsp;</u>`;
+  const cols = SWAP_COLS.map(w => `<col style="width:${(w / W_TWIPS * 100).toFixed(2)}%">`).join('');
+  const rows = Array.from({ length: Math.max(SWAP_ROWS, m.swaps.length) }, (_, i) => {
+    const r = m.swaps[i];
+    const v = r ? [i + 1, r.date, r.period, r.cls, r.code, r.swap_date, r.swap_period, r.swap_code, r.sub] : Array(9).fill('');
+    return `<tr>${v.map((x, k) => `<td class="${k === 8 ? '' : 'c'}">${escH(x)}</td>`).join('')}</tr>`;
+  }).join('');
+  return `<div class="memo p2" data-h="16" data-b="16" data-s="14" data-r="15">
+    <div class="p2-title">การแลกเปลี่ยนคาบสอน</div><div class="blank"></div>
+    <p>ตามที่ข้าพเจ้า ${uv(sp.name)} ตำแหน่ง ${'.'.repeat(50)}</p>
+    <p>ไม่ได้มาปฏิบัติราชการเนื่องจาก ${uv(sp.reason)}</p>
+    <p>เป็นเหตุให้ไม่สามารถเข้าสอนวิชา ${uv(sp.subjects)}</p>
+    <p>รวมจำนวน ${uv(sp.count)} คาบ จึงขอแลกเปลี่ยนคาบสอน ดังนี้</p>
+    <table class="swap-t"><colgroup>${cols}</colgroup>
+      <thead><tr><th rowspan="2" class="c">ที่</th><th colspan="4">คาบสอนปกติ</th><th colspan="3">คาบที่ขอแลก</th><th rowspan="2">ผู้สอนแทน</th></tr>
+        <tr><th>ว/ด/ป</th><th>คาบที่</th><th>ชั้น</th><th>รหัสวิชา</th><th>ว/ด/ป</th><th>คาบที่</th><th>รหัสวิชา</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+  </div>`;
+}
+
 // ย่อทั้งใบจนพอดี 1 หน้า: ความสูงใช้ได้ = 297 − ขอบบนล่าง 2 × 12.7 มม. (≈ 1026 px) เผื่อ 24 px ให้เครื่องพิมพ์ที่ตั้งขอบเอง
 // ตอนพิมพ์ WebKit/Safari ตัวอักษรใหญ่กว่าบนจอเทียบกับกระดาษ ~6% (ตัดบรรทัดเพิ่ม) → คูณเผื่อ PRINT_GROW
 const PAGE_AVAIL_PX = (297 - 2 * 12.7) * 96 / 25.4 - 24;
@@ -178,7 +208,7 @@ async function render() {
   const d = await apiFetch('/api/sub-memo?' + API_Q);
   document.title = d.title;
   document.getElementById('docTitle').textContent = d.title;
-  document.getElementById('pages').innerHTML = d.memos.length ? d.memos.map(m => memoHTML(m, d.academic, d.deputy, d.director)).join('')
+  document.getElementById('pages').innerHTML = d.memos.length ? d.memos.map(m => memoHTML(m, d.academic, d.deputy, d.director) + (m.swaps.length ? swapHTML(m) : '')).join('')
     : '<div class="text-center text-muted py-5"><i class="bi bi-calendar-check fs-1 d-block mb-2"></i>วันนี้ไม่มีครูที่ต้องมีคนสอนแทน</div>';
   await fontsReady();
   fitPages();

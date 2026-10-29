@@ -7,6 +7,8 @@
     [ครูสอนแทน] เข้าสอนแทน ดังนี้ — แถวละ: วันที่ รหัส-วิชา ชั้น เวลา ถึง รวม…คาบ ห้องเรียน (คาบติดกันรวมเป็นแถวเดียว)
   ซ้าย: ลงชื่อผู้ขออนุญาต + ผู้สอนแทนทุกคน · กรอบขวา: หัวหน้ากลุ่มบริหารงานวิชาการตรวจ / รอง ผอ. / ผอ. อนุญาต-ไม่อนุญาต
   (รอง ผอ. ครูสั่งเพิ่ม 29 ต.ค. 69 — ชื่อจากผู้ลงนามท้ายตารางสอนคนที่ 2)
+หน้า 2 "การแลกเปลี่ยนคาบสอน" (มีเมื่อมีการแลกคาบ tt_subs.kind=swap): ตามที่ข้าพเจ้า… ไม่ได้มาปฏิบัติราชการเนื่องจาก…
+  ตาราง ที่ | คาบสอนปกติ ว/ด/ป คาบที่ ชั้น รหัสวิชา | คาบที่ขอแลก ว/ด/ป คาบที่ รหัสวิชา | ผู้สอนแทน · ตำแหน่ง เว้นให้เขียน
 1 ใบ = บันทึกครูไม่มา 1 รายการ (ลาหลายวัน = ใบเดียว) · ไม่มีกำหนด/ยาวเกิน 14 วัน = เฉพาะวันที่เลือก
 คาบที่ยังไม่มีคนรับ = กลุ่มชื่อว่าง (เขียนเพิ่มได้) · ห้องเรียน: ระบบไม่มีข้อมูลห้อง เว้นจุดไว้ให้เขียน
 คำนำหน้าชื่อ: ระบบเก็บชื่อครูไม่มีคำนำหน้า → หาจากชื่อครูที่ปรึกษา / บัญชีผู้ใช้ / ผู้ลงนาม ไม่พบ = "นาย/นาง/นางสาว" ให้ขีดเลือก
@@ -46,6 +48,9 @@ SUB_IND, SUB_TAB = 500, 8288                        # "นาย/นาง/น�
 FIELDS = [('วันที่', 1731), ('รหัส-วิชา', 2403), ('ชั้น', 910), ('เวลา', 1009), ('ถึง', 771), ('รวม', 890), ('คาบ  ห้องเรียน', 1909)]
 ROW_MAX = W - 40
 MIN_DOTS = 0.8                                      # จุดอย่างน้อยหลังค่าในแต่ละช่อง (เท่าของตัวอักษร)
+# หน้า 2 แลกคาบ: ความกว้างคอลัมน์ตามแบบฟอร์ม (ที่ · ว/ด/ป คาบที่ ชั้น รหัสวิชา · ว/ด/ป คาบที่ รหัสวิชา · ผู้สอนแทน)
+SWAP_COLS = [493, 1120, 807, 759, 1281, 1120, 807, 1281, 2798]
+SWAP_ROWS = 10                                      # แถวอย่างน้อย (ที่เหลือว่างไว้เขียนเพิ่มเหมือนแบบฟอร์ม)
 COL_LEFT, COL_BOX = 5182, 4708                      # ช่องลงชื่อซ้าย / กรอบ หัวหน้าวิชาการ-ผอ. (ที่เหลือ = ช่องว่างขวา)
 SIGN_DOTS = 10                                      # ความยาวเส้นจุดลงชื่อ (เท่าของตัวอักษร)
 DEFAULT_DEPUTY = 'นางภัคกัญญา นิ่มจงจิตร์'            # รอง ผอ. เมื่อยังไม่ตั้งในตารางสอน (เหมือน DEFAULT_DEPUTY ใน timetable.html)
@@ -192,13 +197,26 @@ def build_memo(con, a, day, settings, pre, names, subjects):
         if lab not in seen:
             seen.append(lab)
     reason = (a['reason'] or 'ไม่มาปฏิบัติราชการ') + (f" ({a['note']})" if a['note'] else '') + ' ใน' + span_text(f, t, ps)
+    # หน้า 2 การแลกเปลี่ยนคาบสอน — คาบละแถว
+    swaps, swap_subj = [], []
+    for it in items:
+        sw = it['sub']
+        if sw and sw['kind'] == 'swap':
+            code = it['subject']
+            swaps.append(dict(date=short_date(it['date']), period=it['period'], cls=it['cls'], code=code,
+                              swap_date=short_date(sw['swap_date']), swap_period=sw['swap_period'], swap_code=sw['swap_subject'],
+                              sub=person(names.get(sw['sub_id'], ''), pre)[0], status=sw['status']))
+            lab = f"{code} {subjects[code]}" if subjects.get(code) else code
+            if lab not in swap_subj:
+                swap_subj.append(lab)
     md = min(datetime.date.today().isoformat(), f)                     # ลงวันที่ก่อน/วันแรกที่ไม่มา
     m = dict(absence_id=a['id'], teacher=names.get(tid, ''), date_from=f, date_to=t, count=len(items),
              memo_date=dict(day=str(iso(md).day), month=THAI_MONTHS[iso(md).month - 1], year=str(iso(md).year + 543)),
              school=settings.get('school_name', ''),
              para=[['ด้วย', 0], [absent, 1], ['ไม่ได้ปฏิบัติราชการเป็นเหตุให้ขาดการสอนวิชา', 0], [', '.join(seen) or '-', 1],
                    ['เนื่องจาก', 0], [reason, 1], ['จึงให้', 0]],
-             blocks=out_blocks, signers=signers)
+             blocks=out_blocks, signers=signers, swaps=swaps,
+             swap_para=dict(name=absent, reason=reason, subjects=', '.join(swap_subj), count=len(swaps)))
     layout(m)
     return m
 
@@ -358,8 +376,47 @@ def memo_xml(m, n, boss):
     return x
 
 
+def swap_xml(m):
+    """หน้า 2 การแลกเปลี่ยนคาบสอน (ขึ้นหน้าใหม่) — ตารางเส้นทึบ หัวตาราง 2 แถวพื้นเทา"""
+    sp = m['swap_para']
+    uv = lambda t: _r(f' {t} ', 16, u=True)                            # noqa: E731
+    x = _p(_r('การแลกเปลี่ยนคาบสอน', 18, True), 'center', brk=True) + _p(_r(' ', 16))
+    x += _p(_r('ตามที่ข้าพเจ้า', 16) + uv(sp['name']) + _r(' ตำแหน่ง ', 16) + _r('.' * 50, 16))
+    x += _p(_r('ไม่ได้มาปฏิบัติราชการเนื่องจาก', 16) + uv(sp['reason']))
+    x += _p(_r('เป็นเหตุให้ไม่สามารถเข้าสอนวิชา', 16) + uv(sp['subjects']))
+    x += _p(_r('รวมจำนวน', 16) + uv(str(sp['count'])) + _r(' คาบ จึงขอแลกเปลี่ยนคาบสอน ดังนี้', 16)) + _p(_r(' ', 16))
+    one = '<w:{0} w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+    borders = ''.join(one.format(e) for e in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'))
+
+    def cell(text, w, span=1, vmerge=None, head=False, align='center', size=15):
+        gs = f'<w:gridSpan w:val="{span}"/>' if span > 1 else ''
+        vm = '' if vmerge is None else ('<w:vMerge w:val="restart"/>' if vmerge else '<w:vMerge/>')
+        shd = '<w:shd w:val="clear" w:color="auto" w:fill="D9D9D9"/>' if head else ''
+        return (f'<w:tc><w:tcPr><w:tcW w:w="{w}" w:type="dxa"/>{gs}{vm}{shd}<w:vAlign w:val="center"/></w:tcPr>'
+                f'<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="{align}"/></w:pPr>'
+                f'{_r(text, size, head)}</w:p></w:tc>')
+    c = SWAP_COLS
+    tr = lambda cells, h=440: f'<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="{h}" w:hRule="atLeast"/></w:trPr>{cells}</w:tr>'   # noqa: E731
+    head1 = tr(cell('ที่', c[0], vmerge=True, head=True) + cell('คาบสอนปกติ', sum(c[1:5]), 4, head=True, align='left')
+               + cell('คาบที่ขอแลก', sum(c[5:8]), 3, head=True, align='left') + cell('ผู้สอนแทน', c[8], vmerge=True, head=True, align='left'))
+    head2 = tr(cell('', c[0], vmerge=False, head=True) + ''.join(cell(t, w, head=True, align='left') for t, w in
+               zip(('ว/ด/ป', 'คาบที่', 'ชั้น', 'รหัสวิชา', 'ว/ด/ป', 'คาบที่', 'รหัสวิชา'), c[1:8]))
+               + cell('', c[8], vmerge=False, head=True))
+    rows = ''
+    for i in range(max(SWAP_ROWS, len(m['swaps']))):
+        r = m['swaps'][i] if i < len(m['swaps']) else None
+        vals = ([str(i + 1), r['date'], str(r['period']), r['cls'], r['code'], r['swap_date'], str(r['swap_period']), r['swap_code'], r['sub']]
+                if r else [''] * 9)
+        rows += tr(''.join(cell(v, w, align='left' if k == 8 else 'center') for k, (v, w) in enumerate(zip(vals, c))), 460)
+    grid = ''.join('<w:gridCol w:w="%d"/>' % w for w in c)               # Python 3.9: ห้าม backslash ใน f-string
+    x += (f'<w:tbl><w:tblPr><w:tblW w:w="{W}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders>{borders}</w:tblBorders>'
+          '<w:tblCellMar><w:left w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr>'
+          f'<w:tblGrid>{grid}</w:tblGrid>{head1}{head2}{rows}</w:tbl>')
+    return x + '<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>'
+
+
 def build_docx(memos, title, sg):
-    body = ''.join(memo_xml(m, i + 1, sg) for i, m in enumerate(memos))
+    body = ''.join(memo_xml(m, i + 1, sg) + (swap_xml(m) if m['swaps'] else '') for i, m in enumerate(memos))
     sect = (f'<w:sectPr><w:pgSz w:w="{PAGE_W}" w:h="{PAGE_H}"/><w:pgMar w:top="{MARGIN}" w:right="{MARGIN}" w:bottom="{MARGIN}" '
             f'w:left="{MARGIN}" w:header="425" w:footer="425" w:gutter="0"/></w:sectPr>')
     ns = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
