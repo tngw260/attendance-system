@@ -28,8 +28,12 @@
     table.cl td.c { text-align: center; }
     table.cl td.first { border-right: none; }
     table.cl td.last { border-left: none; }
-    .cl-sign { margin-top: 20pt; text-align: right; }
-    .cl-sign p { margin: 0; }
+    /* ลงชื่อ.....ครูสอนแทน / (ชื่อ) — ชื่อกึ่งกลางใต้เส้นจุด: 2 บรรทัดใช้คอลัมน์กว้างเท่ากัน (ชิดขวาทั้งคู่จะเยื้องกัน) */
+    .cl-sign { margin: 20pt 0 0 auto; width: max-content; }
+    .cl-sign .r { display: flex; white-space: nowrap; }
+    .cl-sign .a { width: 2.6em; text-align: right; }
+    .cl-sign .d { width: 13em; overflow: hidden; }
+    .cl-sign .d.c { text-align: center; }
     .adv-edit { font: 13px/1.4 system-ui, sans-serif; text-align: center; margin: 2px 0 4px; }
     @media print {
       body { background: #fff; }
@@ -85,7 +89,8 @@ function sheetHTML(sh, sub, canEdit) {
     <table class="cl"><colgroup>${cols}</colgroup>
       <thead><tr><th>เลขที่</th><th>เลขประจำตัว</th><th colspan="2">ชื่อ - สกุล</th>${Array(CHECK_COLS).fill('<th></th>').join('')}</tr></thead>
       <tbody>${rows}</tbody></table>
-    ${sub ? `<div class="cl-sign"><p>ลงชื่อ........................................ครูสอนแทน</p><p>(${escH(sub.sub || '........................................')})</p></div>` : ''}
+    ${sub ? `<div class="cl-sign"><div class="r"><span class="a">ลงชื่อ</span><span class="d">${'.'.repeat(120)}</span><span>ครูสอนแทน</span></div>
+      <div class="r"><span class="a"></span><span class="d c">(${escH(sub.sub || '.'.repeat(40))})</span></div></div>` : ''}
   </div>`;
 }
 

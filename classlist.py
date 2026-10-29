@@ -221,9 +221,26 @@ def sheet_docx_xml(sh, sub, first):
     body += ('<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr>'
              '<w:r><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:r></w:p>')
     if sub:                                          # ลงชื่อครูสอนแทน ชิดขวา
-        body += (_para('', size=f) + _para('ลงชื่อ........................................ครูสอนแทน', 'right', size=f)
-                 + _para(f"({sub['sub'] or '........................................'})", 'right', size=f))
+        body += _para('', size=f) + sign_docx('ครูสอนแทน', sub['sub'], f)
     return body
+
+
+def sign_docx(label, name, f, right=TEXT_W):
+    """ลงชื่อ........label / (ชื่อ) — ชื่อในวงเล็บอยู่กึ่งกลางใต้เส้นจุดพอดี (ชิดขวาทั้งสองบรรทัดจะเยื้องกัน)
+    เส้นจุด = แท็บ leader จุด · ชื่อ = แท็บกึ่งกลางที่จุดกลางเส้น (ตำแหน่งแท็บวัดจากขอบซ้ายของเนื้อหา)"""
+    em = f * 20                                       # twips ต่อ 1 เท่าของขนาดตัวอักษร
+    w_sign, dots = name_em('ลงชื่อ') * em, 13 * em
+    left = round(right - w_sign - dots - name_em(label) * em - em)
+    end, mid = round(left + w_sign + dots), round(left + w_sign + dots / 2)
+    sz = int(round(f * 2))
+    tab = (f'<w:r><w:rPr><w:rFonts w:ascii="{FONT}" w:hAnsi="{FONT}" w:cs="{FONT}" w:eastAsia="{FONT}"/><w:b/><w:bCs/>'
+           f'<w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/></w:rPr><w:tab/></w:r>')
+    ppr = lambda kind, pos, leader='': (                                    # noqa: E731
+        f'<w:pPr><w:keepNext/><w:tabs><w:tab w:val="{kind}"{leader} w:pos="{pos}"/></w:tabs>'
+        f'<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:ind w:left="{left}"/><w:jc w:val="left"/></w:pPr>')
+    dotted = ppr('left', end, ' w:leader="dot"')     # Python 3.9: ห้าม backslash ใน f-string
+    return (f'<w:p>{dotted}{_run("ลงชื่อ", size=f)}{tab}{_run(label, size=f)}</w:p>'
+            f'<w:p>{ppr("center", mid)}{tab}{_run("(" + (name or "." * 40) + ")", size=f)}</w:p>')
 
 
 def build_docx(sheets, sub, title):
