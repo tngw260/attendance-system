@@ -107,7 +107,7 @@ function signHTML(label, name, center) {
     <div class="r">${hidSign}<span class="d c"><span>(${escH(name || '.'.repeat(40))})</span></span>${center ? hidSign : ''}</div></div>`;
 }
 
-function memoHTML(m, acad, dir) {
+function memoHTML(m, acad, dep, dir) {
   const fld = (lab, v, w) => `<span class="fill" style="flex-basis:${(w / W_TWIPS * 100).toFixed(2)}%"><span>${escH(lab)}</span>${v ? `<span class="fv">${escH(v)}</span>` : ''}<span class="dots"></span></span>`;
   const rowHTML = r => {
     const vals = r ? [r.date, r.subject, r.cls, r.start, r.end, String(r.n), ''] : FIELDS.map(() => '');
@@ -138,6 +138,7 @@ function memoHTML(m, acad, dir) {
         <div class="m-box m-h">
           <div>ได้ตรวจสอบวิชาที่สอนแทนแล้ว</div><div class="blank"></div>
           ${signHTML('', acad.name, true)}<div>${escH(acad.title)}</div><div class="blank"></div>
+          ${signHTML('', dep.name, true)}<div>${escH(dep.title)}</div><div class="blank"></div>
           <div><span class="circle">○</span> อนุญาต &nbsp;&nbsp;&nbsp;&nbsp; <span class="circle">○</span> ไม่อนุญาต</div><div class="blank"></div>
           ${signHTML('', dir.name, true)}<div>${escH(dir.full_title)}</div>
         </div>
@@ -177,7 +178,7 @@ async function render() {
   const d = await apiFetch('/api/sub-memo?' + API_Q);
   document.title = d.title;
   document.getElementById('docTitle').textContent = d.title;
-  document.getElementById('pages').innerHTML = d.memos.length ? d.memos.map(m => memoHTML(m, d.academic, d.director)).join('')
+  document.getElementById('pages').innerHTML = d.memos.length ? d.memos.map(m => memoHTML(m, d.academic, d.deputy, d.director)).join('')
     : '<div class="text-center text-muted py-5"><i class="bi bi-calendar-check fs-1 d-block mb-2"></i>วันนี้ไม่มีครูที่ต้องมีคนสอนแทน</div>';
   await fontsReady();
   fitPages();

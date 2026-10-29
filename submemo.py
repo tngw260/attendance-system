@@ -5,7 +5,8 @@
   ครุฑ + บันทึกข้อความ · วันที่ เดือน พ.ศ. · ส่วนราชการ / เรื่อง การสอนแทน/แลกเปลี่ยนคาบสอน / เรียน ผู้อำนวยการ
   ด้วย [ครูที่ไม่มา] ไม่ได้ปฏิบัติราชการเป็นเหตุให้ขาดการสอนวิชา [วิชา] เนื่องจาก [สาเหตุ] จึงให้
     [ครูสอนแทน] เข้าสอนแทน ดังนี้ — แถวละ: วันที่ รหัส-วิชา ชั้น เวลา ถึง รวม…คาบ ห้องเรียน (คาบติดกันรวมเป็นแถวเดียว)
-  ซ้าย: ลงชื่อผู้ขออนุญาต + ผู้สอนแทนทุกคน · กรอบขวา: หัวหน้ากลุ่มบริหารงานวิชาการตรวจ / ผอ. อนุญาต-ไม่อนุญาต
+  ซ้าย: ลงชื่อผู้ขออนุญาต + ผู้สอนแทนทุกคน · กรอบขวา: หัวหน้ากลุ่มบริหารงานวิชาการตรวจ / รอง ผอ. / ผอ. อนุญาต-ไม่อนุญาต
+  (รอง ผอ. ครูสั่งเพิ่ม 29 ต.ค. 69 — ชื่อจากผู้ลงนามท้ายตารางสอนคนที่ 2)
 1 ใบ = บันทึกครูไม่มา 1 รายการ (ลาหลายวัน = ใบเดียว) · ไม่มีกำหนด/ยาวเกิน 14 วัน = เฉพาะวันที่เลือก
 คาบที่ยังไม่มีคนรับ = กลุ่มชื่อว่าง (เขียนเพิ่มได้) · ห้องเรียน: ระบบไม่มีข้อมูลห้อง เว้นจุดไว้ให้เขียน
 คำนำหน้าชื่อ: ระบบเก็บชื่อครูไม่มีคำนำหน้า → หาจากชื่อครูที่ปรึกษา / บัญชีผู้ใช้ / ผู้ลงนาม ไม่พบ = "นาย/นาง/นางสาว" ให้ขีดเลือก
@@ -46,6 +47,8 @@ ROW_MAX = W - 40
 MIN_DOTS = 0.8                                      # จุดอย่างน้อยหลังค่าในแต่ละช่อง (เท่าของตัวอักษร)
 COL_LEFT, COL_BOX = 5182, 4708                      # ช่องลงชื่อซ้าย / กรอบ หัวหน้าวิชาการ-ผอ. (ที่เหลือ = ช่องว่างขวา)
 SIGN_DOTS = 10                                      # ความยาวเส้นจุดลงชื่อ (เท่าของตัวอักษร)
+DEFAULT_DEPUTY = 'นางภัคกัญญา นิ่มจงจิตร์'            # รอง ผอ. เมื่อยังไม่ตั้งในตารางสอน (เหมือน DEFAULT_DEPUTY ใน timetable.html)
+BOX_LINES = 15                                      # บรรทัดในกรอบขวา: ตรวจ(5) + รอง ผอ.(4) + อนุญาต(2) + ผอ.(3) + ว่าง
 
 # ความกว้างตัวอักษร TH Sarabun New ตัวธรรมดา (1/1000 เท่าของขนาด วัดจากไฟล์ฟอนต์ public/fonts ด้วย Pillow)
 # สระบน-ล่าง/วรรณยุกต์ = 0 · ตัวที่ไม่มีในตาราง = 450 · TH SarabunPSK ใน Word กว้างใกล้เคียงกัน
@@ -211,7 +214,7 @@ def layout(m):
         h += body * LINE * math.ceil(para_em * 1.05 / (W / (20 * body)) + 0.15)       # ตัดคำไทยเหลือท้ายบรรทัด ~5%
         h += body * LINE * nlines
         left = body * LINE + len(m['signers']) * 3 * sign * LINE
-        return h + max(left, 11 * head * LINE + 10)
+        return h + max(left, BOX_LINES * head * LINE + 10)
 
     k = 1.0
     while k > 0.78 and height(k) > AVAIL_PT:
@@ -294,7 +297,7 @@ def _sign(label, name, size, left, dots_em=SIGN_DOTS, mid=None):
             + _p(_tab(size) + _r(f"({name or '.' * 40})", size), ind=ind, tabs=[('center', mid, False)], keep=True))
 
 
-def memo_xml(m, n, academic, director):
+def memo_xml(m, n, boss):
     sz = m['size']
     h, b, s, rs = sz['head'], sz['body'], sz['sign'], sz['row']
     md = m['memo_date']
@@ -306,7 +309,7 @@ def memo_xml(m, n, academic, director):
     x += _p(_r(' ', h))
     info_tab = [('left', INFO_TAB, False)]
     school = m['school']
-    dir_title = director['title']
+    dir_title = boss['director']['title']
     for lab, val in (('ส่วนราชการ', school), ('เรื่อง', 'การสอนแทน/แลกเปลี่ยนคาบสอน'), ('เรียน', dir_title)):
         x += _p(_r(lab, h, True) + _tab(h) + _r(val, h), tabs=info_tab)
     x += _p(''.join(_r(f' {t} ' if v else t, b, u=bool(v)) for t, v in m['para']),
@@ -331,11 +334,13 @@ def memo_xml(m, n, academic, director):
     for sg in m['signers']:
         left += _p(_r(' ', s), keep=True) + _sign(sg['label'], sg['name'], s, 0)
     c = COL_BOX // 2
+    acad, dep, dirc = boss['academic'], boss['deputy'], boss['director']
     box = (_p(_r('ได้ตรวจสอบวิชาที่สอนแทนแล้ว', h), 'center') + _p(_r(' ', h))
-           + _sign('', academic['name'], h, 0, mid=c) + _p(_r(academic['title'], h), 'center') + _p(_r(' ', h))
+           + _sign('', acad['name'], h, 0, mid=c) + _p(_r(acad['title'], h), 'center') + _p(_r(' ', h))
+           + _sign('', dep['name'], h, 0, mid=c) + _p(_r(dep['title'], h), 'center') + _p(_r(' ', h))
            + _p(_r('○', h + 2, font='Segoe UI Symbol') + _r(' อนุญาต      ', h) + _r('○', h + 2, font='Segoe UI Symbol')
                 + _r(' ไม่อนุญาต', h), 'center') + _p(_r(' ', h))
-           + _sign('', director['name'], h, 0, mid=c) + _p(_r(director['full_title'], h), 'center'))
+           + _sign('', dirc['name'], h, 0, mid=c) + _p(_r(dirc['full_title'], h), 'center'))
     one = '<w:{0} w:val="single" w:sz="8" w:space="0" w:color="000000"/>'
     nil = ''.join(f'<w:{e} w:val="nil"/>' for e in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'))
     spare = W - COL_LEFT - COL_BOX
@@ -352,8 +357,8 @@ def memo_xml(m, n, academic, director):
     return x
 
 
-def build_docx(memos, title, academic, director):
-    body = ''.join(memo_xml(m, i + 1, academic, director) for i, m in enumerate(memos))
+def build_docx(memos, title, sg):
+    body = ''.join(memo_xml(m, i + 1, sg) for i, m in enumerate(memos))
     sect = (f'<w:sectPr><w:pgSz w:w="{PAGE_W}" w:h="{PAGE_H}"/><w:pgMar w:top="{MARGIN}" w:right="{MARGIN}" w:bottom="{MARGIN}" '
             f'w:left="{MARGIN}" w:header="425" w:footer="425" w:gutter="0"/></w:sectPr>')
     ns = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
@@ -407,31 +412,34 @@ def build_docx(memos, title, academic, director):
     return buf
 
 
-def signers_of(con, day, settings, pre):
-    """ผู้ลงนามในกรอบขวา: หัวหน้ากลุ่มบริหารงานวิชาการ (ผู้ลงนามคนแรกท้ายตารางสอน) + ผอ. (หน้าตั้งค่า)"""
-    acad = None
+def signers_of(con, settings):
+    """ผู้ลงนามในกรอบขวา: หัวหน้ากลุ่มบริหารงานวิชาการ + รอง ผอ. (ผู้ลงนามคนที่ 1, 2 ท้ายตารางสอน) + ผอ. (หน้าตั้งค่า)
+    รอง ผอ. ขึ้นเสมอแม้ตั้งซ่อนในตารางสอน (ครูสั่งให้มีในบันทึกข้อความ)"""
+    raw = []
     for r in con.execute('SELECT config FROM tt_terms ORDER BY published DESC, id DESC'):
-        sg = [x for x in jl(r['config'], {}).get('signers') or [] if isinstance(x, dict) and x.get('name')]
-        if sg:
-            acad = sg[0]
+        raw = [x if isinstance(x, dict) else {} for x in jl(r['config'], {}).get('signers') or []]
+        if any(x.get('name') for x in raw):
             break
+    acad = raw[0] if raw and raw[0].get('name') else {}
+    dep = raw[1] if len(raw) > 1 and raw[1].get('name') else {}
     school = settings.get('school_name', '')
     title = settings.get('director_title') or 'ผู้อำนวยการโรงเรียน'
     full_title = (title.replace('โรงเรียน', '') + school) if school.startswith('โรงเรียน') else title + school
     paren = lambda n: re.sub(r'\s+', '  ', (n or '').strip())          # noqa: E731  (ชื่อ  นามสกุล เว้น 2 เคาะตามแบบฟอร์ม)
-    return (dict(name=paren(acad['name']) if acad else '', title=(acad or {}).get('title') or 'หัวหน้ากลุ่มบริหารงานวิชาการ'),
-            dict(name=paren(settings.get('director_name')), title=full_title, full_title=full_title))
+    return dict(academic=dict(name=paren(acad.get('name')), title=acad.get('title') or 'หัวหน้ากลุ่มบริหารงานวิชาการ'),
+                deputy=dict(name=paren(dep.get('name') or DEFAULT_DEPUTY), title=dep.get('title') or 'รอง' + full_title),
+                director=dict(name=paren(settings.get('director_name')), title=full_title, full_title=full_title))
 
 
 def init(app, get_db, login_required, current_user, get_settings):
     from flask import jsonify, request, send_file
 
     def collect():
-        """?date=วันที่ [&absence_id=] → (memos, title, academic, director, None) หรือ (..., (ข้อความ, status))"""
+        """?date=วันที่ [&absence_id=] → (memos, title, ผู้ลงนาม, None) หรือ (None, None, None, (ข้อความ, status))"""
         a, s = request.args, get_settings()
         day = a.get('date', '') or datetime.date.today().isoformat()
         if not DATE_RE.match(day):
-            return None, None, None, None, ('วันที่ไม่ถูกต้อง', 400)
+            return None, None, None, ('วันที่ไม่ถูกต้อง', 400)
         with get_db() as con:
             if a.get('absence_id'):
                 try:
@@ -439,7 +447,7 @@ def init(app, get_db, login_required, current_user, get_settings):
                 except ValueError:
                     rows = [None]
                 if not rows[0]:
-                    return None, None, None, None, ('ไม่พบบันทึกครูไม่มา (อาจถูกลบแล้ว)', 404)
+                    return None, None, None, ('ไม่พบบันทึกครูไม่มา (อาจถูกลบแล้ว)', 404)
             else:
                 rows = con.execute('SELECT * FROM tt_absences WHERE date_from<=? AND date_to>=? ORDER BY id', (day, day)).fetchall()
             pre = prefix_index(con, s)
@@ -448,30 +456,30 @@ def init(app, get_db, login_required, current_user, get_settings):
             memos = [build_memo(con, r, day, s, pre, names, subjects) for r in rows]
             if not a.get('absence_id'):                                # พิมพ์รายวัน: เฉพาะครูที่มีคาบต้องมีคนสอนแทน
                 memos = [m for m in memos if m['count']]
-            academic, director = signers_of(con, day, s, pre)
+            sg = signers_of(con, s)
         if a.get('absence_id'):
             m = memos[0]
             title = f"บันทึกข้อความสอนแทน ครู{m['teacher'].split(' ')[0]} {m['date_from']}"
         else:
             title = f'บันทึกข้อความสอนแทน {day}'
-        return memos, title, academic, director, None
+        return memos, title, sg, None
 
     @app.get('/api/sub-memo')
     @login_required
     def sub_memo():
-        memos, title, academic, director, err = collect()
+        memos, title, sg, err = collect()
         if err:
             return jsonify(success=False, message=err[0]), err[1]
-        return jsonify(memos=memos, title=title, academic=academic, director=director)
+        return jsonify(memos=memos, title=title, **sg)
 
     @app.get('/api/sub-memo.docx')
     @login_required
     def sub_memo_docx():
-        memos, title, academic, director, err = collect()
+        memos, title, sg, err = collect()
         if err:
             return jsonify(success=False, message=err[0]), err[1]
         if not memos:
             return jsonify(success=False, message='วันนี้ไม่มีครูที่ต้องมีคนสอนแทน'), 404
-        return send_file(build_docx(memos, title, academic, director), as_attachment=True,
+        return send_file(build_docx(memos, title, sg), as_attachment=True,
                          download_name=title.replace(' ', '_') + '.docx',
                          mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
