@@ -6,7 +6,7 @@
       ปุ่ม 📄 ข้างชื่อครูที่ไม่มา = เปิดใบของคนนั้น (Word / PDF) · ครูเปิดตารางตัวเองเห็นคาบสอนแทน 7 วันข้างหน้า
    5) ครูทุกคน: "ฝากสอน" ของตัวเอง (ลาป่วย/ลากิจ/ไปราชการ) · กด "รับสอนแทน" คาบที่ว่าง (คนแรกได้) → รอผู้จัดสอนแทนอนุมัติ
       ผู้จัดสอนแทน (T.can_subs) = แอดมิน ผู้ช่วยจัดตาราง หรือครูที่แอดมินตั้งให้จัดเฉพาะสอนแทน (แก้ตารางไม่ได้)
-   6) ใบรายชื่อนักเรียนของคาบ Word / PDF (ครูเจ้าของวิชา ครูที่รับสอนแทน ผู้จัดตาราง) */
+   6) ใบรายชื่อนักเรียนของคาบ Word / PDF (ครูเจ้าของวิชา ครูที่รับสอนแทน ผู้จัดสอนแทน) */
 
 const SUB = { date: '', data: null, from: '', to: '' };
 const SUB_REASONS = ['ลาป่วย', 'ลากิจ', 'ไปราชการ', 'อบรม/ประชุม', 'ลาคลอด', 'ย้ายออก/รอครูใหม่', 'อื่น ๆ'];
@@ -188,7 +188,7 @@ async function clearDay() {
   saveSubs({ date: SUB.date, clear: saved.map(s => ({ period: s.period, lesson_id: s.lesson_id })) });
 }
 
-/* ── ใบรายชื่อนักเรียนของคาบ (แบบฟอร์มงานทะเบียน, classlist.py) — ครูเจ้าของวิชา ครูที่รับสอนแทน ผู้จัดตาราง ── */
+/* ── ใบรายชื่อนักเรียนของคาบ (แบบฟอร์มงานทะเบียน, classlist.py) — ครูเจ้าของวิชา ครูที่รับสอนแทน ผู้จัดสอนแทน ── */
 const canClassList = (n, s) => T.can_subs || (!!T.me && (n.l.teacher_ids.includes(T.me) || s?.sub_id === T.me));
 function classListLinks(n) {
   const q = `date=${SUB.date}&period=${n.p}&lesson_id=${n.l.id}`;
@@ -220,7 +220,7 @@ async function volunteer(key) {
   const n = needsOn(SUB.date).find(x => x.key === key);
   if (!n || !confirm(`รับสอนแทน คาบ ${n.p} ${classLabel(n.l)} ${lessonName(n.l)}\nแทน${n.gone.map(tShort).join(', ')} · ${formatThaiDateFull(SUB.date)}?`)) return;
   subPost('/api/tt/subs/volunteer', { ...subKey(n), subject: lessonName(n.l), class_label: classLabel(n.l) },
-          'ส่งคำขอรับสอนแทนแล้ว — รอผู้จัดตารางอนุมัติ');
+          'ส่งคำขอรับสอนแทนแล้ว — รอผู้จัดสอนแทนอนุมัติ');
 }
 
 async function withdrawSub(key) {
@@ -358,7 +358,7 @@ function renderSubsBody() {
       <thead class="table-light"><tr><th class="text-center">คาบ</th><th>ชั้น</th><th>วิชา</th><th class="d-none d-md-table-cell">ครูที่ไม่มา</th><th>สอนแทนโดย</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
       ${admin ? '<div class="small text-muted">รายชื่อเรียง: สอนแทนมาน้อยก่อน (นับตั้งแต่ ' + shortDate(SUB.from) + ') · สาระเดียวกัน · สอนห้องนี้อยู่ · วันนั้นมีคาบน้อย · ครูกดรับเองได้ (รออนุมัติ)</div>'
-        : canPick ? '<div class="small text-muted">คาบที่คุณว่างจะมีปุ่ม 🙋 รับสอนแทน — คนแรกที่กดได้คาบนั้น แล้วรอผู้จัดตารางอนุมัติ</div>' : ''}`
+        : canPick ? '<div class="small text-muted">คาบที่คุณว่างจะมีปุ่ม 🙋 รับสอนแทน — คนแรกที่กดได้คาบนั้น แล้วรอผู้จัดสอนแทนอนุมัติ</div>' : ''}`
       : `<div class="text-center text-muted py-4">${hol?.type === 'holiday' || wd === 0 || wd === 6 || !inTerm(date) ? 'ไม่มีการเรียนการสอน' : abs.length ? 'ครูที่ไม่มาไม่มีคาบสอนวันนี้' : 'ไม่มีครูไม่มา — ไม่ต้องจัดครูแทน'}</div>`}
     ${stale.length ? `<div class="alert alert-warning py-1 px-2 small mt-2 mb-0">มีบันทึกที่ไม่ตรงตาราง/บันทึกไม่มาแล้ว ${stale.length} รายการ
       (${stale.map(s => `คาบ ${s.period} ${esc(s.class_label)} ${esc(s.subject)}`).join(', ')})
@@ -421,7 +421,7 @@ function openAbsenceModal(id) {
     </div>
     <div id="abPs" class="${mode === 'some' ? '' : 'd-none'}">${P.map(x => `<div class="form-check form-check-inline small">
       <input class="form-check-input" type="checkbox" id="abP${x.no}" value="${x.no}" ${a.periods.includes(x.no) ? 'checked' : ''}><label class="form-check-label" for="abP${x.no}">${x.no}</label></div>`).join('')}</div>
-    ${self ? '<div class="small text-muted mt-2">บันทึกแล้ว ครูคนอื่นจะเห็นคาบของคุณและกด "รับสอนแทน" ได้ จากนั้นผู้จัดตารางอนุมัติ</div>' : ''}`;
+    ${self ? '<div class="small text-muted mt-2">บันทึกแล้ว ครูคนอื่นจะเห็นคาบของคุณและกด "รับสอนแทน" ได้ จากนั้นผู้จัดสอนแทนอนุมัติ · พิมพ์บันทึกข้อความได้ที่ปุ่ม 📄</div>' : ''}`;
   showModal(self ? (id ? 'แก้ไขการฝากสอน' : 'ฝากสอน') : id ? 'แก้ไขบันทึกครูไม่มา' : 'บันทึกครูไม่มา', body + body2,
     `${id ? `<button class="btn btn-outline-danger btn-sm me-auto" onclick="deleteAbsence(${id})"><i class="bi bi-trash"></i> ลบ</button>` : ''}
      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>คู่มือสอนแทน — โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</title>
+  <!-- หน้านี้เปิดได้โดยไม่ต้องล็อกอิน (ส่งลิงก์ทาง LINE ได้) · ภาพหน้าจอจากข้อมูลทดสอบ อยู่ /img/guide/sub-*.png
+       รูปแบบเดียวกับคู่มือจัดตารางสอน (timetable-guide.html) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root { --g: #1e6b3a; --g2: #2e8b57; --ink: #1f2933; --mute: #5f6b76; --line: #e3e8ee; --soft: #f3f7f4; --warn: #fff6db; --tip: #eaf4ff; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-family: 'Sarabun', sans-serif; font-size: 17px; line-height: 1.7; color: var(--ink); background: #fbfcfb; }
+    a { color: var(--g2); }
+    header { background: linear-gradient(135deg, var(--g), var(--g2)); color: #fff; padding: 28px 16px 22px; }
+    header .in, main { max-width: 920px; margin: 0 auto; }
+    header h1 { margin: 0; font-size: 1.9rem; line-height: 1.3; }
+    header p { margin: 4px 0 14px; opacity: .92; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; border: 2px solid #fff;
+      color: #fff; text-decoration: none; font-weight: 600; font-size: .95rem; background: transparent; cursor: pointer; font-family: inherit; }
+    .btn.solid { background: #fff; color: var(--g); }
+    main { padding: 8px 16px 60px; }
+    .toc { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; margin: 18px 0 8px; }
+    .toc b { display: block; margin-bottom: 4px; }
+    .toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 28px; }
+    .toc li { break-inside: avoid; }
+    section { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px 10px; margin: 18px 0; }
+    h2 { font-size: 1.35rem; margin: 0 0 10px; color: var(--g); display: flex; align-items: center; gap: 10px; }
+    h2 .no { background: var(--g); color: #fff; border-radius: 10px; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; }
+    h3 { font-size: 1.1rem; margin: 18px 0 6px; }
+    .step { display: flex; gap: 12px; margin: 16px 0 6px; }
+    .step .n { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--g2); color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+    .step .b { flex: 1; min-width: 0; }
+    .step h3 { margin: 0 0 4px; }
+    figure { margin: 10px 0 14px; }
+    figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    figcaption { font-size: .88rem; color: var(--mute); margin-top: 4px; }
+    .note { border-radius: 10px; padding: 10px 14px; margin: 10px 0; }
+    .tip { background: var(--tip); } .warn { background: var(--warn); } .ok { background: var(--soft); }
+    .note b:first-child { margin-right: 4px; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: .96rem; }
+    th, td { border: 1px solid var(--line); padding: 6px 9px; vertical-align: top; text-align: left; }
+    th { background: var(--soft); }
+    .who th:not(:first-child), .who td:not(:first-child) { text-align: center; width: 15%; }
+    .yes { color: var(--g2); font-weight: 700; } .no-c { color: #c3cad1; }
+    .kbd { display: inline-block; padding: 0 7px; border: 1px solid #c9d1d9; border-bottom-width: 2px; border-radius: 6px; background: #fff; font-size: .9rem; white-space: nowrap; }
+    .pill { display: inline-block; padding: 0 9px; border-radius: 999px; font-size: .88rem; font-weight: 600; white-space: nowrap; }
+    .p-warn { background: #ffc107; color: #222; } .p-ok { background: #198754; color: #fff; } .p-blue { background: #0d6efd; color: #fff; } .p-red { background: #dc3545; color: #fff; }
+    /* ภาพรวม 4 ขั้น */
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 6px 0 14px; }
+    .flow .c { position: relative; border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--soft); }
+    .flow .c .k { font-weight: 700; color: var(--g); }
+    .flow .c .w { font-size: .88rem; color: var(--mute); }
+    .flow .c:not(:last-child)::after { content: '➜'; position: absolute; right: -15px; top: 50%; transform: translateY(-50%); color: var(--g2); font-size: 1.1rem; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+    details { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin: 8px 0; }
+    details summary { cursor: pointer; font-weight: 600; }
+    details[open] summary { margin-bottom: 4px; }
+    ul, ol { padding-left: 22px; }
+    .top { position: fixed; right: 14px; bottom: 14px; background: var(--g); color: #fff; width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 1.3rem; box-shadow: 0 3px 10px rgba(0,0,0,.2); }
+    footer { text-align: center; color: var(--mute); font-size: .9rem; padding: 10px 16px 30px; }
+    @media (max-width: 640px) {
+      body { font-size: 16px; }
+      header h1 { font-size: 1.55rem; }
+      .toc ol { columns: 1; }
+      .two { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr 1fr; gap: 14px; }
+      .flow .c:nth-child(2)::after { display: none; }
+      section { padding: 14px 14px 6px; }
+      th, td { padding: 5px 6px; }
+      .who { font-size: .85rem; }
+    }
+    @media print {
+      @page { size: A4; margin: 12mm 12mm 14mm; }
+      body { background: #fff; font-size: 13pt; line-height: 1.5; }
+      header { background: none; color: var(--ink); padding: 0 0 8px; border-bottom: 2px solid var(--g); }
+      header .btns, .top { display: none !important; }
+      section, .toc { border: none; padding: 0; margin: 10px 0; }
+      figure, .note, table, details, .step, .flow { break-inside: avoid; }
+      details { border: none; padding: 0; } details > summary { list-style: none; }
+      figure img { box-shadow: none; max-height: 120mm; width: auto; }
+      a { color: var(--ink); text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="in">
+    <h1><i class="bi bi-arrow-left-right"></i> คู่มือสอนแทน</h1>
+    <p>ฝากสอน · รับสอนแทน · อนุมัติ · พิมพ์บันทึกข้อความ — ระบบเช็คชื่อ โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</p>
+    <div class="btns">
+      <a class="btn solid" href="/timetable.html?tab=sub"><i class="bi bi-box-arrow-up-right"></i> เปิดหน้าสอนแทน</a>
+      <button class="btn" onclick="printGuide()"><i class="bi bi-printer"></i> พิมพ์คู่มือ</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <nav class="toc">
+    <b><i class="bi bi-list-ul"></i> สารบัญ</b>
+    <ol>
+      <li><a href="#s1">ภาพรวม 4 ขั้น + ใครทำอะไรได้</a></li>
+      <li><a href="#s2">ก่อนเริ่ม: บัญชีต้องผูกกับชื่อในตาราง</a></li>
+      <li><a href="#s3">ครูที่ต้องลา: ฝากสอน</a></li>
+      <li><a href="#s4">ครูที่ว่าง: รับสอนแทน</a></li>
+      <li><a href="#s5">ผู้จัดสอนแทน: อนุมัติ / จัดครูแทน</a></li>
+      <li><a href="#s6">บันทึกข้อความสอนแทน</a></li>
+      <li><a href="#s7">แอดมิน: ตั้งสิทธิ์และผูกบัญชี</a></li>
+      <li><a href="#s8">ปัญหาที่พบบ่อย</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <section id="s1">
+    <h2><span class="no">1</span> ภาพรวม 4 ขั้น</h2>
+    <div class="flow">
+      <div class="c"><div class="k">① ฝากสอน</div>ครูที่จะลา บันทึกเอง<div class="w">ลาป่วย · ลากิจ · ไปราชการ</div></div>
+      <div class="c"><div class="k">② รับสอนแทน</div>ครูที่ว่างกด 🙋<div class="w">คนแรกที่กดได้คาบนั้น</div></div>
+      <div class="c"><div class="k">③ อนุมัติ</div>ผู้จัดสอนแทนกด ✓<div class="w">หรือเลือกครูแทนเอง</div></div>
+      <div class="c"><div class="k">④ บันทึกข้อความ</div>พิมพ์ ลงนาม เสนอ ผอ.<div class="w">ระบบกรอกให้ครบ</div></div>
+    </div>
+    <p>ทุกขั้นอยู่ที่เมนู <b>ตารางสอน → แท็บ สอนแทน</b> · ครูทุกคนเห็นว่าคาบไหนยังว่าง ใครรับไปแล้ว และอนุมัติหรือยัง</p>
+    <h3>ใครทำอะไรได้</h3>
+    <table class="who">
+      <tr><th>งาน</th><th>ครู</th><th>ผู้จัด<br>สอนแทน</th><th>ผู้ช่วย<br>จัดตาราง</th><th>แอดมิน</th></tr>
+      <tr><td>ดูคาบสอนแทนทั้งโรงเรียน · ฝากสอนของตัวเอง · กดรับสอนแทน</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>พิมพ์บันทึกข้อความสอนแทน</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>ใบรายชื่อนักเรียนของคาบ (Word / PDF)</td><td>คาบที่สอน / รับแทน</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>บันทึกครูไม่มาแทนคนอื่น (ทุกสาเหตุ ย้อนหลังได้)</td><td class="no-c">–</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>อนุมัติ / ไม่อนุมัติ · เลือกครูแทนเอง · จัดอัตโนมัติ</td><td class="no-c">–</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>จัดตารางสอน · เผยแพร่ตาราง</td><td class="no-c">–</td><td class="no-c">–</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>ตั้งสิทธิ์ · ผูกบัญชีครู</td><td class="no-c">–</td><td class="no-c">–</td><td class="no-c">–</td><td class="yes">✓</td></tr>
+    </table>
+    <div class="note ok"><b>🔒</b><b>ผู้จัดสอนแทน</b> เหมาะกับครูที่ดูแลงานสอนแทนประจำวัน (เช่น ฝ่ายวิชาการ ครูเวร) — ทำได้เฉพาะงานสอนแทน แก้ตารางสอนไม่ได้ และไม่ใช่แอดมินทั้งระบบ</div>
+  </section>
+
+  <!-- 2 -->
+  <section id="s2">
+    <h2><span class="no">2</span> ก่อนเริ่ม: บัญชีต้องผูกกับชื่อในตาราง</h2>
+    <p>ระบบต้องรู้ว่าบัญชีที่ล็อกอินคือครูคนไหนในตารางสอน ถึงจะให้ <b>ฝากสอน</b> และ <b>กดรับสอนแทน</b> ได้</p>
+    <ul>
+      <li><b>เช็กง่าย ๆ:</b> เปิดแท็บ สอนแทน ถ้ามีปุ่มเหลือง <span class="pill p-warn"><i class="bi bi-send"></i> ฝากสอน</span> = พร้อมใช้ ·
+        หรือแท็บ รายครู มีคำว่า <b>(ฉัน)</b> ต่อท้ายชื่อตัวเอง</li>
+      <li><b>ไม่มีปุ่ม / กดแล้วขึ้น "ยังไม่ได้ผูกกับชื่อครูในตารางสอน"</b> → แจ้งแอดมินให้ผูกบัญชี (หัวข้อ 7)</li>
+      <li>บัญชีรวมของห้อง เช่น "ครูที่ปรึกษา ม.1" ใช้เช็คชื่อได้ตามเดิม แต่ <b>ฝากสอน/รับสอนแทนในนามครูแต่ละคนไม่ได้</b> — ครูควรมีบัญชีของตัวเอง</li>
+    </ul>
+  </section>
+
+  <!-- 3 -->
+  <section id="s3">
+    <h2><span class="no">3</span> ครูที่ต้องลา: ฝากสอน</h2>
+    <div class="step"><div class="n">1</div><div class="b">
+      <h3>เปิดแท็บสอนแทน เลือกวันที่จะลา</h3>
+      <p>เมนู <b>ตารางสอน</b> → แท็บ <b>สอนแทน</b> → เลื่อนวันด้วยปุ่ม ‹ › หรือเลือกในช่องวันที่</p>
+    </div></div>
+    <div class="step"><div class="n">2</div><div class="b">
+      <h3>กด "ฝากสอน" กรอก แล้วบันทึก</h3>
+      <p>เลือก <b>สาเหตุ</b> (ลาป่วย / ลากิจ / ไปราชการ) · <b>งานที่ฝาก</b> เช่น "ให้ทำใบงานหน้า 12" · <b>วันที่</b> (ลาหลายวันเลือก "ถึงวันที่") ·
+        <b>คาบที่ไม่อยู่</b> ทั้งวัน / ช่วงเช้า / ช่วงบ่าย / เลือกคาบ</p>
+      <figure><img src="/img/guide/sub-self.png" alt="หน้าต่างฝากสอน" loading="lazy" style="max-width:min(640px,100%)"><figcaption>หน้าต่างฝากสอน — ระบบใส่ชื่อของคุณให้เอง</figcaption></figure>
+    </div></div>
+    <div class="step"><div class="n">3</div><div class="b">
+      <h3>รอครูที่ว่างกดรับ</h3>
+      <p>คาบของคุณขึ้นในตาราง "คาบที่ต้องมีครูสอนแทน" ให้ครูทุกคนเห็น ครูที่ว่างกดรับได้ทันที · ครูที่ผูกบัญชีแล้วจะเห็นในหน้าแรกด้วยว่ามีคาบที่ยังไม่มีคนรับ</p>
+    </div></div>
+    <div class="step"><div class="n">4</div><div class="b">
+      <h3>พิมพ์บันทึกข้อความ ลงชื่อ "ผู้ขออนุญาต"</h3>
+      <p>กดปุ่ม <i class="bi bi-file-earmark-text"></i> ข้างชื่อตัวเองในกล่อง "ครูที่ไม่มา / ฝากสอน" → <b>พิมพ์</b> หรือ <b>ดาวน์โหลด Word</b> (ดูหัวข้อ 6) ·
+        แนะนำพิมพ์หลังทุกคาบมีคนรับแล้ว ชื่อครูสอนแทนจะขึ้นครบ</p>
+    </div></div>
+    <div class="note warn"><b>📌</b>ฝากสอนได้ <b>ตั้งแต่วันนี้เป็นต้นไป</b> (ย้อนหลังไม่ได้) ครั้งละไม่เกิน <b>31 วัน</b> ·
+      แก้/ลบเองได้ที่ <i class="bi bi-pencil-square"></i> จนถึงวันสุดท้ายที่ลา · ลาย้อนหลัง หรือสาเหตุอื่น (อบรม ลาคลอด ย้ายออก) ให้แจ้ง <b>ผู้จัดสอนแทน</b> บันทึกให้ ·
+      ถ้าคุณรับสอนแทนห้องอื่นไว้ในวันที่ลา ระบบยกเลิกคาบนั้นให้เอง (คาบนั้นกลับมาว่างให้คนอื่นรับ)</div>
+  </section>
+
+  <!-- 4 -->
+  <section id="s4">
+    <h2><span class="no">4</span> ครูที่ว่าง: รับสอนแทน</h2>
+    <div class="step"><div class="n">1</div><div class="b">
+      <h3>ดูว่ามีคาบไหนต้องการครูแทน</h3>
+      <p>หน้าแรกจะมีกล่องฟ้า <b>"มีคาบที่ยังไม่มีครูสอนแทน"</b> (วันนี้ / วันเรียนถัดไป) → กด <b>ดู / รับสอนแทน</b> · หรือเปิด ตารางสอน → แท็บ สอนแทน เอง</p>
+    </div></div>
+    <div class="step"><div class="n">2</div><div class="b">
+      <h3>กด "🙋 รับสอนแทน" ในคาบที่ว่าง</h3>
+      <p>ปุ่มขึ้นเฉพาะคาบที่คุณว่างจริง · <b>คนแรกที่กดได้คาบนั้น</b> คนอื่นจะเห็นชื่อคุณทันที</p>
+      <figure><img src="/img/guide/sub-teacher.png" alt="แท็บสอนแทนของครู" loading="lazy"><figcaption>มุมมองของครู — สถานะ <span class="pill p-ok">อนุมัติแล้ว</span> <span class="pill p-warn">รออนุมัติ</span> และปุ่มรับสอนแทนในคาบที่ยังไม่มีครู</figcaption></figure>
+    </div></div>
+    <div class="step"><div class="n">3</div><div class="b">
+      <h3>รอผู้จัดสอนแทนอนุมัติ</h3>
+      <ul>
+        <li><span class="pill p-warn">รออนุมัติ</span> → <span class="pill p-ok">อนุมัติแล้ว</span> · ระหว่างรอ เปลี่ยนใจกด <b>ยกเลิกการรับ</b> ได้ (อนุมัติแล้วต้องแจ้งผู้จัดสอนแทน)</li>
+        <li>คาบที่รับไว้ขึ้นในหน้าแรก กล่องเหลือง <b>"คาบสอนแทนของคุณ"</b> และในตารางสอนของตัวเอง</li>
+        <li>ใต้ชื่อวิชามี <b>รายชื่อ: Word · PDF</b> = ใบรายชื่อนักเรียนห้องนั้นตามแบบฟอร์มงานทะเบียน มีช่องลงชื่อครูสอนแทน</li>
+        <li>ลงชื่อ <b>"ผู้สอนแทน"</b> ในบันทึกข้อความของครูที่ฝากสอน</li>
+      </ul>
+    </div></div>
+  </section>
+
+  <!-- 5 -->
+  <section id="s5">
+    <h2><span class="no">5</span> ผู้จัดสอนแทน: อนุมัติ / จัดครูแทน</h2>
+    <p>ผู้จัดสอนแทน (รวมแอดมินและผู้ช่วยจัดตาราง) เห็นปุ่มเพิ่ม: <span class="pill p-red">+ บันทึกครูไม่มา</span> ช่องเลือก "สอนแทนโดย" ปุ่มอนุมัติ และจัดอัตโนมัติ</p>
+    <figure><img src="/img/guide/sub-manager.png" alt="แท็บสอนแทนของผู้จัดสอนแทน" loading="lazy"><figcaption>มุมมองผู้จัดสอนแทน — คาบ 5 มีครูกดรับไว้ รอกดอนุมัติ</figcaption></figure>
+    <div class="step"><div class="n">1</div><div class="b">
+      <h3>อนุมัติคำขอ</h3>
+      <p>คาบที่ขึ้น <span class="pill p-warn">รออนุมัติ</span> กด <b>✓ อนุมัติ</b> (หลายคาบกด <b>อนุมัติทั้งหมด</b>) ·
+        <b>ไม่อนุมัติ</b> = คาบกลับมาว่างให้คนอื่นกดรับ · หรือเลือกครูคนอื่นในช่อง "สอนแทนโดย" แทนได้เลย</p>
+    </div></div>
+    <div class="step"><div class="n">2</div><div class="b">
+      <h3>คาบที่ไม่มีใครรับ: เลือกครูเอง หรือจัดอัตโนมัติ</h3>
+      <ul>
+        <li>ช่อง <b>"สอนแทนโดย"</b> เรียงให้แล้ว: สอนแทนมาน้อยก่อน (กระจายงานทั้งเทอม) · สาระเดียวกัน · สอนห้องนั้นอยู่ · วันนั้นมีคาบน้อย — ครูไม่ว่างเลือกไม่ได้</li>
+        <li>ผู้จัดสอนแทนเลือกเอง = <b>อนุมัติทันที</b> · กด <b>จัดอัตโนมัติ</b> ให้ระบบเลือกทุกคาบที่ยังว่าง</li>
+        <li>ไม่มีใครว่าง: เลือก <b>✗ ไม่มีครูแทน (มอบงาน/รวมห้อง)</b> แล้วพิมพ์หมายเหตุ</li>
+      </ul>
+    </div></div>
+    <div class="step"><div class="n">3</div><div class="b">
+      <h3>บันทึกครูไม่มาแทนคนอื่น</h3>
+      <p>ครูโทรมาลา / ไม่มีบัญชี / ลาย้อนหลัง → <span class="pill p-red">+ บันทึกครูไม่มา</span> เลือกครู สาเหตุได้ทุกแบบ (อบรม ลาคลอด ย้ายออก ฯลฯ) ย้อนหลังได้ หลายวันหรือ "ยังไม่มีกำหนด" ก็ได้</p>
+    </div></div>
+    <div class="step"><div class="n">4</div><div class="b">
+      <h3>แจ้งครูและพิมพ์</h3>
+      <div class="two">
+        <ul>
+          <li><b>ส่ง LINE / รูปภาพ</b> ได้ข้อความแบบกลุ่มไลน์ครู พร้อมรูป ก๊อป/แชร์เข้า LINE ได้ทันที</li>
+          <li>ปุ่มเขียว <b>พิมพ์</b> ด้านบน = <b>บันทึกข้อความของครูที่ไม่มาวันนั้นทุกคน คนละใบ</b> (ใช้แทนใบบันทึกการจัดครูสอนแทนแบบเดิม)</li>
+          <li>หน้าแรกของผู้จัดสอนแทนมีสรุปการจัดครูแทนของวันนี้ (ยังไม่จัด / รออนุมัติ)</li>
+        </ul>
+        <figure><img src="/img/guide/subline.png" alt="ส่ง LINE" loading="lazy"><figcaption>ข้อความ + รูปพร้อมส่ง LINE</figcaption></figure>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- 6 -->
+  <section id="s6">
+    <h2><span class="no">6</span> บันทึกข้อความสอนแทน</h2>
+    <p>แบบฟอร์ม <b>"การสอนแทน/แลกเปลี่ยนคาบสอน"</b> ของโรงเรียน — ระบบกรอกให้อัตโนมัติจากข้อมูลสอนแทน</p>
+    <div class="two">
+      <figure><a href="/img/guide/sub-memo.png" target="_blank" rel="noopener"><img src="/img/guide/sub-memo.png" alt="บันทึกข้อความสอนแทน" loading="lazy"></a><figcaption>ตัวอย่าง: ลา 2 วัน ครูแทน 3 คน + คาบที่ยังไม่มีคนรับ (แตะภาพเพื่อขยาย)</figcaption></figure>
+      <div>
+        <h3 style="margin-top:0">ระบบกรอกให้</h3>
+        <ul>
+          <li>วันที่ · ชื่อครูที่ไม่มา · วิชาที่ขาดสอน · สาเหตุและวันที่ลา</li>
+          <li>ครูสอนแทนแยกเป็นคน แต่ละแถวมี วันที่ รหัส-วิชา ชั้น เวลา ถึง รวมกี่คาบ (คาบติดกันรวมเป็นแถวเดียว)</li>
+          <li>ชื่อในวงเล็บใต้ลายเซ็นทุกช่อง · หัวหน้ากลุ่มบริหารงานวิชาการ · ผู้อำนวยการ</li>
+        </ul>
+        <h3>เขียนเอง</h3>
+        <ul>
+          <li>ลายเซ็น · ช่อง <b>ห้องเรียน</b> (ระบบไม่มีข้อมูลห้อง) · ผอ. ทำเครื่องหมาย ○ อนุญาต / ไม่อนุญาต</li>
+        </ul>
+        <h3>ลำดับลงนาม</h3>
+        <p>ผู้ขออนุญาต → ผู้สอนแทน → หัวหน้ากลุ่มบริหารงานวิชาการ (ตรวจ) → ผู้อำนวยการ (อนุญาต)</p>
+      </div>
+    </div>
+    <table>
+      <tr><th style="width:190px">เปิดจากไหน</th><th>ได้อะไร</th></tr>
+      <tr><td>ปุ่ม <i class="bi bi-file-earmark-text"></i> ข้างชื่อครูที่ไม่มา</td><td>ใบของครูคนนั้น 1 ใบ (ฝากสอน 1 ครั้ง = 1 ใบ ลาหลายวันรวมใบเดียว) — <b>ครูทุกคนเปิดได้</b></td></tr>
+      <tr><td>ปุ่มเขียว <b>พิมพ์</b> ในแท็บสอนแทน</td><td>ใบของครูทุกคนที่ไม่มาวันที่เลือก คนละหน้า</td></tr>
+    </table>
+    <ul>
+      <li><b>ดาวน์โหลด Word</b> = แก้ต่อใน Word ได้ · <b>พิมพ์ / บันทึก PDF</b> = เลือกเครื่องพิมพ์ หรือ "บันทึกเป็น PDF" · ระบบย่อให้พอดี 1 หน้า A4</li>
+      <li><b>แก้ข้อความ</b> = คลิกแก้บนหน้าเว็บก่อนพิมพ์ เช่น เติมห้องเรียน (แก้เฉพาะใบที่พิมพ์ ไม่บันทึกลงระบบ)</li>
+      <li>คาบที่ยังไม่มีคนรับ ขึ้นเป็นกลุ่ม "นาย/นาง/นางสาว……" ว่างไว้ · คาบที่มอบงาน ขึ้นเป็น "ไม่มีครูสอนแทน (มอบหมายงาน/รวมห้อง)"</li>
+    </ul>
+    <div class="note tip"><b>💡</b>ชื่อครูที่ระบบไม่รู้คำนำหน้า จะขึ้น <b>"นาย/นาง/นางสาว"</b> ให้ขีดเลือก · แก้ถาวรได้โดยให้แอดมินตั้งชื่อบัญชีผู้ใช้ของครูให้มีคำนำหน้า เช่น "นางสาวสมใจ ใจดี"
+      (ระบบดึงคำนำหน้าจากชื่อบัญชีผู้ใช้ รายชื่อครูที่ปรึกษา และผู้ลงนามในตารางสอน)</div>
+  </section>
+
+  <!-- 7 -->
+  <section id="s7">
+    <h2><span class="no">7</span> แอดมิน: ตั้งสิทธิ์และผูกบัญชี</h2>
+    <div class="step"><div class="n">1</div><div class="b">
+      <h3>ตั้งสิทธิ์รายคน</h3>
+      <p>แท็บ <b>สอนแทน</b> → ปุ่ม <b><i class="bi bi-person-gear"></i> สิทธิ์</b> มุมขวาบน (หรือ จัดตาราง → เครื่องมือ → สิทธิ์ผู้ช่วยจัดตาราง / ผู้จัดสอนแทน) →
+        เลือกระดับของแต่ละคน <b>ครู / ผู้จัดสอนแทน / ผู้ช่วยจัดตาราง</b> → บันทึก · มีผลเมื่อครูคนนั้นเปิดหน้าใหม่</p>
+      <figure><img src="/img/guide/sub-perm.png" alt="ตั้งสิทธิ์" loading="lazy" style="max-width:min(640px,100%)"><figcaption>หน้าต่างสิทธิ์ — บอกด้วยว่าบัญชีไหน <span style="color:#dc3545">ยังไม่ผูกกับชื่อในตาราง</span></figcaption></figure>
+    </div></div>
+    <div class="step"><div class="n">2</div><div class="b">
+      <h3>ผูกบัญชีกับชื่อครูในตาราง</h3>
+      <ul>
+        <li><b>ครูยังไม่มีบัญชี:</b> หน้า <b>จัดการผู้ใช้</b> → สร้างบัญชีบทบาท "ครู" ตั้งชื่อ-สกุล <b>ตรงกับชื่อในตารางสอน</b> (ใส่คำนำหน้าได้ เช่น "นายพรเทพ อุ้มชูวัฒนา") → ครูล็อกอินเปิดหน้าตารางสอน ระบบผูกให้เอง</li>
+        <li><b>ชื่อไม่ตรง / ผูกผิดคน:</b> จัดตาราง → <b>รายครู</b> → เลือกครู → <b>เงื่อนไขครู</b> → ช่อง "บัญชีผู้ใช้ในระบบ" → เลือกบัญชี → บันทึก</li>
+      </ul>
+    </div></div>
+  </section>
+
+  <!-- 8 -->
+  <section id="s8">
+    <h2><span class="no">8</span> ปัญหาที่พบบ่อย</h2>
+    <details><summary>ไม่เห็นปุ่ม "ฝากสอน" / "รับสอนแทน"</summary>
+      <p>บัญชียังไม่ผูกกับชื่อในตารางสอน (หัวข้อ 2) → แจ้งแอดมิน · ถ้าใช้บัญชีรวม เช่น "ครูที่ปรึกษา ม.1" ต้องใช้บัญชีของตัวเอง</p></details>
+    <details><summary>คาบนั้นว่างแต่ไม่มีปุ่มรับสอนแทน</summary>
+      <p>ระบบซ่อนปุ่มเมื่อ: คุณมีสอนคาบนั้น · คุณลา/ฝากสอนคาบนั้น · คุณรับห้องอื่นคาบเดียวกันไว้แล้ว · วันนั้นผ่านไปแล้ว (ใต้ช่องจะบอกเหตุผล) — ถ้าคิดว่าว่างจริง แจ้งผู้จัดสอนแทนเลือกให้</p></details>
+    <details><summary>กดรับแล้วขึ้น "คาบนี้มีผู้รับแล้ว"</summary>
+      <p>มีครูกดก่อนเสี้ยววินาที ระบบให้คนแรก หน้าจอจะอัปเดตชื่อผู้รับให้เห็น</p></details>
+    <details><summary>อยากยกเลิกคาบที่รับไว้</summary>
+      <p>ยัง <b>รออนุมัติ</b> → กด "ยกเลิกการรับ" ใต้ชื่อตัวเอง · <b>อนุมัติแล้ว</b> → แจ้งผู้จัดสอนแทนเปลี่ยนครู</p></details>
+    <details><summary>ฝากสอนย้อนหลัง / ลาเกิน 31 วัน / สาเหตุอื่นไม่ได้</summary>
+      <p>ครูฝากสอนเองได้เฉพาะ ลาป่วย ลากิจ ไปราชการ ตั้งแต่วันนี้ไป ครั้งละไม่เกิน 31 วัน — กรณีอื่นให้ผู้จัดสอนแทนกด "บันทึกครูไม่มา" ให้</p></details>
+    <details><summary>บันทึกข้อความยังไม่มีชื่อครูสอนแทน</summary>
+      <p>ยังไม่มีใครรับคาบนั้น ช่องชื่อจะว่างไว้ · รอให้มีคนรับ/ผู้จัดสอนแทนเลือกครูก่อน แล้วเปิดบันทึกข้อความใหม่ ข้อมูลอัปเดตทันที</p></details>
+    <details><summary>คำนำหน้าชื่อขึ้น "นาย/นาง/นางสาว" / ชื่อผู้ลงนามไม่ถูก</summary>
+      <p>ขีดเลือกบนกระดาษ หรือกด <b>แก้ข้อความ</b> ก่อนพิมพ์ · แก้ถาวร: ชื่อบัญชีผู้ใช้ใส่คำนำหน้า (หัวข้อ 6) ·
+        ชื่อหัวหน้ากลุ่มบริหารงานวิชาการ = ผู้ลงนามท้ายตารางสอน (จัดตาราง → เครื่องมือ → ผู้ลงนามท้ายตาราง) · ชื่อ ผอ. = หน้าตั้งค่าระบบ</p></details>
+    <details><summary>ลาหลายวัน บันทึกข้อความยาวจนตัวหนังสือเล็ก</summary>
+      <p>ระบบย่อให้พอดี 1 หน้า (ย่อได้ถึงราว 80%) ถ้าคาบเยอะมาก Word จะขึ้นหน้า 2 ต่อให้เอง · ลาไม่มีกำหนด หรือยาวกว่า 2 สัปดาห์ ระบบทำใบเฉพาะวันที่เลือกในแท็บสอนแทน</p></details>
+    <details><summary>พิมพ์จาก iPhone / iPad / Safari แล้วไม่พอดีหน้า</summary>
+      <p>เลือกกระดาษ <b>A4</b> ขนาด <b>100%</b> · หรือกด <b>ดาวน์โหลด Word</b> แล้วพิมพ์จากคอมพิวเตอร์</p></details>
+    <details><summary>เว็บยังแสดงหน้าตาแบบเก่า</summary>
+      <p>กด <span class="kbd">Ctrl</span> + <span class="kbd">F5</span> (Mac: <span class="kbd">Cmd</span> + <span class="kbd">Shift</span> + <span class="kbd">R</span>) ครั้งเดียว</p></details>
+    <p class="small">ขั้นตอนจัดตาราง / ส่ง LINE แบบละเอียด ดู <a href="/timetable-guide.html#s7">คู่มือจัดตารางสอน หัวข้อ 7</a></p>
+  </section>
+</main>
+
+<footer>คู่มือสอนแทน · ระบบเช็คชื่อ โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม · ภาพประกอบจากข้อมูลตัวอย่าง</footer>
+<a class="top" href="#" title="กลับด้านบน"><i class="bi bi-arrow-up"></i></a>
+<script>
+// พิมพ์: โหลดภาพที่ยังไม่ได้เลื่อนไปดูให้ครบก่อน (ภาพโหลดแบบ lazy) ไม่งั้นกระดาษได้ภาพว่าง
+async function printGuide() {
+  document.querySelectorAll('img[loading="lazy"]').forEach(i => { i.loading = 'eager'; });
+  await Promise.all([...document.images].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
+  print();
+}
+// พิมพ์ (รวมกดพิมพ์จากเมนูเบราว์เซอร์): กางคำตอบ "ปัญหาที่พบบ่อย" ทั้งหมด แล้วหุบคืนหลังพิมพ์
+let closedDetails = [];
+addEventListener('beforeprint', () => { closedDetails = [...document.querySelectorAll('details:not([open])')]; closedDetails.forEach(d => { d.open = true; }); });
+addEventListener('afterprint', () => { closedDetails.forEach(d => { d.open = false; }); closedDetails = []; });
+</script>
+</body>
+</html>

@@ -165,7 +165,8 @@ function fitPages() {
 
 // มือถือ: ย่อกระดาษ A4 ให้พอดีจอ (ตอนพิมพ์คืนขนาดจริง)
 function fitScreen(on = true) {
-  const z = on && innerWidth < 830 ? String((innerWidth - 12) / 800) : '';
+  const vw = document.documentElement.clientWidth;      // ไม่ใช้ innerWidth: มือถือขยายตามกระดาษที่ล้นจอ (ได้ ~800)
+  const z = on && vw < 830 ? String((vw - 12) / 800) : '';
   document.querySelectorAll('.memo').forEach(p => { p.style.zoom = z; });
 }
 addEventListener('beforeprint', () => fitScreen(false));
