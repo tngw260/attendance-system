@@ -5172,6 +5172,8 @@ import classlist                                     # ใบรายชื่�
 classlist.init(app, get_db, login_required, current_user, get_settings)
 import submemo                                       # บันทึกข้อความสอนแทน (แบบฟอร์มโรงเรียน) Word / PDF
 submemo.init(app, get_db, login_required, current_user, get_settings)
+import remedial                                      # สอบแก้ตัว 0 ร มส มผ — ครูส่งผลออนไลน์ นายทะเบียนตรวจรับ
+remedial.init(app, get_db, login_required, current_user, get_settings)
 
 if __name__ == '__main__':
     import sys

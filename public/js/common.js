@@ -336,6 +336,7 @@ function setupUserUI() {
     injectLibraryLink();
     injectBankLink();
     injectTimetableLink();
+    injectRemedialLink();
     // Add global student search
     injectGlobalSearch();
     // Apply theme color and logo from settings
@@ -460,6 +461,21 @@ function injectTimetableLink() {
   li.className = 'nav-item';
   const isActive = location.pathname === '/timetable.html';
   li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/timetable.html"><i class="bi bi-calendar-week me-1"></i>ตารางสอน</a>`;
+  anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
+}
+
+function injectRemedialLink() {
+  // สอบแก้ตัว — ครูส่งผล / นายทะเบียน (แอดมิน) ตรวจรับ
+  if (!(currentUser?.role === 'admin' || currentUser?.role === 'teacher')) return;
+  if (document.querySelector('a.nav-link[href="/remedial.html"]')) return;
+  const anchor = document.querySelector('a.nav-link[href="/timetable.html"]');
+  if (!anchor) return;
+  const anchorLi = anchor.closest('li.nav-item');
+  if (!anchorLi) return;
+  const li = document.createElement('li');
+  li.className = 'nav-item';
+  const isActive = location.pathname === '/remedial.html';
+  li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/remedial.html"><i class="bi bi-arrow-repeat me-1"></i>สอบแก้ตัว</a>`;
   anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
 }
 

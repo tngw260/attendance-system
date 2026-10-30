@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สอบแก้ตัว</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <style>
+    .rm-tabs .btn { min-width: 8.5rem; }
+    .subj-card .card-header { background: var(--surface-2, #f6f8f7); }
+    .case { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: center; padding: .55rem .9rem;
+            border-top: 1px solid var(--bs-border-color); }
+    .case:first-child { border-top: 0; }
+    .case .who { flex: 1 1 14rem; min-width: 0; }
+    .case .who small { color: var(--bs-secondary-color); }
+    .case .act { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
+    .og { display: inline-block; min-width: 2.3rem; text-align: center; font-weight: 700; }
+    .og-0 { background: #fde2e1; color: #b42318; } .og-ร { background: #fff1d6; color: #9a5b00; }
+    .og-มส { background: #e8e2f7; color: #5b3aa8; } .og-มผ { background: #e6eef6; color: #2c5d8a; }
+    .st-pending { background: #f1f3f5; color: #495057; } .st-submitted { background: #dbeafe; color: #1e4fa8; }
+    .st-received { background: #d9f2e1; color: #17653a; }
+    .ret { flex-basis: 100%; color: #b42318; font-size: .875rem; }
+    .stat { display: inline-flex; gap: .4rem; align-items: center; padding: .3rem .7rem; border-radius: 999px;
+            background: var(--surface-2, #f1f3f5); font-size: .9rem; }
+    #aTable td, #aTable th { white-space: nowrap; vertical-align: middle; }
+    #aTable td.wrap { white-space: normal; min-width: 11rem; }
+    .stu-pick { max-height: 50vh; overflow: auto; }
+    .stu-pick .row-s { display: flex; align-items: center; gap: .5rem; padding: .3rem .25rem; border-bottom: 1px solid var(--bs-border-color); }
+    .stu-pick .row-s .nm { flex: 1; min-width: 0; }
+    .stu-pick select { width: 6.2rem; }
+    .sub-list .row-s { display: flex; align-items: center; gap: .5rem; padding: .35rem 0; border-bottom: 1px solid var(--bs-border-color); }
+    .sub-list .row-s .nm { flex: 1; min-width: 0; }
+    .sub-list select { width: 5.5rem; }
+    .imp-preview { max-height: 45vh; overflow: auto; font-size: .9rem; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+        <li class="nav-item"><a class="nav-link" href="/attendance.html"><i class="bi bi-check2-square me-1"></i>เช็คชื่อ</a></li>
+        <li class="nav-item"><a class="nav-link" href="/scan.html"><i class="bi bi-qr-code-scan me-1"></i>สแกน QR</a></li>
+        <li class="nav-item"><a class="nav-link" href="/line-summary.html"><i class="bi bi-chat-quote me-1"></i>สรุป LINE</a></li>
+        <li class="nav-item"><a class="nav-link" href="/uniform-check.html"><i class="bi bi-person-vcard me-1"></i>ตรวจเครื่องแต่งกาย</a></li>
+        <li class="nav-item"><a class="nav-link" href="/late-students.html"><i class="bi bi-clock-history me-1"></i>มาสาย</a></li>
+        <li class="nav-item"><a class="nav-link" href="/students.html"><i class="bi bi-people me-1"></i>นักเรียน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/report.html"><i class="bi bi-bar-chart me-1"></i>รายงาน</a></li>
+        <li class="nav-item"><a class="nav-link" href="/behavior-report.html"><i class="bi bi-award me-1"></i>คะแนน</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/users.html"><i class="bi bi-shield-lock me-1"></i>ผู้ใช้</a></li>
+        <li class="nav-item admin-only"><a class="nav-link" href="/settings.html"><i class="bi bi-gear me-1"></i>ตั้งค่า</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header no-print">
+  <div class="container">
+    <h1><i class="bi bi-arrow-repeat me-2"></i>สอบแก้ตัว 0 · ร · มส · มผ</h1>
+    <div class="subtitle">ครูผู้สอนส่งผลสอบแก้ตัวออนไลน์ — นายทะเบียนตรวจรับ</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+  <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+    <div>
+      <label class="form-label small mb-1" for="term">ภาคเรียนที่ติด</label>
+      <select id="term" class="form-select" onchange="onTerm()"></select>
+    </div>
+    <div class="btn-group rm-tabs ms-sm-2" role="group" id="tabs" hidden>
+      <button class="btn btn-outline-primary active" id="tabT" onclick="showTab('t')"><i class="bi bi-person-video3 me-1"></i>ครูผู้สอน</button>
+      <button class="btn btn-outline-primary" id="tabA" onclick="showTab('a')"><i class="bi bi-clipboard-check me-1"></i>นายทะเบียน
+        <span class="badge bg-danger ms-1" id="waitBadge" hidden></span></button>
+    </div>
+  </div>
+
+  <!-- ===== ครูผู้สอน ===== -->
+  <section id="viewT">
+    <div class="card mb-3"><div class="card-body d-flex flex-wrap gap-2 align-items-end">
+      <div class="flex-grow-1" style="max-width:24rem">
+        <label class="form-label small mb-1" for="teacher">ครูผู้สอน (เลือกชื่อตัวเอง)</label>
+        <select id="teacher" class="form-select" onchange="onTeacher()"></select>
+      </div>
+      <button class="btn btn-outline-primary" onclick="openAdd()"><i class="bi bi-person-plus me-1"></i>เพิ่มนักเรียนที่ติด</button>
+      <button class="btn btn-primary" id="btnBulk" onclick="openSubmit(selectedT())" disabled>
+        <i class="bi bi-send-check me-1"></i>ส่งผลผ่าน <span id="bulkN"></span></button>
+    </div></div>
+    <div id="tStats" class="d-flex flex-wrap gap-2 mb-3"></div>
+    <div id="tList"></div>
+  </section>
+
+  <!-- ===== นายทะเบียน ===== -->
+  <section id="viewA" hidden>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <button class="btn btn-outline-primary" onclick="openImport()"><i class="bi bi-upload me-1"></i>นำเข้าจาก SGS</button>
+      <button class="btn btn-outline-success" onclick="exportXlsx()"><i class="bi bi-file-earmark-excel me-1"></i>ดาวน์โหลด Excel</button>
+    </div>
+    <div id="aStats" class="d-flex flex-wrap gap-2 mb-3"></div>
+    <div id="aByTeacher" class="mb-3"></div>
+    <div class="d-flex flex-wrap gap-2 align-items-end mb-2">
+      <select id="fStatus" class="form-select w-auto" onchange="renderA()">
+        <option value="">ทุกสถานะ</option><option value="submitted" selected>ส่งผลแล้ว (รอตรวจรับ)</option>
+        <option value="pending">ค้าง</option><option value="received">ตรวจรับแล้ว</option>
+      </select>
+      <select id="fClass" class="form-select w-auto" onchange="renderA()"><option value="">ทุกชั้น</option></select>
+      <input id="fText" class="form-control w-auto" placeholder="ค้นหา ชื่อ / วิชา / ครู" oninput="renderA()">
+    </div>
+    <div class="d-flex flex-wrap gap-2 mb-2" id="aBulk">
+      <button class="btn btn-success btn-sm" onclick="bulkA('receive')"><i class="bi bi-check2-all me-1"></i>ตรวจรับที่เลือก</button>
+      <button class="btn btn-outline-danger btn-sm" onclick="openReturn()"><i class="bi bi-reply me-1"></i>ตีกลับให้ครูแก้</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="bulkA('unreceive')">ยกเลิกตรวจรับ</button>
+    </div>
+    <div class="table-responsive card"><table class="table table-sm table-hover mb-0" id="aTable"></table></div>
+  </section>
+</div>
+
+<!-- เพิ่มนักเรียนที่ติด -->
+<div class="modal fade" id="addModal" tabindex="-1"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">เพิ่มนักเรียนที่ติด</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div class="small text-muted mb-2" id="addWho"></div>
+    <label class="form-label small mb-1" for="addLesson">รายวิชา</label>
+    <select id="addLesson" class="form-select mb-2" onchange="onAddLesson()"></select>
+    <div id="addOther" class="row g-2 mb-2" hidden>
+      <div class="col-4"><input id="addCode" class="form-control" placeholder="รหัสวิชา"></div>
+      <div class="col-8"><input id="addTitle" class="form-control" placeholder="ชื่อวิชา"></div>
+      <div class="col-12"><select id="addClass" class="form-select" onchange="loadAddStudents([this.value])"></select></div>
+    </div>
+    <div class="small text-muted mb-1">เลือกผลการเรียนเดิมของนักเรียนที่ติด (คนที่ผ่านปล่อยเป็น —)</div>
+    <div class="stu-pick border rounded" id="addStudents"><div class="p-3 text-muted">เลือกวิชาก่อน</div></div>
+  </div>
+  <div class="modal-footer"><span class="me-auto small text-muted" id="addCount"></span>
+    <button class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>
+    <button class="btn btn-primary" onclick="saveAdd()"><i class="bi bi-plus-lg me-1"></i>เพิ่ม</button></div>
+</div></div></div>
+
+<!-- ส่งผลผ่าน -->
+<div class="modal fade" id="submitModal" tabindex="-1"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">ส่งผลสอบแก้ตัวผ่าน</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div class="row g-2 mb-2">
+      <div class="col-7"><label class="form-label small mb-1" for="subDate">วันที่สอบแก้ตัว</label>
+        <input type="date" id="subDate" class="form-control"></div>
+      <div class="col-5" id="subAttemptBox"><label class="form-label small mb-1" for="subAttempt">ครั้งที่ (ผล 0)</label>
+        <select id="subAttempt" class="form-select"><option value="1">1</option><option value="2">2</option></select></div>
+    </div>
+    <div class="sub-list mb-2" id="subList"></div>
+    <input id="subNote" class="form-control" placeholder="หมายเหตุ (ถ้ามี)">
+    <div class="small text-muted mt-2">ผล 0 และ มส แก้ตัวผ่านได้เกรด 1 · ร ได้ตามคะแนนจริง · มผ ได้ ผ</div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>
+    <button class="btn btn-primary" onclick="sendSubmit()"><i class="bi bi-send-check me-1"></i>ส่งผล</button></div>
+</div></div></div>
+
+<!-- แก้รายการ -->
+<div class="modal fade" id="editModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">แก้รายการ</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div class="fw-bold mb-2" id="editWho"></div>
+    <label class="form-label small mb-1" for="editOrig">ผลการเรียนเดิม</label>
+    <select id="editOrig" class="form-select mb-2"></select>
+    <label class="form-label small mb-1" for="editTeacher">ครูผู้สอน</label>
+    <select id="editTeacher" class="form-select mb-2"></select>
+    <label class="form-label small mb-1" for="editTitle">ชื่อวิชา</label>
+    <input id="editTitle" class="form-control">
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline-danger me-auto" onclick="delCase()"><i class="bi bi-trash me-1"></i>ลบรายการ</button>
+    <button class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>
+    <button class="btn btn-primary" onclick="saveEdit()">บันทึก</button></div>
+</div></div></div>
+
+<!-- ตีกลับ -->
+<div class="modal fade" id="returnModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">ตีกลับให้ครูแก้</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div class="small text-muted mb-2" id="returnN"></div>
+    <textarea id="returnNote" class="form-control" rows="2" placeholder="เหตุผล เช่น วันที่สอบไม่ตรงกับบันทึก"></textarea>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>
+    <button class="btn btn-danger" onclick="bulkA('return')">ตีกลับ</button></div>
+</div></div></div>
+
+<!-- นำเข้าจาก SGS -->
+<div class="modal fade" id="importModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">นำเข้ารายชื่อที่ติดจาก SGS</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div class="small text-muted mb-2">ไฟล์ Excel (.xlsx / .csv) หรือคัดลอกตารางมาวาง ต้องมีหัวคอลัมน์ <b>เลขประจำตัว</b> · <b>รหัสวิชา</b> · <b>ผลการเรียน</b>
+      (ชื่อวิชา · ครูผู้สอน มีหรือไม่มีก็ได้) — ระบบเลือกเฉพาะ 0 ร มส มผ · ไม่มีคอลัมน์ครู จะหาครูจากตารางสอน</div>
+    <input type="file" id="impFile" class="form-control mb-2" accept=".xlsx,.csv">
+    <textarea id="impText" class="form-control mb-2" rows="4" placeholder="หรือวางตารางที่คัดลอกมาตรงนี้"></textarea>
+    <div id="impResult"></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>
+    <button class="btn btn-outline-primary" onclick="runImport(true)">ตรวจสอบก่อน</button>
+    <button class="btn btn-primary" id="impSave" onclick="runImport(false)" disabled>บันทึก</button></div>
+</div></div></div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="mainToast" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex"><div class="toast-body fw-500"></div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let META = null, CASES = [], TAB = 't', ADD = null, SUB = [], EDIT = null;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const modal = id => bootstrap.Modal.getOrCreateInstance(document.getElementById(id));
+const $ = id => document.getElementById(id);
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+const ogBadge = o => `<span class="badge og og-${esc(o)}">${esc(o)}</span>`;
+const stBadge = c => `<span class="badge st-${c.status}">${esc(c.status_th)}</span>`;
+const thDate = d => d ? formatThaiDateShort(d) : '';
+const term = () => $('term').value;
+const teacherId = () => $('teacher').value;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  try {
+    META = await apiFetch('/api/rm/meta');
+  } catch (e) { showToast(e.message, 'danger'); return; }
+  $('term').innerHTML = (META.terms.length ? META.terms : [META.default_term]).filter(Boolean)
+    .map(t => `<option ${t === META.default_term ? 'selected' : ''}>${esc(t)}</option>`).join('');
+  const opts = META.teachers.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  $('teacher').innerHTML = '<option value="">— เลือกชื่อครูผู้สอน —</option>' + opts;
+  $('editTeacher').innerHTML = '<option value="">— ยังไม่ระบุ —</option>' + opts;
+  $('editOrig').innerHTML = META.origs.map(o => `<option>${o}</option>`).join('');
+  const saved = store.get('rm.teacher');
+  $('teacher').value = META.my_teacher_id || (META.teachers.some(t => String(t.id) === saved) ? saved : '');
+  if (META.is_admin) { $('tabs').hidden = false; if (META.waiting) showTab('a', true); }
+  waitBadge(META.waiting);
+  load();
+});
+
+function waitBadge(n) { $('waitBadge').hidden = !n; $('waitBadge').textContent = n || ''; }
+
+function showTab(t, quiet) {
+  TAB = t;
+  $('tabT').classList.toggle('active', t === 't'); $('tabA').classList.toggle('active', t === 'a');
+  $('viewT').hidden = t !== 't'; $('viewA').hidden = t !== 'a';
+  if (!quiet) load();
+}
+function onTerm() { load(); }
+function onTeacher() { store.set('rm.teacher', teacherId()); load(); }
+
+async function load() {
+  const q = new URLSearchParams({ term: term() });
+  if (TAB === 't') {
+    if (!teacherId()) { CASES = []; renderT(); return; }
+    q.set('teacher_id', teacherId());
+  }
+  try {
+    const d = await apiFetch('/api/rm/cases?' + q);
+    CASES = d.cases;
+    if (TAB === 'a') { waitBadge(d.counts.submitted); renderA(d.counts); } else renderT();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
+function stats(el, list) {
+  const n = s => list.filter(c => c.status === s).length;
+  el.innerHTML = `<span class="stat">ทั้งหมด <b>${list.length}</b></span>
+    <span class="stat">ค้าง <b>${n('pending')}</b></span>
+    <span class="stat">ส่งผลแล้ว <b>${n('submitted')}</b></span>
+    <span class="stat">ตรวจรับแล้ว <b>${n('received')}</b></span>`;
+}
+
+// ── ครูผู้สอน ──────────────────────────────────────────
+function renderT() {
+  const el = $('tList');
+  if (!teacherId()) {
+    $('tStats').innerHTML = '';
+    el.innerHTML = '<div class="alert alert-info">เลือกชื่อครูผู้สอนก่อน — ระบบจำไว้ในเครื่องนี้</div>';
+    return updBulk();
+  }
+  stats($('tStats'), CASES);
+  if (!CASES.length) {
+    el.innerHTML = `<div class="card"><div class="card-body text-center text-muted py-4">
+      ยังไม่มีนักเรียนที่ติดในภาคเรียน ${esc(term())}<br>
+      <button class="btn btn-outline-primary mt-2" onclick="openAdd()"><i class="bi bi-person-plus me-1"></i>เพิ่มนักเรียนที่ติด</button></div></div>`;
+    return updBulk();
+  }
+  const groups = {};
+  CASES.forEach(c => (groups[c.code] = groups[c.code] || []).push(c));
+  el.innerHTML = Object.entries(groups).map(([code, list]) => `
+    <div class="card subj-card mb-3">
+      <div class="card-header d-flex align-items-center gap-2">
+        <input type="checkbox" class="form-check-input" title="เลือกทุกคนที่ค้าง" onchange="pickAll(this,'${esc(code)}')">
+        <b>${esc(code)}</b> <span class="flex-grow-1">${esc(list[0].title)}</span>
+        <span class="small text-muted">${list.length} คน</span>
+      </div>
+      <div>${list.map(caseRowT).join('')}</div>
+    </div>`).join('');
+  updBulk();
+}
+
+function caseRowT(c) {
+  const pick = c.status === 'pending'
+    ? `<input type="checkbox" class="form-check-input pk" data-id="${c.id}" data-code="${esc(c.code)}" onchange="updBulk()">` : '<span style="width:1rem"></span>';
+  let act = '';
+  if (c.status === 'pending') act = `<button class="btn btn-sm btn-primary" onclick="openSubmit([${c.id}])">ส่งผลผ่าน</button>
+      <button class="btn btn-sm btn-light" title="แก้/ลบ" onclick="openEdit(${c.id})"><i class="bi bi-pencil"></i></button>`;
+  else if (c.status === 'submitted') act = `<span class="small">ผลใหม่ <b>${esc(c.result)}</b> · ${thDate(c.exam_date)}</span>
+      <button class="btn btn-sm btn-outline-secondary" onclick="withdraw(${c.id})">ถอนผล</button>`;
+  else act = `<span class="small text-success"><i class="bi bi-check-circle-fill me-1"></i>ผลใหม่ <b>${esc(c.result)}</b> · ${thDate(c.exam_date)}</span>`;
+  return `<div class="case">${pick}
+    <div class="who">${esc(c.student_name)}<br><small>${esc(c.class_label)}${c.number ? ' เลขที่ ' + c.number : ''} · ${esc(c.student_code)}</small></div>
+    ${ogBadge(c.orig)} ${stBadge(c)}
+    <div class="act">${act}</div>
+    ${c.return_note ? `<div class="ret"><i class="bi bi-reply-fill me-1"></i>นายทะเบียนตีกลับ: ${esc(c.return_note)}</div>` : ''}
+  </div>`;
+}
+
+function pickAll(box, code) {
+  document.querySelectorAll(`.pk[data-code="${CSS.escape(code)}"]`).forEach(x => x.checked = box.checked);
+  updBulk();
+}
+function selectedT() { return [...document.querySelectorAll('.pk:checked')].map(x => +x.dataset.id); }
+function updBulk() {
+  const n = selectedT().length;
+  $('btnBulk').disabled = !n; $('bulkN').textContent = n ? `(${n} คน)` : '';
+}
+
+// เพิ่มนักเรียนที่ติด
+async function openAdd() {
+  if (!teacherId()) return showToast('เลือกชื่อครูผู้สอนก่อน', 'warning');
+  ADD = { lessons: [], students: [] };
+  $('addWho').textContent = `${$('teacher').selectedOptions[0].text} · ภาคเรียน ${term()}`;
+  $('addStudents').innerHTML = '<div class="p-3 text-muted">กำลังโหลด…</div>';
+  $('addCount').textContent = '';
+  modal('addModal').show();
+  try {
+    ADD.lessons = (await apiFetch(`/api/rm/lessons?term=${encodeURIComponent(term())}&teacher_id=${teacherId()}`)).lessons;
+  } catch (e) { showToast(e.message, 'danger'); }
+  $('addLesson').innerHTML = '<option value="">— เลือกรายวิชา —</option>' +
+    ADD.lessons.map((l, i) => `<option value="${i}">${esc(l.code)} ${esc(l.title)} (${l.classes.map(c => 'ม.' + c).join(', ')})</option>`).join('') +
+    '<option value="other">วิชาอื่น (พิมพ์รหัสวิชาเอง)</option>';
+  $('addClass').innerHTML = '<option value="">— ชั้น —</option>' +
+    [1, 2, 3, 4, 5, 6].map(l => `<option value="${l}/1">ม.${l}/1</option>`).join('');
+  $('addOther').hidden = true;
+  $('addStudents').innerHTML = `<div class="p-3 text-muted">${ADD.lessons.length ? 'เลือกวิชาก่อน' : 'ไม่พบวิชาของครูในตารางสอนภาคเรียนนี้ — เลือก “วิชาอื่น”'}</div>`;
+}
+
+function onAddLesson() {
+  const v = $('addLesson').value;
+  $('addOther').hidden = v !== 'other';
+  if (v === '' || v === 'other') { $('addStudents').innerHTML = '<div class="p-3 text-muted">เลือกชั้นก่อน</div>'; return; }
+  loadAddStudents(ADD.lessons[+v].classes);
+}
+
+async function loadAddStudents(classes) {
+  classes = classes.filter(Boolean);
+  if (!classes.length) return;
+  try {
+    ADD.students = (await apiFetch('/api/rm/students?classes=' + encodeURIComponent(classes.join(',')))).students;
+  } catch (e) { return showToast(e.message, 'danger'); }
+  const have = new Set(CASES.filter(c => c.code === addCode()).map(c => c.student_code));
+  $('addStudents').innerHTML = ADD.students.map(s => `
+    <label class="row-s"><span class="nm">${s.number ?? ''} ${esc(s.name)} <small class="text-muted">${esc(s.class_label)}</small>
+      ${have.has(String(+s.student_code || s.student_code)) ? '<span class="badge bg-light text-dark">มีแล้ว</span>' : ''}</span>
+      <select class="form-select form-select-sm" data-id="${s.id}" onchange="addCountUpd()">
+        <option value="">—</option>${META.origs.map(o => `<option>${o}</option>`).join('')}</select></label>`).join('')
+    || '<div class="p-3 text-muted">ไม่มีนักเรียนในชั้นนี้</div>';
+  addCountUpd();
+}
+function addCode() {
+  const v = $('addLesson').value;
+  return v === 'other' ? $('addCode').value.trim().toUpperCase().replace(/\s+/g, '') : (ADD.lessons[+v] || {}).code || '';
+}
+function addCountUpd() {
+  const n = [...document.querySelectorAll('#addStudents select')].filter(s => s.value).length;
+  $('addCount').textContent = n ? `เลือก ${n} คน` : '';
+}
+
+async function saveAdd() {
+  const v = $('addLesson').value;
+  const items = [...document.querySelectorAll('#addStudents select')].filter(s => s.value)
+    .map(s => ({ student_id: +s.dataset.id, orig: s.value }));
+  if (!items.length) return showToast('ยังไม่ได้เลือกผลการเรียนของนักเรียนที่ติด', 'warning');
+  const body = { term: term(), teacher_id: teacherId(), items, code: addCode(),
+                 title: v === 'other' ? $('addTitle').value : (ADD.lessons[+v] || {}).title };
+  try {
+    const r = await apiFetch('/api/rm/cases', { method: 'POST', body: JSON.stringify(body) });
+    showToast(`เพิ่ม ${r.added} คน` + (r.skipped ? ` (มีอยู่แล้ว ${r.skipped} คน)` : ''));
+    modal('addModal').hide(); load();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
+// ส่งผลผ่าน (1 คน หรือหลายคน)
+function openSubmit(ids) {
+  SUB = CASES.filter(c => ids.includes(c.id) && c.status === 'pending');
+  if (!SUB.length) return;
+  $('subDate').value = todayISO(); $('subDate').max = todayISO();
+  $('subAttemptBox').hidden = !SUB.some(c => c.orig === '0');
+  $('subNote').value = '';
+  $('subList').innerHTML = SUB.map(c => `<div class="row-s">
+      <span class="nm">${esc(c.student_name)} <small class="text-muted">${esc(c.class_label)} · ${esc(c.code)}</small></span>
+      ${ogBadge(c.orig)} <i class="bi bi-arrow-right"></i>
+      ${c.allowed.length > 1
+        ? `<select class="form-select form-select-sm" data-id="${c.id}"><option value="">เกรด</option>${c.allowed.map(g => `<option>${g}</option>`).join('')}</select>`
+        : `<b style="width:5.5rem" data-id="${c.id}" data-v="${esc(c.allowed[0])}">${esc(c.allowed[0])}</b>`}
+    </div>`).join('');
+  modal('submitModal').show();
+}
+
+async function sendSubmit() {
+  const date = $('subDate').value, attempt = $('subAttempt').value, note = $('subNote').value;
+  if (!date) return showToast('ระบุวันที่สอบแก้ตัว', 'warning');
+  const jobs = SUB.map(c => {
+    const el = document.querySelector(`#subList [data-id="${c.id}"]`);
+    return { c, result: el.tagName === 'SELECT' ? el.value : el.dataset.v };
+  });
+  const miss = jobs.find(j => !j.result);
+  if (miss) return showToast(`เลือกเกรดของ ${miss.c.student_name}`, 'warning');
+  let ok = 0;
+  for (const j of jobs) {
+    try {
+      await apiFetch(`/api/rm/cases/${j.c.id}/submit`, { method: 'POST',
+        body: JSON.stringify({ result: j.result, exam_date: date, attempt, note, teacher_id: teacherId() || j.c.teacher_id }) });
+      ok++;
+    } catch (e) { showToast(`${j.c.student_name}: ${e.message}`, 'danger'); }
+  }
+  if (ok) { showToast(`ส่งผลแล้ว ${ok} คน — รอนายทะเบียนตรวจรับ`); modal('submitModal').hide(); }
+  load();
+}
+
+async function withdraw(id) {
+  if (!confirm('ถอนผลที่ส่งแล้ว กลับไปเป็น “ค้าง”?')) return;
+  try { await apiFetch(`/api/rm/cases/${id}/withdraw`, { method: 'POST' }); load(); }
+  catch (e) { showToast(e.message, 'danger'); }
+}
+
+// แก้ / ลบ
+function openEdit(id) {
+  EDIT = CASES.find(c => c.id === id);
+  if (!EDIT) return;
+  $('editWho').textContent = `${EDIT.student_name} · ${EDIT.code} ${EDIT.title}`;
+  $('editOrig').value = EDIT.orig;
+  $('editTeacher').value = EDIT.teacher_id || '';
+  $('editTitle').value = EDIT.title || '';
+  modal('editModal').show();
+}
+async function saveEdit() {
+  try {
+    await apiFetch(`/api/rm/cases/${EDIT.id}`, { method: 'PUT', body: JSON.stringify({
+      orig: $('editOrig').value, title: $('editTitle').value,
+      ...($('editTeacher').value ? { teacher_id: $('editTeacher').value } : {}) }) });
+    modal('editModal').hide(); load();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+async function delCase() {
+  if (!confirm(`ลบ ${EDIT.student_name} ออกจากรายชื่อสอบแก้ตัววิชา ${EDIT.code}?`)) return;
+  try { await apiFetch(`/api/rm/cases/${EDIT.id}`, { method: 'DELETE' }); modal('editModal').hide(); load(); }
+  catch (e) { showToast(e.message, 'danger'); }
+}
+
+// ── นายทะเบียน ─────────────────────────────────────────
+function renderA() {
+  stats($('aStats'), CASES);
+  const byT = {};
+  CASES.forEach(c => {
+    const k = c.teacher_name || '— ยังไม่ระบุครู —';
+    byT[k] = byT[k] || { pending: 0, submitted: 0, received: 0 };
+    byT[k][c.status]++;
+  });
+  $('aByTeacher').innerHTML = Object.keys(byT).length ? `<div class="card"><div class="card-body py-2">
+    <div class="small fw-bold mb-1">สรุปรายครู</div>
+    ${Object.entries(byT).sort((a, b) => b[1].pending - a[1].pending).map(([t, n]) =>
+      `<div class="d-flex flex-wrap gap-2 small py-1 border-top"><span class="flex-grow-1">${esc(t)}</span>
+        <span class="text-danger">ค้าง ${n.pending}</span><span class="text-primary">รอตรวจรับ ${n.submitted}</span>
+        <span class="text-success">ตรวจรับแล้ว ${n.received}</span></div>`).join('')}</div></div>` : '';
+  const cls = [...new Set(CASES.map(c => c.class_label))].sort();
+  const keep = $('fClass').value;
+  $('fClass').innerHTML = '<option value="">ทุกชั้น</option>' + cls.map(c => `<option>${esc(c)}</option>`).join('');
+  $('fClass').value = cls.includes(keep) ? keep : '';
+  const st = $('fStatus').value, fc = $('fClass').value, ft = $('fText').value.trim();
+  const rows = CASES.filter(c => (!st || c.status === st) && (!fc || c.class_label === fc) &&
+    (!ft || [c.student_name, c.code, c.title, c.teacher_name, c.student_code].join(' ').includes(ft)));
+  $('aTable').innerHTML = `<thead class="table-light"><tr>
+      <th><input type="checkbox" class="form-check-input" onchange="document.querySelectorAll('.apk').forEach(x=>x.checked=this.checked)"></th>
+      <th>ชั้น</th><th>นักเรียน</th><th>วิชา</th><th>ครูผู้สอน</th><th>เดิม</th><th>ใหม่</th><th>วันที่สอบ</th><th>สถานะ</th><th></th></tr></thead>
+    <tbody>${rows.map(c => `<tr>
+      <td><input type="checkbox" class="form-check-input apk" value="${c.id}"></td>
+      <td>${esc(c.class_label)}</td>
+      <td class="wrap">${esc(c.student_name)} <small class="text-muted">${esc(c.student_code)}</small></td>
+      <td class="wrap"><b>${esc(c.code)}</b> ${esc(c.title)}</td>
+      <td class="wrap">${esc(c.teacher_name) || '<span class="text-danger">ยังไม่ระบุ</span>'}</td>
+      <td>${ogBadge(c.orig)}</td><td><b>${esc(c.result)}</b>${c.attempt ? ` <small class="text-muted">ครั้งที่ ${c.attempt}</small>` : ''}</td>
+      <td>${thDate(c.exam_date)}</td>
+      <td>${stBadge(c)}${c.return_note ? `<div class="small text-danger">${esc(c.return_note)}</div>` : ''}</td>
+      <td><button class="btn btn-sm btn-light" title="แก้/ลบ" onclick="openEdit(${c.id})"><i class="bi bi-pencil"></i></button></td>
+    </tr>`).join('') || '<tr><td colspan="10" class="text-center text-muted py-4">ไม่มีรายการ</td></tr>'}</tbody>`;
+}
+function selectedA() { return [...document.querySelectorAll('.apk:checked')].map(x => +x.value); }
+function openReturn() {
+  const ids = selectedA();
+  if (!ids.length) return showToast('เลือกรายการก่อน', 'warning');
+  $('returnN').textContent = `ตีกลับ ${ids.length} รายการ — ครูจะเห็นข้อความนี้และส่งผลใหม่ได้`;
+  $('returnNote').value = '';
+  modal('returnModal').show();
+}
+async function bulkA(action) {
+  const ids = selectedA();
+  if (!ids.length) return showToast('เลือกรายการก่อน', 'warning');
+  const body = { ids };
+  if (action === 'return') body.note = $('returnNote').value;
+  try {
+    const r = await apiFetch('/api/rm/' + action, { method: 'POST', body: JSON.stringify(body) });
+    showToast({ receive: 'ตรวจรับ', unreceive: 'ยกเลิกตรวจรับ', return: 'ตีกลับ' }[action] + ` ${r.count} รายการ`);
+    if (action === 'return') modal('returnModal').hide();
+    load();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
+async function exportXlsx() {
+  try { await downloadFile('/api/rm/export.xlsx?term=' + encodeURIComponent(term())); }
+  catch (e) { showToast(e.message, 'danger'); }
+}
+
+// นำเข้า
+function openImport() {
+  $('impFile').value = ''; $('impText').value = ''; $('impResult').innerHTML = ''; $('impSave').disabled = true;
+  modal('importModal').show();
+}
+async function runImport(preview) {
+  const fd = new FormData();
+  fd.append('term', term()); fd.append('preview', preview ? '1' : '0');
+  if ($('impFile').files[0]) fd.append('file', $('impFile').files[0]);
+  else if ($('impText').value.trim()) fd.append('text', $('impText').value);
+  else return showToast('เลือกไฟล์ หรือวางตารางก่อน', 'warning');
+  try {
+    const res = await fetch('/api/rm/import', { method: 'POST', body: fd, credentials: 'same-origin' });
+    const r = await res.json();
+    if (!res.ok) throw new Error(r.message || 'นำเข้าไม่สำเร็จ');
+    if (!preview) {
+      showToast(`นำเข้า ${r.added} รายการ`); modal('importModal').hide(); load(); return;
+    }
+    $('impSave').disabled = !r.new;
+    $('impSave').textContent = r.new ? `บันทึก ${r.new} รายการ` : 'บันทึก';
+    $('impResult').innerHTML = `<div class="small mb-2">พบนักเรียนที่ติด <b>${r.items.length}</b> รายการ ·
+        ใหม่ <b>${r.new}</b> · มีอยู่แล้ว ${r.existing} · ข้ามแถวที่ผ่านแล้ว ${r.passed_rows}
+        ${r.unknown.length ? `<div class="text-danger">ไม่พบเลขประจำตัวในทะเบียน: ${r.unknown.map(esc).join(', ')}</div>` : ''}</div>
+      <div class="imp-preview border rounded"><table class="table table-sm mb-0">
+        <thead class="table-light"><tr><th>ชั้น</th><th>นักเรียน</th><th>วิชา</th><th>ครูผู้สอน</th><th>ผล</th><th></th></tr></thead>
+        <tbody>${r.items.map(it => `<tr class="${it.exists ? 'text-muted' : ''}"><td>${esc(it.class_label)}</td>
+          <td>${esc(it.student_name)}</td><td>${esc(it.code)} ${esc(it.title)}</td>
+          <td>${esc(it.teacher_name) || '<span class="text-danger">ไม่พบ</span>'}</td><td>${ogBadge(it.orig)}</td>
+          <td>${it.exists ? 'มีแล้ว' : 'ใหม่'}</td></tr>`).join('')}</tbody></table></div>`;
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+</script>
+</body>
+</html>
