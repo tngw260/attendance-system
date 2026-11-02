@@ -3228,8 +3228,14 @@ def api_admin_backup_info():
             bank_bal = con.execute(
                 "SELECT COALESCE(SUM(CASE WHEN txn_type='deposit' THEN amount ELSE -amount END),0) AS b "
                 "FROM bank_transactions").fetchone()['b']
+        # สำรองอัตโนมัติ (tools/backup_db.py ตั้งเป็น Scheduled task) — ไฟล์ล่าสุดก่อน
+        import glob as _glob
+        autos = sorted(_glob.glob(os.path.join(DATA_DIR, 'backups', 'school_*.db.gz')), reverse=True)
+        auto_backups = [{'name': os.path.basename(p), 'size_mb': round(os.path.getsize(p) / 1024 / 1024, 2),
+                         'time': datetime.datetime.fromtimestamp(os.path.getmtime(p)).strftime('%Y-%m-%d %H:%M')}
+                        for p in autos[:14]]
         return jsonify(size_bytes=size, size_mb=round(size/1024/1024, 2),
-                       counts=counts, bank_total_balance=round(bank_bal or 0, 2))
+                       counts=counts, bank_total_balance=round(bank_bal or 0, 2), auto_backups=auto_backups)
     except Exception as e:
         return jsonify(error=str(e)), 500
 

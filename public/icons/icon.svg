@@ -1,21 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1a55c8"/>
-      <stop offset="1" stop-color="#0d3b8e"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <!-- Mortarboard (graduation cap) -->
-  <g fill="#fff">
-    <path d="M256 110 L80 180 L256 250 L432 180 Z"/>
-    <path d="M120 210 L120 320 Q120 360 256 360 Q392 360 392 320 L392 210 L256 264 Z" opacity=".9"/>
-    <rect x="420" y="180" width="10" height="120" rx="2"/>
-    <circle cx="425" cy="310" r="18"/>
-  </g>
-  <!-- Checkmark -->
-  <g transform="translate(330, 320)">
-    <circle r="80" fill="#f5a623"/>
-    <path d="M -32 0 L -8 24 L 36 -22" stroke="#fff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a9152"/><stop offset="1" stop-color="#11502b"/></linearGradient>
+<radialGradient id="halo"><stop offset="0" stop-color="#fff3b0" stop-opacity=".35"/><stop offset="1" stop-color="#fff3b0" stop-opacity="0"/></radialGradient>
+<radialGradient id="petal" cx="0" cy=".55" r="1.05" fx="0" fy=".55">
+  <stop offset="0" stop-color="#ec9a00"/><stop offset=".32" stop-color="#fbbd0b"/><stop offset=".75" stop-color="#ffd52e"/><stop offset="1" stop-color="#ffe04f"/>
+</radialGradient>
+<radialGradient id="throat"><stop offset="0" stop-color="#a85a00"/><stop offset=".35" stop-color="#d98200"/><stop offset=".7" stop-color="#f0a500" stop-opacity=".7"/><stop offset="1" stop-color="#fbbd0b" stop-opacity="0"/></radialGradient>
+<linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4fb062"/><stop offset="1" stop-color="#2a7a3c"/></linearGradient>
+</defs><rect width="512" height="512" fill="url(#bg)"/><circle cx="256.0" cy="256.0" r="215.04" fill="url(#halo)"/><g transform="translate(238.0,282.0) rotate(145)"><path d="M0,0 C53.2,-42.0 136.8,-37.8 190.0,0 C136.8,37.8 53.2,42.0 0,0 Z" fill="url(#leaf)"/><path d="M9.5,0 Q95.0,-4.2 176.7,0" stroke="#bfe3b0" stroke-width="4" fill="none" opacity=".6"/></g><g transform="translate(274.0,234.0) rotate(-35)"><path d="M0,0 C51.8,-40.0 133.2,-36.0 185.0,0 C133.2,36.0 51.8,40.0 0,0 Z" fill="url(#leaf)"/><path d="M9.2,0 Q92.5,-4.0 172.1,0" stroke="#bfe3b0" stroke-width="4" fill="none" opacity=".6"/></g><g transform="translate(256.0,256.0) rotate(-12)"><circle r="128.0" cx="6" cy="9" fill="#0b3a1f" opacity=".25"/><path d="M0,0 C23.0,-38.4 70.4,-79.4 117.8,-53.8 C128.0,-38.4 140.8,-23.0 138.2,-6.4 C135.7,15.4 140.8,28.2 130.6,38.4 C117.8,53.8 105.0,64.0 89.6,61.4 C70.4,57.6 57.6,46.1 48.6,38.4 C35.8,28.2 23.0,20.5 15.4,15.4 Z" transform="rotate(0)" fill="url(#petal)" stroke="#d68b00" stroke-width="3" stroke-linejoin="round"/><path d="M32.0,-2.6 Q76.8,-15.4 110.1,-7.7" transform="rotate(0)" stroke="#ffe680" stroke-width="4" fill="none" opacity=".55"/><path d="M0,0 C23.0,-38.4 70.4,-79.4 117.8,-53.8 C128.0,-38.4 140.8,-23.0 138.2,-6.4 C135.7,15.4 140.8,28.2 130.6,38.4 C117.8,53.8 105.0,64.0 89.6,61.4 C70.4,57.6 57.6,46.1 48.6,38.4 C35.8,28.2 23.0,20.5 15.4,15.4 Z" transform="rotate(72)" fill="url(#petal)" stroke="#d68b00" stroke-width="3" stroke-linejoin="round"/><path d="M32.0,-2.6 Q76.8,-15.4 110.1,-7.7" transform="rotate(72)" stroke="#ffe680" stroke-width="4" fill="none" opacity=".55"/><path d="M0,0 C23.0,-38.4 70.4,-79.4 117.8,-53.8 C128.0,-38.4 140.8,-23.0 138.2,-6.4 C135.7,15.4 140.8,28.2 130.6,38.4 C117.8,53.8 105.0,64.0 89.6,61.4 C70.4,57.6 57.6,46.1 48.6,38.4 C35.8,28.2 23.0,20.5 15.4,15.4 Z" transform="rotate(144)" fill="url(#petal)" stroke="#d68b00" stroke-width="3" stroke-linejoin="round"/><path d="M32.0,-2.6 Q76.8,-15.4 110.1,-7.7" transform="rotate(144)" stroke="#ffe680" stroke-width="4" fill="none" opacity=".55"/><path d="M0,0 C23.0,-38.4 70.4,-79.4 117.8,-53.8 C128.0,-38.4 140.8,-23.0 138.2,-6.4 C135.7,15.4 140.8,28.2 130.6,38.4 C117.8,53.8 105.0,64.0 89.6,61.4 C70.4,57.6 57.6,46.1 48.6,38.4 C35.8,28.2 23.0,20.5 15.4,15.4 Z" transform="rotate(216)" fill="url(#petal)" stroke="#d68b00" stroke-width="3" stroke-linejoin="round"/><path d="M32.0,-2.6 Q76.8,-15.4 110.1,-7.7" transform="rotate(216)" stroke="#ffe680" stroke-width="4" fill="none" opacity=".55"/><path d="M0,0 C23.0,-38.4 70.4,-79.4 117.8,-53.8 C128.0,-38.4 140.8,-23.0 138.2,-6.4 C135.7,15.4 140.8,28.2 130.6,38.4 C117.8,53.8 105.0,64.0 89.6,61.4 C70.4,57.6 57.6,46.1 48.6,38.4 C35.8,28.2 23.0,20.5 15.4,15.4 Z" transform="rotate(288)" fill="url(#petal)" stroke="#d68b00" stroke-width="3" stroke-linejoin="round"/><path d="M32.0,-2.6 Q76.8,-15.4 110.1,-7.7" transform="rotate(288)" stroke="#ffe680" stroke-width="4" fill="none" opacity=".55"/><circle r="53.8" fill="url(#throat)"/><line x1="11.4" y1="1.6" x2="41.8" y2="5.9" stroke="#b56a05" stroke-width="3" stroke-linecap="round" opacity=".75"/><line x1="8.3" y1="8.0" x2="30.4" y2="29.3" stroke="#b56a05" stroke-width="3" stroke-linecap="round" opacity=".75"/><line x1="2.0" y1="11.3" x2="7.3" y2="41.6" stroke="#b56a05" stroke-width="3" stroke-linecap="round" opacity=".75"/><line x1="-5.1" y1="10.4" x2="-18.5" y2="38.0" stroke="#b56a05" stroke-width="3" stroke-linecap="round" opacity=".75"/><line x1="-10.2" y1="5.4" x2="-37.3" y2="19.8" stroke="#b56a05" stroke-width="3" stroke-linecap="round" opacity=".75"/><line x1="-11.4" y1="-1.6" x2="-41.8" y2="-5.9" stroke="#b56a05" stroke-width="3" stroke-linecap="round" opacity=".75"/><line x1="-8.3" y1="-8.0" x2="-30.4" y2="-29.3" stroke="#b56a05" stroke-width="3" stroke-linecap="round" opacity=".75"/><line x1="-2.0" y1="-11.3" x2="-7.3" y2="-41.6" stroke="#b56a05" stroke-width="3" stroke-linecap="round" opacity=".75"/><line x1="5.1" y1="-10.4" x2="18.5" y2="-38.0" stroke="#b56a05" stroke-width="3" stroke-linecap="round" opacity=".75"/><line x1="10.2" y1="-5.4" x2="37.3" y2="-19.8" stroke="#b56a05" stroke-width="3" stroke-linecap="round" opacity=".75"/><circle r="10.9" fill="#7a4504"/></g></svg>

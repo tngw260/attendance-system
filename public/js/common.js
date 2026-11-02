@@ -28,7 +28,7 @@ function toggleTheme() {
   }
   // Update theme-color meta (mobile address bar)
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = next === 'dark' ? '#15171c' : '#0d3b8e';
+  if (meta) meta.content = next === 'dark' ? '#15171c' : '#1d7a41';
 }
 
 // ─── PWA: register service worker + manifest + iOS support ───
@@ -45,22 +45,28 @@ function toggleTheme() {
     const dark = document.documentElement.dataset.theme === 'dark';
     const t = document.createElement('meta');
     t.name = 'theme-color';
-    t.content = dark ? '#15171c' : '#0d3b8e';
+    t.content = dark ? '#15171c' : '#1d7a41';
     head.appendChild(t);
   }
   // iOS PWA support
   if (!document.querySelector('link[rel="apple-touch-icon"]')) {
     const ai = document.createElement('link');
     ai.rel = 'apple-touch-icon';
-    ai.href = '/icons/icon.svg';
+    ai.href = '/icons/apple-touch-icon.png';            // iOS ไม่รองรับไอคอน SVG
     head.appendChild(ai);
+  }
+  // ไอคอนบนแท็บเบราว์เซอร์ (ดอกบานบุรี)
+  if (!document.querySelector('link[rel="icon"]')) {
+    const fi = document.createElement('link');
+    fi.rel = 'icon'; fi.type = 'image/svg+xml'; fi.href = '/icons/icon.svg?v=2';
+    head.appendChild(fi);
   }
   if (!document.querySelector('meta[name="apple-mobile-web-app-capable"]')) {
     const ac = document.createElement('meta');
     ac.name = 'apple-mobile-web-app-capable'; ac.content = 'yes';
     head.appendChild(ac);
     const at = document.createElement('meta');
-    at.name = 'apple-mobile-web-app-title'; at.content = 'เช็คชื่อ';
+    at.name = 'apple-mobile-web-app-title'; at.content = 'Baanburi One';
     head.appendChild(at);
   }
   // Register service worker + auto-update เมื่อ deploy ใหม่

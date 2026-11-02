@@ -114,6 +114,7 @@
         | นักเรียน <span id="dbStudents">-</span> | บันทึกเช็คชื่อ <span id="dbAttendance">-</span> | บันทึกพฤติกรรม <span id="dbBehavior">-</span>
         <br><strong class="text-danger">แนะนำให้ดาวน์โหลด backup ทุกอาทิตย์</strong> เก็บไว้ใน Google Drive / Email ตัวเอง
       </div>
+      <div class="alert small mb-3" id="autoBackup"></div>
       <div class="row g-4">
         <div class="col-md-6">
           <div class="card border-success">
@@ -213,7 +214,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/js/common.js?v=20261102e"></script>
+<script src="/js/common.js?v=20261102h"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
@@ -239,6 +240,14 @@ async function loadBackupInfo() {
     document.getElementById('dbStudents').textContent = r.counts.students;
     document.getElementById('dbAttendance').textContent = r.counts.attendance;
     document.getElementById('dbBehavior').textContent = r.counts.behavior_logs;
+    const box = document.getElementById('autoBackup'), list = r.auto_backups || [];
+    const last = list[0];
+    const fresh = last && (Date.now() - new Date(last.time.replace(' ', 'T'))) < 36 * 3600 * 1000;
+    box.className = 'alert small mb-3 ' + (fresh ? 'alert-success' : 'alert-warning');
+    box.innerHTML = last
+      ? `<i class="bi bi-shield-check me-1"></i><strong>สำรองอัตโนมัติล่าสุด:</strong> ${last.time} น. (${last.size_mb} MB) · เก็บไว้บนเซิร์ฟเวอร์ ${list.length} ไฟล์`
+        + (fresh ? '' : '<br><strong>ไม่มีไฟล์ใหม่เกิน 1 วัน — ตรวจ Scheduled task บน PythonAnywhere</strong>')
+      : '<i class="bi bi-exclamation-triangle me-1"></i><strong>ยังไม่ได้ตั้งสำรองอัตโนมัติ</strong> — ตั้ง Scheduled task บน PythonAnywhere: <code>python3 ~/attendance-system/tools/backup_db.py</code>';
   } catch (e) {
     document.getElementById('dbSize').textContent = '?';
   }
