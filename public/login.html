@@ -8,23 +8,23 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="/css/style.css?v=20261102d" rel="stylesheet">
   <style>
-    /* พื้นหลัง: พุ่มดอกบานบุรีสีเหลือง (Wikimedia Commons, Wiki Farazi, CC0) + ชั้นสีเขียวโปร่งให้อ่านง่าย */
+    /* พื้นหลัง: ภาพศิลปะดอกบานบุรีสีเหลือง (วาดเป็น SVG เอง — คมทุกขนาดจอ) */
     body {
       min-height: 100vh;
       display: flex;
       align-items: center;
-      background: #12532c url('/img/login-bg.jpg') center 20% / cover no-repeat fixed;
+      background: #12532c url('/img/login-art.svg?v=2') center / cover no-repeat fixed;
     }
     body::before {
       content: '';
       position: fixed;
       inset: 0;
-      background: linear-gradient(100deg, rgba(8, 42, 22, .58) 0%, rgba(8, 42, 22, .1) 50%, rgba(8, 42, 22, .35) 100%);
+      background: linear-gradient(100deg, rgba(8, 42, 22, .25) 0%, rgba(8, 42, 22, 0) 55%);
     }
     @media (max-width: 767.98px) {
       /* มือถือ: กล่องล็อกอินชิดล่าง ครึ่งบนเห็นพุ่มดอกบานบุรี */
-      body { align-items: flex-end; background-image: url('/img/login-bg-m.jpg'); background-attachment: scroll; background-position: center 15%; }
-      body::before { background: linear-gradient(180deg, rgba(8, 42, 22, .05) 0%, rgba(8, 42, 22, .15) 35%, rgba(8, 42, 22, .7) 100%); }
+      body { align-items: flex-end; background-image: url('/img/login-art-m.svg?v=2'); background-attachment: scroll; background-position: center top; }
+      body::before { background: linear-gradient(180deg, rgba(8, 42, 22, 0) 0%, rgba(8, 42, 22, 0) 45%, rgba(8, 42, 22, .45) 100%); }
       .login-wrap { padding-bottom: 1rem !important; }
     }
     .login-wrap { position: relative; z-index: 1; }
