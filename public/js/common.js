@@ -483,9 +483,9 @@ function injectRemedialLink() {
   anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
 }
 
-// ── เมนูหลัก "งานทวี Smart School" — 6 หมวด ──
+// ── เมนูหลัก "Baanburi One" — 6 หมวด ──
 // [ลิงก์, ไอคอน, ชื่อ, 'admin' = เห็นเฉพาะแอดมิน]
-const APP_NAME = 'งานทวี Smart School';
+const APP_NAME = 'Baanburi One';
 const NAV_GROUPS = [
   { label: 'หน้าหลัก', icon: 'bi-house', href: '/' },
   { label: 'เช็คชื่อ', icon: 'bi-check2-square', items: [

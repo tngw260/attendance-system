@@ -348,6 +348,10 @@ body {
   .navbar-nav > .nav-item > .nav-link { padding-left: .65rem; padding-right: .65rem; }
 }
 
+.hero-slogan { font-size: .95rem; opacity: .95; margin: .1rem 0 .4rem; }
+.hero-slogan b { color: #ffd23f; letter-spacing: .01em; }
+.hero-slogan .nw { white-space: nowrap; display: inline-block; }
+
 /* ── PAGE HEADER ── */
 .page-header {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);

@@ -5193,7 +5193,7 @@ if __name__ == '__main__':
             cli_list_users(); sys.exit(0)
         elif args[0] in ('--help', '-h'):
             print("""
-งานทวี Smart School — โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม
+Baanburi One — โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม
 
 Usage:
   python app.py                              เริ่มเซิร์ฟเวอร์
@@ -5212,7 +5212,7 @@ Env:
             sys.exit(1)
 
     print('\n========================================')
-    print('  งานทวี Smart School')
+    print('  Baanburi One')
     print('  โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม')
     print('========================================')
     port = int(os.environ.get('PORT', 8080))
