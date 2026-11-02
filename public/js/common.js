@@ -22,6 +22,10 @@ function toggleTheme() {
     const label = next === 'dark' ? 'สว่าง' : 'มืด';
     btn.innerHTML = `<i class="bi ${icon}"></i> ${label}`;
   }
+  const item = document.querySelector('.theme-toggle-item');
+  if (item) {
+    item.innerHTML = `<i class="bi ${next === 'dark' ? 'bi-sun-fill' : 'bi-moon-stars-fill'} me-2"></i>${next === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}`;
+  }
   // Update theme-color meta (mobile address bar)
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = next === 'dark' ? '#15171c' : '#0d3b8e';
@@ -231,8 +235,7 @@ function injectGlobalSearch() {
   if (!badge) return;
 
   const wrap = document.createElement('div');
-  wrap.className = 'position-relative me-2 my-1';
-  wrap.style.minWidth = '180px';
+  wrap.className = 'position-relative me-2 my-1 gs-wrap';
   wrap.innerHTML = `
     <input id="globalSearch" type="search" class="form-control form-control-sm"
       placeholder="🔍 ค้นหานักเรียน..." autocomplete="off" style="font-size:.85rem;">
@@ -332,16 +335,8 @@ async function loadCurrentUser() {
 
 function setupUserUI() {
   try {
-    // Upgrade "คะแนน" link → "คะแนนความประพฤติ" dropdown
-    upgradeBehaviorMenu();
-    // Add Heatmap link (after รายงาน) if not present
-    injectHeatmapLink();
-    injectRiskReportLink();
-    injectHomeVisitLink();
-    injectLibraryLink();
-    injectBankLink();
-    injectTimetableLink();
-    injectRemedialLink();
+    // เมนูหลักจัดเป็นหมวด (ทุกหน้าใช้ชุดเดียวกัน) — หน้าที่ไม่มีแถบเมนูมาตรฐานข้ามไป
+    buildNav();
     // Add global student search
     injectGlobalSearch();
     // Apply theme color and logo from settings
@@ -362,16 +357,20 @@ function setupUserUI() {
       }
       const dark = document.documentElement.dataset.theme === 'dark';
       const themeIcon = dark ? 'bi-sun-fill' : 'bi-moon-stars-fill';
-      const themeLabel = dark ? 'สว่าง' : 'มืด';
+      const themeLabel = dark ? 'โหมดสว่าง' : 'โหมดมืด';
       el.innerHTML = `
-        <button class="theme-toggle" onclick="toggleTheme()" title="สลับโหมดมืด/สว่าง">
-          <i class="bi ${themeIcon}"></i> ${themeLabel}
-        </button>
-        <span class="badge bg-light text-dark me-2">${roleLabel}</span>
-        <span class="text-light me-2"><i class="bi bi-person-circle me-1"></i>${currentUser.full_name}${assignTxt}</span>
-        <button class="btn btn-sm btn-outline-light" onclick="logout()" title="ออกจากระบบ">
-          <i class="bi bi-box-arrow-right"></i>
-        </button>`;
+        <div class="nav-item dropdown user-menu">
+          <a class="nav-link dropdown-toggle text-light" href="#" role="button" aria-expanded="false" title="${escNav(currentUser.full_name)}">
+            <i class="bi bi-person-circle me-1"></i>${escNav(currentUser.full_name)}</a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><div class="dropdown-header">${escNav(currentUser.full_name)}<div class="mt-1"><span class="badge bg-secondary">${roleLabel}</span>${assignTxt}</div></div></li>
+            <li><a class="dropdown-item" href="#" onclick="toggleTheme(); return false;"><span class="theme-toggle-item"><i class="bi ${themeIcon} me-2"></i>${themeLabel}</span></a></li>
+            <li><a class="dropdown-item" href="/change-password.html"><i class="bi bi-key me-2"></i>เปลี่ยนรหัสผ่าน</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item text-danger" href="#" onclick="logout(); return false;"><i class="bi bi-box-arrow-right me-2"></i>ออกจากระบบ</a></li>
+          </ul>
+        </div>`;
+      wireDropdown(el.querySelector('.user-menu'));
     }
     if (currentUser?.role !== 'admin') {
       document.querySelectorAll('.admin-only').forEach(e => e.style.display = 'none');
@@ -482,6 +481,105 @@ function injectRemedialLink() {
   const isActive = location.pathname === '/remedial.html';
   li.innerHTML = `<a class="nav-link ${isActive ? 'active' : ''}" href="/remedial.html"><i class="bi bi-arrow-repeat me-1"></i>สอบแก้ตัว</a>`;
   anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
+}
+
+// ── เมนูหลัก "งานทวี Smart School" — 6 หมวด ──
+// [ลิงก์, ไอคอน, ชื่อ, 'admin' = เห็นเฉพาะแอดมิน]
+const APP_NAME = 'งานทวี Smart School';
+const NAV_GROUPS = [
+  { label: 'หน้าหลัก', icon: 'bi-house', href: '/' },
+  { label: 'เช็คชื่อ', icon: 'bi-check2-square', items: [
+    ['/attendance.html', 'bi-check2-square', 'เช็คชื่อรายห้อง'],
+    ['/scan.html', 'bi-qr-code-scan', 'สแกน QR'],
+    ['/late-students.html', 'bi-clock-history', 'มาสาย / บำเพ็ญประโยชน์'],
+    ['/uniform-check.html', 'bi-person-vcard', 'ตรวจเครื่องแต่งกาย'],
+    ['/line-summary.html', 'bi-chat-quote', 'สรุปส่ง LINE'],
+  ] },
+  { label: 'ดูแลนักเรียน', icon: 'bi-people', items: [
+    ['/students.html', 'bi-people', 'รายชื่อนักเรียน'],
+    ['/home-visit.html', 'bi-house-heart', 'เยี่ยมบ้าน'],
+    ['/behavior-report.html', 'bi-award', 'คะแนนความประพฤติ'],
+    ['/pc-forms.html', 'bi-file-earmark-text', 'พิมพ์แบบฟอร์ม ปค.'],
+    ['/behavior-rules.html', 'bi-list-check', 'จัดการพฤติกรรม', 'admin'],
+    ['/risk-report.html', 'bi-exclamation-triangle', 'กลุ่มเสี่ยง'],
+    ['/bank.html', 'bi-bank2', 'ธนาคารโรงเรียน'],
+    ['/library.html', 'bi-book-half', 'ห้องสมุด', 'admin'],
+  ] },
+  { label: 'วิชาการ', icon: 'bi-mortarboard', items: [
+    ['/timetable.html', 'bi-calendar-week', 'ตารางสอน'],
+    ['/timetable.html?tab=sub', 'bi-person-up', 'สอนแทน'],
+    ['/remedial.html', 'bi-arrow-repeat', 'สอบแก้ตัว'],
+  ] },
+  { label: 'รายงาน', icon: 'bi-bar-chart', items: [
+    ['/report.html', 'bi-bar-chart', 'รายงานการมาเรียน'],
+    ['/heatmap.html', 'bi-calendar3-week', 'ปฏิทินมาเรียน'],
+  ] },
+  { label: 'ตั้งค่า', icon: 'bi-gear', admin: true, items: [
+    ['/users.html', 'bi-shield-lock', 'ผู้ใช้'],
+    ['/settings.html', 'bi-gear', 'ตั้งค่าระบบ'],
+    ['/admin.html', 'bi-tools', 'เครื่องมือ'],
+  ] },
+];
+
+function escNav(t) {
+  return String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function navIsActive(href) {
+  const u = new URL(href, location.origin);
+  if (u.pathname !== location.pathname) return false;
+  const sub = new URLSearchParams(location.search).get('tab') === 'sub';
+  return u.pathname === '/timetable.html' ? (u.search === '?tab=sub') === sub : true;
+}
+
+// เมนูย่อยเปิด/ปิดด้วยการคลิกเอง — ไม่ใช้ data-bs-toggle (มีปัญหาใน LINE/FB in-app browser)
+function wireDropdown(li) {
+  const toggle = li.querySelector('.dropdown-toggle');
+  const menu = li.querySelector('.dropdown-menu');
+  if (!toggle || !menu) return;
+  toggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const open = !menu.classList.contains('show');
+    document.querySelectorAll('.navbar .dropdown-menu.show').forEach(m => m.classList.remove('show'));
+    menu.classList.toggle('show', open);
+    toggle.setAttribute('aria-expanded', String(open));
+  });
+}
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.navbar .dropdown-menu.show').forEach(m => {
+    if (!m.parentElement.contains(e.target)) {
+      m.classList.remove('show');
+      m.parentElement.querySelector('.dropdown-toggle')?.setAttribute('aria-expanded', 'false');
+    }
+  });
+});
+
+function buildNav() {
+  const ul = document.querySelector('.navbar .navbar-nav');
+  if (!ul || ul.dataset.built) return;
+  ul.dataset.built = '1';
+  const isAdmin = currentUser?.role === 'admin';
+  const brand = document.querySelector('.navbar .navbar-brand');
+  if (brand) {
+    brand.classList.add('d-flex', 'align-items-center');
+    brand.innerHTML = `<i class="bi bi-mortarboard-fill me-2"></i><span class="brand-text">${APP_NAME}<small class="brand-sub">โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม</small></span>`;
+  }
+  ul.innerHTML = NAV_GROUPS.filter(g => !g.admin || isAdmin).map(g => {
+    if (g.href) {
+      return `<li class="nav-item"><a class="nav-link ${navIsActive(g.href) ? 'active' : ''}" href="${g.href}"><i class="bi ${g.icon} me-1"></i>${g.label}</a></li>`;
+    }
+    const items = g.items.filter(it => it[3] !== 'admin' || isAdmin);
+    const active = items.some(it => navIsActive(it[0]));
+    return `<li class="nav-item dropdown">
+      <a class="nav-link dropdown-toggle ${active ? 'active' : ''}" href="#" role="button" aria-expanded="false"><i class="bi ${g.icon} me-1"></i>${g.label}</a>
+      <ul class="dropdown-menu">${items.map(([href, icon, label]) =>
+        `<li><a class="dropdown-item ${navIsActive(href) ? 'active' : ''}" href="${href}"><i class="bi ${icon} me-2"></i>${label}</a></li>`).join('')}</ul>
+    </li>`;
+  }).join('');
+  ul.querySelectorAll('li.dropdown').forEach(wireDropdown);
+  // แถบเมนูใช้ความกว้างเต็มจอบนคอม (container 1140px แคบไปสำหรับเมนู + ค้นหา + ผู้ใช้)
+  document.querySelector('.navbar > .container')?.classList.replace('container', 'container-fluid');
 }
 
 function upgradeBehaviorMenu() {

@@ -318,6 +318,35 @@ body {
 @media (min-width: 992px) {
   .navbar-nav { row-gap: .25rem; }
 }
+/* ชื่อระบบ 2 บรรทัด + เมนูหมวด + เมนูผู้ใช้ (common.js buildNav) */
+.navbar-brand .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+.navbar-brand .brand-sub { font-size: .7rem; font-weight: 400; opacity: .85; letter-spacing: 0; }
+.navbar .dropdown-menu { font-size: .95rem; padding: .35rem 0; }
+.navbar .dropdown-item { padding: .45rem 1rem; }
+.navbar .dropdown-item.active, .navbar .dropdown-item:active { background: var(--primary); color: #fff; }
+.navbar .user-menu > .dropdown-toggle { display: block; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.navbar .user-menu .dropdown-header { white-space: normal; min-width: 210px; color: var(--bs-body-color); font-weight: 600; }
+.navbar .user-menu { position: relative; }
+.navbar .user-menu .dropdown-menu { right: 0; left: auto; }          /* เปิดเองไม่ผ่าน Popper → ชิดขวาเอง */
+@media (max-width: 991.98px) {
+  .navbar .user-menu .dropdown-menu { position: static; }
+}
+.navbar .gs-wrap { width: 170px; }
+/* จอโน้ตบุ๊กเล็ก/แท็บเล็ตแนวนอน: ซ่อนไอคอนหัวข้อ ย่อช่องค้นหาและชื่อผู้ใช้ ให้อยู่แถวเดียว */
+@media (min-width: 992px) and (max-width: 1279.98px) {
+  .navbar-nav > .nav-item > .nav-link > .bi { display: none; }
+  .navbar-nav > .nav-item > .nav-link { padding-left: .45rem; padding-right: .45rem; }
+  .navbar .gs-wrap { width: 130px; }
+  .navbar .user-menu > .dropdown-toggle { max-width: 130px; }
+  .navbar-brand .brand-sub { display: none; }
+}
+@media (max-width: 991.98px) {
+  .navbar .gs-wrap { width: 100%; }
+}
+@media (min-width: 992px) {
+  .navbar-nav { column-gap: .15rem; }
+  .navbar-nav > .nav-item > .nav-link { padding-left: .65rem; padding-right: .65rem; }
+}
 
 /* ── PAGE HEADER ── */
 .page-header {
