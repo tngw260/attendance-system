@@ -759,6 +759,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     return jsonify(success=False, message='มีชื่อนี้แล้ว'), 409
                 con.execute('UPDATE tt_teachers SET name=? WHERE id=?', (name, tid))
             if cons is not None:
+                if (ns := jl(t['constraints'], {}).get('no_sub')):
+                    cons['no_sub'] = ns          # ตั้งจากแท็บสอนแทน (ฟอร์มนี้ไม่มีช่องนี้) → คงค่าเดิม
                 con.execute('UPDATE tt_teachers SET constraints=? WHERE id=?', (json.dumps(cons, ensure_ascii=False), tid))
             if 'user_id' in b and current_user()['role'] == 'admin':      # ผูกบัญชีผู้ใช้ = แอดมินเท่านั้น
                 uid = b.get('user_id') or None
@@ -1724,6 +1726,37 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             con.execute('DELETE FROM tt_subs WHERE id=?', (i,))
         return len(gone)
 
+    def no_sub_of(con, tid):
+        """ครูที่ไม่รับสอนแทน (เช่น มีงานนอก) → เหตุผล หรือ '' · ยังฝากสอนของตัวเอง/ขอแลกคาบของตัวเองได้ตามปกติ"""
+        r = con.execute('SELECT constraints FROM tt_teachers WHERE id=?', (tid,)).fetchone()
+        return str(jl(r['constraints'], {}).get('no_sub') or '') if r else ''
+
+    @app.put('/api/tt/teachers/no-sub')
+    @tt_subs_required
+    def tt_teachers_no_sub():
+        """ตั้งครูที่ไม่รับสอนแทน {items: [{id, reason}]} — ครูที่ไม่อยู่ในรายการ = รับสอนแทนได้ตามปกติ
+        เก็บใน constraints.no_sub (เหตุผล ว่าง = "งานนอก") · คาบที่จัด/กดรับไว้ก่อนแล้วไม่ลบ (ผู้จัดสอนแทนเปลี่ยนเอง)"""
+        try:
+            want = {int(i['id']): squeeze(i.get('reason'), 40) or 'งานนอก' for i in ((request.get_json() or {}).get('items') or [])}
+        except (TypeError, ValueError, KeyError, AttributeError):
+            return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
+        with get_db() as con:
+            rows = con.execute('SELECT id, constraints FROM tt_teachers').fetchall()
+            if set(want) - {r['id'] for r in rows}:
+                return jsonify(success=False, message='ไม่พบครู'), 404
+            out = {}
+            for r in rows:
+                c = jl(r['constraints'], {})
+                if c.get('no_sub', '') != want.get(r['id'], ''):
+                    if r['id'] in want:
+                        c['no_sub'] = want[r['id']]
+                    else:
+                        c.pop('no_sub', None)
+                    con.execute('UPDATE tt_teachers SET constraints=? WHERE id=?', (json.dumps(c, ensure_ascii=False), r['id']))
+                if c.get('no_sub'):
+                    out[r['id']] = c['no_sub']
+        return jsonify(success=True, no_sub=out)
+
     @app.get('/api/tt/subs')
     @login_required
     def tt_subs_list():
@@ -1782,7 +1815,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                     (me['id'], d))]
             summary = day_summary(con, d, s) if can_manage_subs(u) else None
             open_needs = []
-            if me:
+            if me and not no_sub_of(con, me['id']):
                 for day in (d, nxt):
                     sm = summary if summary and day == d else day_summary(con, day, s)
                     if sm['term'] and published(con, sm['term']['id']):
@@ -1867,8 +1900,13 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             return jsonify(success=False, message='ข้อมูลไม่ถูกต้อง'), 400
         with get_db() as con:
             # ตรวจก่อนเขียน (return กลางคันใน with = commit ครึ่ง ๆ)
-            final = {(r['period'], r['lesson_id']): r['sub_id'] for r in con.execute(
+            old = {(r['period'], r['lesson_id']): r['sub_id'] for r in con.execute(
                 'SELECT period, lesson_id, sub_id FROM tt_subs WHERE date=?', (d,))}
+            for i in items:
+                if i['sub_id'] and i['sub_id'] != old.get((i['period'], i['lesson_id'])) and (ns := no_sub_of(con, i['sub_id'])):
+                    name = con.execute('SELECT name FROM tt_teachers WHERE id=?', (i['sub_id'],)).fetchone()['name']
+                    return jsonify(success=False, message=f'ครู{name.split(" ")[0]}ไม่รับสอนแทน ({ns})'), 409
+            final = dict(old)
             for k in clear:
                 final.pop(k, None)
             for i in items:
@@ -1953,6 +1991,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             if not me:
                 return jsonify(success=False, message='บัญชีนี้ยังไม่ได้ผูกกับชื่อครูในตารางสอน (แจ้งแอดมิน)'), 400
             me = me['id']
+            if (ns := no_sub_of(con, me)):
+                return jsonify(success=False, message=f'คุณอยู่ในรายชื่อครูไม่รับสอนแทน ({ns}) — แจ้งผู้จัดสอนแทนถ้าจะรับ'), 409
             sm = day_summary(con, d, get_settings())
             need = next((n for n in sm['needs'] if n['period'] == p and n['lesson_id'] == lid), None)
             if not need or not published(con, sm['term']['id']):
@@ -2045,6 +2085,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             if need['status']:
                 return jsonify(success=False, message='คาบนี้มีผู้รับแล้ว', subs=day_subs(con, d)), 409
             first = names[sid].split(' ')[0]
+            if (ns := no_sub_of(con, sid)):
+                return jsonify(success=False, message=f'ครู{first}ไม่รับสอนแทน ({ns})'), 409
             if (why := teacher_busy(con, sid, d, p)):
                 return jsonify(success=False, message=f'ครู{first}ไม่ว่างคาบนี้ ({why})'), 409
             # คาบที่จะสอนคืน: คาบสอนของครูคู่แลก ในภาคเรียนที่เผยแพร่ ไม่ใช่วันหยุด และฉันว่าง
@@ -2097,6 +2139,8 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             if not b.get('accept'):
                 con.execute('DELETE FROM tt_subs WHERE id=?', (r['id'],))
                 return jsonify(success=True, accepted=False, subs=day_subs(con, tg[0]))
+            if (ns := no_sub_of(con, r['sub_id'])):
+                return jsonify(success=False, message=f'คุณอยู่ในรายชื่อครูไม่รับสอนแทน ({ns}) — กด "ไม่รับ" ได้'), 409
             if (why := teacher_busy(con, r['sub_id'], r['date'], r['period'], r['id'])):
                 return jsonify(success=False, message=f'คุณไม่ว่างคาบนี้แล้ว ({why}) — กด "ไม่รับ" ได้'), 409
             if (why := teacher_busy(con, r['absent_id'], r['swap_date'], r['swap_period'], r['id'])):

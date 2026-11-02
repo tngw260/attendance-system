@@ -8,7 +8,9 @@
       ผู้จัดสอนแทน (T.can_subs) = แอดมิน ผู้ช่วยจัดตาราง หรือครูที่แอดมินตั้งให้จัดเฉพาะสอนแทน (แก้ตารางไม่ได้)
    6) ใบรายชื่อนักเรียนของคาบ Word / PDF (ครูเจ้าของวิชา ครูที่รับสอนแทน ผู้จัดสอนแทน)
    7) แลกคาบ: ครูที่ไม่มากด 🔁 ในคาบของตัวเอง เลือกครูคู่แลก + คาบของครูคนนั้นที่จะไปสอนคืน → ครูคู่แลกยืนยัน (offer → pending)
-      → ผู้จัดสอนแทนอนุมัติ · วันสอนคืนขึ้นในกล่อง "คาบสอนคืนจากการแลกคาบ" · ไม่นับในสถิติสอนแทน */
+      → ผู้จัดสอนแทนอนุมัติ · วันสอนคืนขึ้นในกล่อง "คาบสอนคืนจากการแลกคาบ" · ไม่นับในสถิติสอนแทน
+   8) ครูไม่รับสอนแทน (เช่น มีงานนอก — constraints.no_sub) ผู้จัดสอนแทนตั้งที่ปุ่ม "ไม่รับสอนแทน": ไม่ขึ้นเป็นครูแทน/คู่แลก กดรับเองไม่ได้
+      แต่ยังฝากสอนคาบของตัวเองได้ */
 
 const SUB = { date: '', data: null, from: '', to: '' };
 const SUB_REASONS = ['ลาป่วย', 'ลากิจ', 'ไปราชการ', 'อบรม/ประชุม', 'ลาคลอด', 'ย้ายออก/รอครูใหม่', 'อื่น ๆ'];
@@ -54,6 +56,7 @@ const spanLabel = a => shortDate(a.date_from) + (a.date_to === a.date_from ? '' 
 const tFull = id => IDX.teachers[id]?.name || SUB.data?.teacher_names?.[id] || '';
 const tName = id => tFull(id) ? 'ครู' + tFull(id) : `ครู (รหัส ${id})`;
 const tShort = id => tFull(id) ? 'ครู' + tFull(id).split(' ')[0] : `ครู (รหัส ${id})`;
+const noSub = id => ((IDX.teachers[id] || {}).constraints || {}).no_sub || '';   // เหตุผลที่ไม่รับสอนแทน หรือ ''
 
 /* ── ข้อมูลของวัน ── */
 const absencesOn = date => (SUB.data?.absences || []).filter(a => a.date_from <= date && a.date_to >= date);
@@ -102,6 +105,7 @@ function candidatesFor(n, date, assigned, counts) {
     const why = [], own = IDX.byTeacher[t.id][`${wd}-${p}`] || [];
     let ok = true, score = 0;
     if (n.gone.includes(t.id) || absentAt(t.id, date, p)) { ok = false; why.push('ไม่มา'); }
+    else if (noSub(t.id)) { ok = false; why.push(`ไม่รับสอนแทน (${noSub(t.id)})`); }
     else if (own.length) { ok = false; why.push('มีสอน ' + lessonName(own[0])); }
     else if (busySub.has(t.id)) { ok = false; why.push('สอนแทนห้องอื่นแล้ว'); }
     else if (busyBack.has(t.id)) { ok = false; why.push('สอนคืนจากการแลกคาบ'); }
@@ -374,6 +378,7 @@ function renderSubsBody() {
     ${wd === 0 || wd === 6 ? '<span class="badge bg-secondary">วันเสาร์-อาทิตย์</span>' : ''}
     ${!inTerm(date) ? `<span class="badge bg-secondary">ปิดภาคเรียน (ภาคเรียน ${esc(T.term.name)} ${shortDate(T.term.start_date)} – ${shortDate(T.term.end_date)})</span>` : ''}
     <span class="ms-auto d-flex gap-1">
+      ${admin ? `<button class="btn btn-sm btn-outline-secondary" onclick="openNoSubModal()" title="ครูที่ให้ใครฝากคาบไม่ได้ เช่น มีงานนอก"><i class="bi bi-person-slash"></i> ไม่รับสอนแทน</button>` : ''}
       ${T.is_admin ? `<button class="btn btn-sm btn-outline-secondary" onclick="openEditorsModal()" title="ตั้งว่าใครจัด/อนุมัติสอนแทนได้"><i class="bi bi-person-gear"></i> สิทธิ์</button>` : ''}
       ${T.is_admin ? `<button class="btn btn-sm btn-outline-danger" onclick="openResetModal()" title="ล้างข้อมูลสอนแทนทดลองของภาคเรียนนี้ เริ่มนับสถิติใหม่"><i class="bi bi-arrow-counterclockwise"></i> รีเซตสถิติ</button>` : ''}
       <a class="btn btn-sm btn-outline-secondary" href="/subs-guide.html" target="_blank" rel="noopener"><i class="bi bi-book"></i> คู่มือ</a></span>
@@ -422,7 +427,7 @@ function renderSubsBody() {
         ${s && !notFinal(s) ? (isSwap(s) ? swapInfo : '') + `<input class="form-control form-control-sm mt-1" placeholder="หมายเหตุ เช่น ให้ทำใบงาน หน้า 12" value="${esc(s.note)}" onchange="setSubNote('${n.key}', this.value)">` : ''}`;
     } else if (!s) {                                             // ยังไม่มีใครรับ → ครูที่ว่างกดรับได้
       const me = canPick ? candidatesFor(n, date, assigned, counts).find(c => c.t.id === T.me) : null;
-      const free = canPick && (me ? me.ok : !n.gone.includes(T.me));
+      const free = canPick && !noSub(T.me) && (me ? me.ok : !n.gone.includes(T.me));
       const ownPeriod = canPick && n.gone.includes(T.me);         // คาบของฉันที่ฝากสอนไว้ → ขอแลกคาบได้
       pick = `<span class="text-danger small">ยังไม่มีครูแทน</span>` +
         (free ? `<div><button class="btn btn-sm btn-primary mt-1 text-nowrap" onclick="volunteer('${n.key}')">🙋 รับสอนแทน</button></div>`
@@ -464,6 +469,7 @@ function renderSubsBody() {
       <thead class="table-light"><tr><th class="text-center">คาบ</th><th>ชั้น</th><th>วิชา</th><th class="d-none d-md-table-cell">ครูที่ไม่มา</th><th>สอนแทนโดย</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
       ${admin ? '<div class="small text-muted">รายชื่อเรียง: สอนแทนมาน้อยก่อน (นับตั้งแต่ ' + shortDate(SUB.from) + ') · สาระเดียวกัน · สอนห้องนี้อยู่ · วันนั้นมีคาบน้อย · ครูกดรับเองได้ (รออนุมัติ)</div>'
+        : canPick && noSub(T.me) ? `<div class="small text-muted">คุณอยู่ในรายชื่อไม่รับสอนแทน (${esc(noSub(T.me))}) — ยังฝากสอนคาบของตัวเองได้ตามปกติ</div>`
         : canPick ? '<div class="small text-muted">คาบที่คุณว่างจะมีปุ่ม 🙋 รับสอนแทน — คนแรกที่กดได้คาบนั้น แล้วรอผู้จัดสอนแทนอนุมัติ</div>' : ''}`
       : `<div class="text-center text-muted py-4">${hol?.type === 'holiday' || wd === 0 || wd === 6 || !inTerm(date) ? 'ไม่มีการเรียนการสอน' : abs.length ? 'ครูที่ไม่มาไม่มีคาบสอนวันนี้' : 'ไม่มีครูไม่มา — ไม่ต้องจัดครูแทน'}</div>`}
     ${stale.length ? `<div class="alert alert-warning py-1 px-2 small mt-2 mb-0">มีบันทึกที่ไม่ตรงตาราง/บันทึกไม่มาแล้ว ${stale.length} รายการ
@@ -481,8 +487,10 @@ function renderSubsBody() {
 }
 
 function statsHTML(counts) {
-  const list = T.teachers.filter(t => t.active !== 0 && IDX.byTeacher[t.id]);
-  if (!list.length) return '';
+  const list = T.teachers.filter(t => t.active !== 0 && IDX.byTeacher[t.id] && !noSub(t.id));
+  const off = {};                                            // ไม่รับสอนแทน แยกตามเหตุผล
+  T.teachers.filter(t => t.active !== 0 && noSub(t.id)).forEach(t => (off[noSub(t.id)] = off[noSub(t.id)] || []).push(tShort(t.id)));
+  if (!list.length && !Object.keys(off).length) return '';
   const max = Math.max(1, ...list.map(t => counts.total[t.id] || 0));
   return `<div class="card mb-2"><div class="card-body py-2">
     <div class="fw-bold mb-1"><i class="bi bi-bar-chart me-1"></i>จำนวนคาบสอนแทน <span class="small text-muted fw-normal">ตั้งแต่ ${shortDate(SUB.from)}</span></div>
@@ -490,7 +498,38 @@ function statsHTML(counts) {
       <div style="width:110px" class="text-truncate">${esc(tShort(t.id))}</div>
       <div class="flex-fill me-2"><div class="progress" style="height:8px"><div class="progress-bar" style="width:${n / max * 100}%"></div></div></div>
       <div style="width:28px" class="text-end">${n}</div></div>`; }).join('')}
+    ${Object.entries(off).map(([why, names]) => `<div class="small text-muted border-top pt-1 mt-1"><i class="bi bi-person-slash me-1"></i>ไม่รับสอนแทน (${esc(why)}): ${names.map(esc).join(' · ')}</div>`).join('')}
   </div></div>`;
+}
+
+/* ── ครูไม่รับสอนแทน (ผู้จัดสอนแทนตั้ง) ── */
+function openNoSubModal() {
+  const list = T.teachers.filter(t => t.active !== 0 || noSub(t.id));
+  showModal('<i class="bi bi-person-slash"></i> ครูที่ไม่รับสอนแทน', `
+    <div class="small text-muted mb-2">ติ๊กครูที่ให้ใครฝากคาบไม่ได้ เช่น มีงานนอก — ไม่ขึ้นในรายชื่อครูแทน · จัดอัตโนมัติข้าม · กดรับสอนแทนไม่ได้ · ถูกขอแลกคาบไม่ได้
+      <br>ครูกลุ่มนี้ยังฝากสอนคาบของตัวเองได้ตามปกติ · คาบที่จัด/กดรับไว้ก่อนแล้วไม่ถูกลบ (เปลี่ยนครูเองได้)</div>
+    <div class="list-group" style="max-height:55vh; overflow:auto">
+      ${list.map(t => `<label class="list-group-item d-flex align-items-center gap-2 py-1">
+        <input class="form-check-input mt-0 nsChk" type="checkbox" data-id="${t.id}" ${noSub(t.id) ? 'checked' : ''}
+          onchange="this.parentNode.querySelector('.nsWhy').disabled = !this.checked">
+        <span class="flex-fill">${esc(tName(t.id))}</span>
+        <input class="form-control form-control-sm nsWhy" style="width:130px" maxlength="40" placeholder="งานนอก" value="${esc(noSub(t.id))}" ${noSub(t.id) ? '' : 'disabled'}></label>`).join('')}
+    </div>`,
+    `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+     <button class="btn btn-primary btn-sm" onclick="saveNoSub()"><i class="bi bi-save"></i> บันทึก</button>`);
+}
+
+async function saveNoSub() {
+  const items = [...document.querySelectorAll('.nsChk:checked')].map(x => ({ id: +x.dataset.id, reason: x.parentNode.querySelector('.nsWhy').value.trim() }));
+  try {
+    const r = await apiFetch('/api/tt/teachers/no-sub', { method: 'PUT', body: JSON.stringify({ items }) });
+    T.teachers.forEach(t => {                                 // IDX.teachers ชี้วัตถุเดียวกัน
+      t.constraints = t.constraints || {};
+      if (r.no_sub[t.id]) t.constraints.no_sub = r.no_sub[t.id]; else delete t.constraints.no_sub;
+    });
+    edModal.hide(); renderSubsBody();
+    toastEd(items.length ? `บันทึกแล้ว — ไม่รับสอนแทน ${items.length} คน` : 'บันทึกแล้ว — ครูทุกคนรับสอนแทนได้');
+  } catch (e) { alert(e.message); }
 }
 
 /* ── ฟอร์มบันทึกครูไม่มา ── */
