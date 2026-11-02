@@ -3,6 +3,7 @@ let currentStudents = [];
 document.addEventListener('DOMContentLoaded', async () => {
   await loadCurrentUser();
   document.getElementById('selDate').value = todayISO();
+  autoDate = todayISO();
   await loadClassDropdown();
 
   // Pre-fill from URL params
@@ -14,7 +15,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   document.getElementById('selClass').addEventListener('change', syncHiddenInputs);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) rollDate(); });
+  window.addEventListener('focus', rollDate);
 });
+
+// เปิดหน้าค้างไว้ข้ามวัน (มือถือกลับมาที่แท็บเดิมโดยไม่โหลดใหม่) → เลื่อนเป็นวันนี้ ถ้าครูไม่ได้เลือกวันที่เอง
+let autoDate = '';
+function rollDate() {
+  const el = document.getElementById('selDate');
+  const today = todayISO();
+  if (!autoDate || el.value !== autoDate || today === autoDate) return;
+  el.value = autoDate = today;
+  showToast('เปลี่ยนวันที่เป็นวันนี้แล้ว', 'info');
+  if (document.getElementById('selClass').value) loadAttendance();
+}
 
 async function loadClassDropdown() {
   try {

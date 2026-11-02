@@ -119,8 +119,13 @@ const THAI_MONTHS = [
 const THAI_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const THAI_DAYS = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
 
+// YYYY-MM-DD ตามเวลาในเครื่อง — toISOString() เป็นเวลา UTC (ช้ากว่าไทย 7 ชม.) ก่อน 7 โมงเช้าจะได้วันที่ของเมื่อวาน
+function isoLocal(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function todayISO() {
-  return new Date().toISOString().split('T')[0];
+  return isoLocal();
 }
 
 function formatThaiDateShort(dateStr) {

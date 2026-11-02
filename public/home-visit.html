@@ -216,7 +216,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/js/common.js"></script>
+<script src="/js/common.js?v=20261102"></script>
 <script>
 const THAI_MONTHS_F = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 let theme={}, allClasses=[], curStudents=[], visitModal=null, curVisit=null;
@@ -527,7 +527,7 @@ function copyField(i, btn) {
 }
 
 function setVal(id,v){ const el=document.getElementById(id); if(el) el.value=v||''; }
-function todayISO(){ return new Date().toISOString().split('T')[0]; }
+function todayISO(){ return isoLocal(); }
 function pcDate(iso){ if(!iso) return ''; const dt=new Date(iso+'T00:00:00'); if(isNaN(dt))return iso; return `${dt.getDate()} ${THAI_MONTHS_F[dt.getMonth()].slice(0,3)} ${dt.getFullYear()+543}`; }
 
 function renderPhotos() {

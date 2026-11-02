@@ -655,7 +655,8 @@ const key = params.get('key');
 
 const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
-function todayISO() { return new Date().toISOString().split('T')[0]; }
+function isoLocal(d = new Date()) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }  // เวลาเครื่อง ไม่ใช่ UTC
+function todayISO() { return isoLocal(); }
 
 function formatThaiDate(iso) {
   if (!iso) return '-';
@@ -683,7 +684,7 @@ function setToday() {
 function setDaysFromToday(daysBack) {
   const d = new Date();
   d.setDate(d.getDate() + daysBack);
-  document.getElementById('datePicker').value = d.toISOString().split('T')[0];
+  document.getElementById('datePicker').value = isoLocal(d);
   reload();
 }
 
@@ -691,7 +692,7 @@ function changeDay(delta) {
   const cur = getSelectedDate();
   const d = new Date(cur + 'T00:00:00');
   d.setDate(d.getDate() + delta);
-  document.getElementById('datePicker').value = d.toISOString().split('T')[0];
+  document.getElementById('datePicker').value = isoLocal(d);
   reload();
 }
 
