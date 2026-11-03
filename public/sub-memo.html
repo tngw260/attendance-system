@@ -84,7 +84,6 @@
 const Q = new URLSearchParams(location.search);
 const API_Q = ['date', 'absence_id'].filter(k => Q.get(k)).map(k => `${k}=${encodeURIComponent(Q.get(k))}`).join('&');
 const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const NO_PREFIX = 'นาย/นาง/นางสาว';
 const FIELDS = ['วันที่', 'รหัส-วิชา', 'ชั้น', 'เวลา', 'ถึง', 'รวม', 'คาบ  ห้องเรียน'];
 const W_TWIPS = 10466;                          // ความกว้างเนื้อหา A4 ขอบ 0.5 นิ้ว (เท่ากับ submemo.W) — ช่องต่าง ๆ คิดเป็น % ของค่านี้
 const SUB_FILL = (8288 - 500) / (W_TWIPS - 500) * 100;   // ชื่อครูสอนแทน + จุด ถึง "เข้าสอนแทน ดังนี้" (เท่าแท็บใน Word)
@@ -123,7 +122,7 @@ function memoHTML(m, acad, dep, dir) {
   const blocks = m.blocks.map(b => {
     const head = b.kind === 'none'
       ? `<div class="m-sub">ไม่มีครูสอนแทน (มอบหมายงาน/รวมห้อง) ดังนี้</div>`
-      : `<div class="ln m-sub"><span class="fill" style="flex-basis:${SUB_FILL.toFixed(2)}%"><span>${escH(b.name || NO_PREFIX)}</span><span class="dots"></span></span><span>เข้าสอนแทน ดังนี้</span></div>`;
+      : `<div class="ln m-sub"><span class="fill" style="flex-basis:${SUB_FILL.toFixed(2)}%"><span>${escH(b.name || '')}</span><span class="dots"></span></span><span>เข้าสอนแทน ดังนี้</span></div>`;
     return head + (b.rows.length ? b.rows : [null, null, null]).map(rowHTML).join('');
   }).join('');
   const md = m.memo_date, uv = t => `<u class="v">&nbsp;${escH(t)}&nbsp;</u>`;
