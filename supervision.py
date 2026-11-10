@@ -1,0 +1,720 @@
+"""ระบบนิเทศการสอนออนไลน์ (public/supervision.html)
+
+นัดนิเทศ (sv_visits) = ครูผู้รับการนิเทศ 1 คน × คาบสอน 1 คาบจากตารางสอน × กรรมการ 3 คน
+  กรรมการ 1 ใน 3 คนเป็น "เพื่อนคู่นิเทศ" (peer_seat) — มาสังเกตการสอนก่อนวันนิเทศจริง 1 รอบ
+แบบประเมิน (sv_evals) ต่อ 1 นัด มีได้ 4 ใบ
+  round='pre'   ของเพื่อนคู่นิเทศ (สังเกตก่อน)  ผู้รับการนิเทศเห็นผลทันทีที่ส่ง เพื่อปรับก่อนวันจริง
+  round='main'  ของกรรมการที่นั่ง 1–3 (วันนิเทศจริง) ต่างคนต่างให้คะแนน เห็นของกันเมื่อส่งครบ 3 คน
+ส่งครบ 3 คน → ระบบแปลผล (ค่าเฉลี่ยรายข้อ ระดับคุณภาพ ร้อยละ จุดเด่น ข้อที่ควรพัฒนา ข้อที่ให้คะแนนต่างกันมาก)
+  + ส่วนที่ 4 เทียบ "ก่อนนิเทศ" (รอบเพื่อนคู่นิเทศ) กับ "หลังนิเทศ" (ค่าเฉลี่ยกรรมการ) รายด้าน
+ผู้รับการนิเทศ: กรอกข้อมูลก่อนสอน → ดูผล → เขียนสะท้อนคิด → กดรับทราบ
+
+บัญชีครูส่วนใหญ่เป็นบัญชีรวม → ผู้ใช้ "เลือกชื่อตัวเอง" บนหน้าเว็บ (ส่งมาเป็น as=t:<id> หรือ n:<ชื่อ>)
+  บัญชีที่ผูกกับครูในตารางสอนแล้ว (tt_teachers.user_id) ถูกบังคับให้เป็นครูคนนั้น เลือกชื่อคนอื่นไม่ได้
+สิทธิ์จัดการนัด/เปิดคืนแบบประเมิน/ดูสรุปทั้งโรงเรียน = แอดมิน หรือผู้ช่วยจัดตาราง (tt_editors = ฝ่ายวิชาการ)
+
+แบบประเมิน (FORMS) เก็บเป็นข้อมูล — เปลี่ยนรายการ/เกณฑ์ได้โดยเพิ่มเวอร์ชันใหม่ นัดเก่ายังอ้างเวอร์ชันเดิม
+"""
+import datetime
+import json
+import re
+
+from timetable import bare_name, jl, term_for_date
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS sv_visits (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    term          TEXT NOT NULL,
+    form          TEXT NOT NULL DEFAULT 'v1',
+    teacher_id    INTEGER REFERENCES tt_teachers(id) ON DELETE SET NULL,
+    teacher_name  TEXT NOT NULL,
+    area          TEXT DEFAULT '',
+    date          TEXT NOT NULL,
+    period        TEXT DEFAULT '',
+    code          TEXT DEFAULT '',
+    title         TEXT DEFAULT '',
+    class_label   TEXT DEFAULT '',
+    peer_seat     INTEGER NOT NULL DEFAULT 1,
+    pre_date      TEXT DEFAULT '',
+    pre_period    TEXT DEFAULT '',
+    pre_lesson    TEXT DEFAULT '',
+    plan_no       TEXT DEFAULT '',
+    unit          TEXT DEFAULT '',
+    topic         TEXT DEFAULT '',
+    focus         TEXT DEFAULT '',
+    reflection    TEXT DEFAULT '{}',
+    agreed        TEXT DEFAULT '',
+    ack_at        TEXT,
+    created_by    INTEGER,
+    created_at    TEXT DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_sv_term ON sv_visits(term, date);
+CREATE TABLE IF NOT EXISTS sv_evals (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    visit_id       INTEGER NOT NULL REFERENCES sv_visits(id) ON DELETE CASCADE,
+    round          TEXT NOT NULL CHECK (round IN ('pre','main')),
+    seat           INTEGER NOT NULL CHECK (seat BETWEEN 1 AND 3),
+    evaluator_id   INTEGER REFERENCES tt_teachers(id) ON DELETE SET NULL,
+    evaluator_name TEXT NOT NULL,
+    position       TEXT DEFAULT '',
+    scores         TEXT DEFAULT '{}',
+    comments       TEXT DEFAULT '{}',
+    highlight      TEXT DEFAULT '',
+    strengths      TEXT DEFAULT '',
+    improvements   TEXT DEFAULT '',
+    status         TEXT NOT NULL DEFAULT 'draft',
+    submitted_at   TEXT,
+    updated_at     TEXT,
+    UNIQUE(visit_id, round, seat)
+);
+"""
+
+# ── แบบประเมิน (ร่างจาก "แบบนิเทศการจัดการเรียนรู้" ของโรงเรียน) ─────────────
+FORMS = {
+    'v1': {
+        'name': 'แบบนิเทศการจัดการเรียนรู้',
+        'scale': [[4, 'ดีมาก'], [3, 'ดี'], [2, 'พอใช้'], [1, 'น้อยมาก'], [0, 'ไม่มีการปฏิบัติ']],
+        'parts': [
+            {'id': 'p1', 'title': 'ส่วนที่ 1 การสังเกตก่อนการสอน (Pre-conference)', 'items': [
+                {'id': 'p1_1', 'title': 'การวางแผนและออกแบบการจัดการเรียนรู้',
+                 'desc': 'จุดประสงค์ชัดเจนสอดคล้องมาตรฐาน/ตัวชี้วัด กิจกรรม วิธีสอน การวัดผล การจัดเวลา และคุณลักษณะอันพึงประสงค์'},
+                {'id': 'p1_2', 'title': 'การเตรียมสื่อ นวัตกรรม และสภาพแวดล้อมการเรียนรู้',
+                 'desc': 'สื่อ/อุปกรณ์/เทคโนโลยี ใบงาน และการจัดสภาพแวดล้อมพร้อมและสอดคล้องกับกิจกรรม'},
+                {'id': 'p1_3', 'title': 'การวิเคราะห์ผู้เรียนและการเตรียมความพร้อม',
+                 'desc': 'เข้าใจความแตกต่างระหว่างบุคคล รองรับผู้เรียนพิเศษ และตั้งเป้าหมายที่ท้าทายแต่บรรลุได้'},
+            ]},
+            {'id': 'p2', 'title': 'ส่วนที่ 2 บันทึกการนิเทศการสอน', 'items': [
+                {'id': 'p2_1', 'title': 'การนำเข้าสู่บทเรียนและการกระตุ้นความสนใจ',
+                 'desc': 'ทบทวนความรู้เดิม เร้าความสนใจ และแจ้งจุดประสงค์การเรียนรู้'},
+                {'id': 'p2_2', 'title': 'การจัดกิจกรรมการเรียนรู้เชิงรุก (Active Learning)',
+                 'desc': 'ผู้เรียนลงมือปฏิบัติและสร้างองค์ความรู้ด้วยตนเอง ทำงานกลุ่ม เชื่อมโยงชีวิตจริง และใช้เทคนิคที่หลากหลาย'},
+                {'id': 'p2_3', 'title': 'การส่งเสริมการคิดขั้นสูงและความคิดสร้างสรรค์',
+                 'desc': 'ใช้คำถามระดับสูง กระตุ้นการคิดวิเคราะห์ การแก้ปัญหา และการสรุปองค์ความรู้ด้วยตนเอง'},
+                {'id': 'p2_4', 'title': 'การจัดการชั้นเรียนและบรรยากาศการเรียนรู้',
+                 'desc': 'บรรยากาศเชิงบวก การมีส่วนร่วมเท่าเทียม การบริหารเวลา และการเสริมแรงทางบวก'},
+                {'id': 'p2_5', 'title': 'การใช้สื่อ นวัตกรรม และเทคโนโลยี',
+                 'desc': 'ใช้สื่อหลากหลายและเทคโนโลยีได้คล่องแคล่ว ช่วยเพิ่มความเข้าใจและความสนใจของผู้เรียน'},
+                {'id': 'p2_6', 'title': 'การวัดและประเมินผลระหว่างเรียน',
+                 'desc': 'ตรวจสอบความเข้าใจต่อเนื่อง ให้ข้อมูลป้อนกลับที่สร้างสรรค์ และประเมินครบทั้ง K P A'},
+                {'id': 'p2_7', 'title': 'บุคลิกภาพและมาตรฐานวิชาชีพครู',
+                 'desc': 'การแต่งกาย การใช้ภาษา ความเมตตา การควบคุมอารมณ์ ความเชี่ยวชาญเนื้อหา และความรับผิดชอบ'},
+                {'id': 'p2_8', 'title': 'การสอดแทรกคุณค่าและสมรรถนะที่พึงประสงค์',
+                 'desc': 'คุณธรรมจริยธรรม สมรรถนะตามหลักสูตร หลักปรัชญาเศรษฐกิจพอเพียง และทักษะแห่งศตวรรษที่ 21'},
+            ]},
+        ],
+        # ส่วนที่ 4 ติดตามพัฒนาการ: ด้าน ← ข้อที่ใช้คิด
+        'aspects': [
+            ['การวางแผนและออกแบบการจัดการเรียนรู้เชิงรุก', ['p1_1']],
+            ['การนำกิจกรรม Active Learning สู่การปฏิบัติ', ['p2_2']],
+            ['การส่งเสริมการคิดขั้นสูงของผู้เรียน', ['p2_3']],
+            ['การจัดการชั้นเรียนและบรรยากาศการเรียนรู้', ['p2_4']],
+            ['การใช้สื่อ นวัตกรรม และเทคโนโลยี', ['p2_5']],
+            ['การวัดและประเมินผลระหว่างเรียน', ['p2_6']],
+            ['บุคลิกภาพและมาตรฐานวิชาชีพ', ['p2_7']],
+        ],
+        'reflect': [
+            ['r1', 'สิ่งที่ดำเนินไปได้ดีที่สุดในคาบนี้ และการมีส่วนร่วมของผู้เรียน'],
+            ['r2', 'เทคนิค Active Learning / การคิดขั้นสูงที่ผู้เรียนแสดงออก'],
+            ['r3', 'ปัญหา อุปสรรค และสิ่งที่จะปรับปรุงหากสอนใหม่'],
+            ['r4', 'ผู้เรียนบรรลุจุดประสงค์การเรียนรู้มากน้อยเพียงใด'],
+        ],
+        # เกณฑ์แปลผล: ค่าเฉลี่ยรายข้อ (0–4) และร้อยละรวม — [ขั้นต่ำ, ระดับ]
+        'mean_levels': [[3.51, 'ดีมาก'], [2.51, 'ดี'], [1.51, 'พอใช้'], [0.51, 'น้อยมาก'], [0, 'ไม่มีการปฏิบัติ']],
+        'pct_levels': [[80, 'ดีมาก'], [70, 'ดี'], [60, 'พอใช้'], [0, 'ควรพัฒนา']],
+    },
+}
+DEFAULT_FORM = 'v1'
+DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}')
+SPREAD_FLAG = 2          # กรรมการให้คะแนนข้อเดียวกันห่างกันตั้งแต่กี่ระดับ จึงติดธงให้คุยกัน
+TREND_EPS = 0.25         # ส่วนที่ 4: ต่างกันเกินเท่านี้จึงนับว่าดีขึ้น/ลดลง
+
+
+def form_items(form):
+    return [it for p in form['parts'] for it in p['items']]
+
+
+def level_of(value, table):
+    for low, name in table:
+        if value >= low:
+            return name
+    return table[-1][1]
+
+
+def r2(x):
+    return round(x + 1e-9, 2)
+
+
+def aspect_scores(form, scores):
+    """คะแนนรายด้าน (ส่วนที่ 4) จาก {ข้อ: คะแนน} → [ค่าเฉลี่ย 0–4 | None]"""
+    out = []
+    for _, ids in form['aspects']:
+        vals = [scores[i] for i in ids if i in scores]
+        out.append(r2(sum(vals) / len(vals)) if vals else None)
+    return out
+
+
+def interpret(form, mains, pre=None):
+    """แปลผลจากแบบประเมินรอบจริงที่ส่งแล้ว (mains = [{name, scores}]) + รอบเพื่อนคู่นิเทศ (pre = scores | None)"""
+    items = form_items(form)
+    rows, total = [], 0.0
+    for it in items:
+        vals = [m['scores'][it['id']] for m in mains if it['id'] in m['scores']]
+        mean = sum(vals) / len(vals) if vals else 0.0
+        total += mean
+        rows.append(dict(id=it['id'], title=it['title'], scores=vals, mean=r2(mean),
+                         level=level_of(r2(mean), form['mean_levels']),
+                         spread=(max(vals) - min(vals)) if vals else 0,
+                         flag=bool(vals) and max(vals) - min(vals) >= SPREAD_FLAG))
+    full = 4 * len(items)
+    pct = r2(total * 100 / full) if full else 0
+    parts = []
+    for p in form['parts']:
+        ids = {it['id'] for it in p['items']}
+        s = sum(r['mean'] for r in rows if r['id'] in ids)
+        parts.append(dict(id=p['id'], title=p['title'], score=r2(s), full=4 * len(ids)))
+    # จุดเด่น = 3 ข้อคะแนนสูงสุดที่ได้ระดับดีขึ้นไป · ควรพัฒนา = 3 ข้อต่ำสุดที่ยังไม่ถึงดีมาก (ไม่ซ้ำกับจุดเด่น)
+    ranked = sorted(rows, key=lambda r: -r['mean'])          # sorted คงลำดับเดิมเมื่อคะแนนเท่ากัน
+    top = [r['title'] for r in ranked[:3] if r['mean'] >= 2.51]
+    low = [r['title'] for r in sorted(rows, key=lambda r: r['mean']) if r['mean'] < 3.51 and r['title'] not in top][:3]
+    level = level_of(pct, form['pct_levels'])
+    text = f'ผลการนิเทศอยู่ในระดับ{level} ได้ {r2(total):g} จาก {full} คะแนน คิดเป็นร้อยละ {pct:g} '
+    if top:
+        text += 'จุดเด่น ได้แก่ ' + ' · '.join(top) + ' '
+    text += ('ควรพัฒนาเพิ่มเติมเรื่อง ' + ' · '.join(low)) if low else 'ทุกรายการอยู่ในระดับดีมาก'
+    flagged = [r['title'] for r in rows if r['flag']]
+    res = dict(items=rows, parts=parts, total=r2(total), full=full, percent=pct, level=level,
+               strengths=top, improve=low, flagged=flagged, summary=text, raters=len(mains))
+    # ส่วนที่ 4: ก่อนนิเทศ (เพื่อนคู่นิเทศสังเกตก่อน) เทียบหลังนิเทศ (ค่าเฉลี่ยกรรมการ)
+    after_scores = {r['id']: r['mean'] for r in rows}
+    after = aspect_scores(form, after_scores)
+    before = aspect_scores(form, pre) if pre else [None] * len(after)
+    asp = []
+    for (name, _), b, a in zip(form['aspects'], before, after):
+        trend = ''
+        if b is not None and a is not None:
+            trend = 'ดีขึ้น' if a - b > TREND_EPS else 'ลดลง' if b - a > TREND_EPS else 'คงที่'
+        asp.append(dict(name=name, before=b, after=a, trend=trend))
+    full4 = 4 * len(asp)
+
+    def tot(vals):
+        vals = [v for v in vals if v is not None]
+        return dict(score=r2(sum(vals)), percent=r2(sum(vals) * 100 / full4)) if len(vals) == len(asp) and asp else None
+    res['aspects'] = dict(rows=asp, full=full4, before=tot(before), after=tot(after))
+    return res
+
+
+def init(app, get_db, login_required, current_user, get_settings):
+    from flask import jsonify, request
+
+    with get_db() as con:
+        con.executescript(SCHEMA)
+
+    def bad(msg, code=400):
+        return jsonify(success=False, message=msg), code
+
+    def can_manage(u):
+        if not u:
+            return False
+        if u['role'] == 'admin':
+            return True
+        with get_db() as con:
+            return bool(con.execute('SELECT 1 FROM tt_editors WHERE user_id=?', (u['id'],)).fetchone())
+
+    def clean(s, n=3000):
+        return re.sub(r'[ \t]+', ' ', str(s or '')).strip()[:n]
+
+    def now():
+        return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # ── "ฉันคือใคร" ───────────────────────────────────────
+    def acting(con, u, raw):
+        """ตัวตนของผู้ใช้บนหน้าเว็บ → ('t', id, ชื่อ) | ('n', None, ชื่อ) | None
+        บัญชีที่ผูกกับครูในตารางสอนแล้วใช้ครูคนนั้นเสมอ (เลือกชื่อคนอื่นไม่ได้)"""
+        me = con.execute('SELECT id, name FROM tt_teachers WHERE user_id=?', (u['id'],)).fetchone()
+        if me:
+            return ('t', me['id'], me['name'])
+        raw = str(raw or '')
+        if raw.startswith('t:') and raw[2:].isdigit():
+            t = con.execute('SELECT id, name FROM tt_teachers WHERE id=?', (int(raw[2:]),)).fetchone()
+            return ('t', t['id'], t['name']) if t else None
+        if raw.startswith('n:') and clean(raw[2:], 80):
+            return ('n', None, clean(raw[2:], 80))
+        return None
+
+    def same(who, pid, pname):
+        """ตัวตน who ตรงกับบุคคล (id, ชื่อ) ไหม"""
+        if not who:
+            return False
+        if who[0] == 't' and pid:
+            return who[1] == pid
+        return bool(pname) and bare_name(who[2]) == bare_name(pname)
+
+    def person(con, p):
+        """{id | name, position} จากหน้าเว็บ → (id|None, ชื่อ, ตำแหน่ง)"""
+        p = p or {}
+        pos = clean(p.get('position'), 80)
+        pid = p.get('id')
+        if pid not in (None, ''):
+            try:
+                t = con.execute('SELECT id, name FROM tt_teachers WHERE id=?', (int(pid),)).fetchone()
+            except (TypeError, ValueError):
+                t = None
+            if t:
+                return t['id'], t['name'], pos
+        name = clean(p.get('name'), 80)
+        if name:
+            for t in con.execute('SELECT id, name FROM tt_teachers'):
+                if bare_name(t['name']) == bare_name(name):
+                    return t['id'], t['name'], pos
+        return None, name, pos
+
+    # ── ตารางสอน ─────────────────────────────────────────
+    def area_of(con, code):
+        r = con.execute('SELECT area FROM tt_subjects WHERE code=?', (re.sub(r'\s+', '', code or ''),)).fetchone()
+        return (r['area'] or '') if r else ''
+
+    def subject_title(con, code):
+        r = con.execute('SELECT name FROM tt_subjects WHERE code=?', (code,)).fetchone()
+        return (r['name'] or '') if r else ''
+
+    def day_lessons(con, teacher_id, date, settings):
+        """คาบสอนของครูในวันนั้นจากตารางสอน (คาบติดกันของวิชาเดียวกันรวมเป็น "3-4")"""
+        try:
+            d = datetime.date.fromisoformat(date)
+        except (TypeError, ValueError):
+            return None, []
+        term = term_for_date(con, date, settings)
+        if not term or d.isoweekday() > 5:
+            return term, []
+        times = {p['no']: p for p in jl(term['config'], {}).get('periods', [])}
+        slots = {}
+        for r in con.execute("""SELECT l.id, l.code, l.title, l.kind, l.classes, l.track, l.teacher_ids, s.period
+                                FROM tt_lessons l JOIN tt_slots s ON s.lesson_id=l.id
+                                WHERE l.term_id=? AND s.day=? ORDER BY s.period""", (term['id'], d.isoweekday())):
+            if teacher_id in jl(r['teacher_ids'], []) and r['kind'] == 'subject' and r['code']:
+                slots.setdefault(r['id'], dict(r=r, periods=[]))['periods'].append(r['period'])
+        out = []
+        for v in slots.values():
+            r, run = v['r'], []
+            for p in sorted(v['periods']) + [None]:
+                if run and (p is None or p != run[-1] + 1):
+                    a, b = times.get(run[0], {}), times.get(run[-1], {})
+                    cls = ', '.join('ม.' + c for c in jl(r['classes'], []))
+                    out.append(dict(
+                        period=str(run[0]) if len(run) == 1 else f'{run[0]}-{run[-1]}',
+                        time=f"{a.get('start', '')}–{b.get('end', '')}" if a and b else '',
+                        code=r['code'], title=r['title'] or subject_title(con, r['code']),
+                        class_label=cls + (f" ({r['track']})" if r['track'] else ''), area=area_of(con, r['code'])))
+                    run = []
+                if p is not None:
+                    run.append(p)
+        out.sort(key=lambda x: int(x['period'].split('-')[0]))
+        return term, out
+
+    # ── โหลดนัด + แบบประเมิน ───────────────────────────────
+    def eval_dict(r, full):
+        d = dict(round=r['round'], seat=r['seat'], evaluator_id=r['evaluator_id'], evaluator_name=r['evaluator_name'],
+                 position=r['position'], status=r['status'], submitted_at=r['submitted_at'])
+        if full:
+            d.update(scores=jl(r['scores'], {}), comments=jl(r['comments'], {}), highlight=r['highlight'],
+                     strengths=r['strengths'], improvements=r['improvements'], updated_at=r['updated_at'])
+        return d
+
+    def load(con, vid):
+        v = con.execute('SELECT * FROM sv_visits WHERE id=?', (vid,)).fetchone()
+        if not v:
+            return None, []
+        return v, con.execute('SELECT * FROM sv_evals WHERE visit_id=? ORDER BY round DESC, seat', (vid,)).fetchall()
+
+    def progress(v, evals):
+        """สถานะของนัด (คำนวณจากแบบประเมิน ไม่เก็บซ้ำ)"""
+        mains = [e for e in evals if e['round'] == 'main']
+        pre = next((e for e in evals if e['round'] == 'pre'), None)
+        done = sum(e['status'] == 'submitted' for e in mains)
+        pre_done = bool(pre) and pre['status'] == 'submitted'
+        if v['ack_at']:
+            st, th = 'ack', 'รับทราบผลแล้ว'
+        elif mains and done == len(mains):
+            st, th = 'done', 'ประเมินครบ รอรับทราบ'
+        elif done:
+            st, th = 'evaluating', f'กำลังประเมิน {done}/{len(mains)}'
+        elif pre_done:
+            st, th = 'pre_done', 'เพื่อนคู่นิเทศสังเกตแล้ว'
+        else:
+            st, th = 'scheduled', 'รอนิเทศ'
+        return dict(status=st, status_th=th, main_done=done, main_total=len(mains), pre_done=pre_done)
+
+    def visit_brief(v, evals):
+        d = {k: v[k] for k in ('id', 'term', 'teacher_id', 'teacher_name', 'area', 'date', 'period', 'code', 'title',
+                               'class_label', 'peer_seat', 'pre_date', 'pre_period', 'pre_lesson')}
+        d.update(progress(v, evals))
+        d['committee'] = [dict(seat=e['seat'], id=e['evaluator_id'], name=e['evaluator_name'], position=e['position'],
+                               peer=e['seat'] == v['peer_seat'], submitted=e['status'] == 'submitted')
+                          for e in evals if e['round'] == 'main']
+        return d
+
+    def result_of(v, evals):
+        form = FORMS.get(v['form'], FORMS[DEFAULT_FORM])
+        mains = [e for e in evals if e['round'] == 'main']
+        if not mains or any(e['status'] != 'submitted' for e in mains):
+            return None
+        pre = next((e for e in evals if e['round'] == 'pre' and e['status'] == 'submitted'), None)
+        return interpret(form, [dict(name=e['evaluator_name'], scores=jl(e['scores'], {})) for e in mains],
+                         jl(pre['scores'], {}) if pre else None)
+
+    # ── อ่าน ──────────────────────────────────────────────
+    @app.get('/api/sv/meta')
+    @login_required
+    def sv_meta():
+        u, s = current_user(), get_settings()
+        with get_db() as con:
+            terms = [r['name'] for r in con.execute('SELECT name FROM tt_terms')]
+            terms = sorted(set(terms) | {r['term'] for r in con.execute('SELECT DISTINCT term FROM sv_visits')},
+                           key=lambda n: (n[2:], n[0]), reverse=True)
+            cur = term_for_date(con, datetime.date.today().isoformat(), s)
+            teachers = [dict(r) for r in con.execute(
+                'SELECT id, name FROM tt_teachers WHERE COALESCE(active,1)=1 ORDER BY sort_order, id')]
+            others = sorted({r['evaluator_name'] for r in con.execute(
+                'SELECT DISTINCT evaluator_name FROM sv_evals WHERE evaluator_id IS NULL')})
+            me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (u['id'],)).fetchone()
+        return jsonify(terms=terms, default_term=cur['name'] if cur else (terms[0] if terms else ''),
+                       teachers=teachers, others=others, my_teacher_id=me['id'] if me else None,
+                       can_manage=can_manage(u), forms=FORMS, default_form=DEFAULT_FORM,
+                       director=s.get('director_name') or '')
+
+    @app.get('/api/sv/slots')
+    @login_required
+    def sv_slots():
+        """คาบสอนของครูในวันที่เลือก (ดึงจากตารางสอน) ?teacher_id=&date="""
+        try:
+            tid = int(request.args.get('teacher_id', ''))
+        except ValueError:
+            return bad('เลือกครูก่อน')
+        with get_db() as con:
+            term, lessons = day_lessons(con, tid, request.args.get('date', ''), get_settings())
+        return jsonify(term=term['name'] if term else '', lessons=lessons)
+
+    @app.get('/api/sv/visits')
+    @login_required
+    def sv_visits():
+        term = request.args.get('term', '')
+        u = current_user()
+        with get_db() as con:
+            who = acting(con, u, request.args.get('as'))
+            mgr = can_manage(u)
+            out = []
+            for v in con.execute('SELECT * FROM sv_visits WHERE term=? ORDER BY date, period, id', (term,)).fetchall():
+                evals = con.execute('SELECT * FROM sv_evals WHERE visit_id=? ORDER BY round DESC, seat', (v['id'],)).fetchall()
+                d = visit_brief(v, evals)
+                # บทบาทของ "ฉัน" ในนัดนี้ + งานที่ยังค้าง
+                roles, todo = [], []
+                if same(who, v['teacher_id'], v['teacher_name']):
+                    roles.append('teacher')
+                    if d['status'] == 'done':
+                        todo.append('ดูผลและกดรับทราบ')
+                    elif not (v['unit'] or v['topic']):
+                        todo.append('กรอกข้อมูลก่อนสอน')
+                for e in evals:
+                    if same(who, e['evaluator_id'], e['evaluator_name']):
+                        roles.append(e['round'] + str(e['seat']))
+                        if e['status'] != 'submitted':
+                            todo.append('สังเกตการสอนก่อนนิเทศ' if e['round'] == 'pre' else 'ให้คะแนนนิเทศ')
+                d.update(my_roles=roles, todo=todo)
+                if mgr and d['status'] in ('done', 'ack'):
+                    res = result_of(v, evals)
+                    d.update(percent=res['percent'], level=res['level'])
+                out.append(d)
+        return jsonify(visits=out)
+
+    @app.get('/api/sv/visits/<int:vid>')
+    @login_required
+    def sv_visit(vid):
+        u = current_user()
+        with get_db() as con:
+            v, evals = load(con, vid)
+            if not v:
+                return bad('ไม่พบนัดนิเทศ', 404)
+            who = acting(con, u, request.args.get('as'))
+            mgr = can_manage(u)
+            is_teacher = same(who, v['teacher_id'], v['teacher_name'])
+            mine = [e for e in evals if same(who, e['evaluator_id'], e['evaluator_name'])]
+            if not (mgr or is_teacher or mine):
+                return bad('นัดนี้ไม่ใช่ของคุณ — เลือกชื่อตัวเองให้ตรงก่อน')
+            prog = progress(v, evals)
+            all_done = prog['status'] in ('done', 'ack')
+            out = []
+            for e in evals:
+                own = e in mine
+                if e['round'] == 'pre':
+                    # รอบสังเกตก่อน: เจ้าของเห็นเสมอ · ผู้รับการนิเทศเห็นเมื่อส่งแล้ว · กรรมการอีก 2 คนเห็นเมื่อรอบจริงครบ
+                    full = mgr or own or (e['status'] == 'submitted' and (is_teacher or all_done))
+                else:
+                    full = mgr or own or all_done
+                out.append(dict(eval_dict(e, full), mine=own, peer=e['seat'] == v['peer_seat']))
+            d = visit_brief(v, evals)
+            d.update(form=v['form'], plan_no=v['plan_no'], unit=v['unit'], topic=v['topic'], focus=v['focus'],
+                     reflection=jl(v['reflection'], {}), agreed=v['agreed'], ack_at=v['ack_at'],
+                     is_teacher=is_teacher, can_manage=mgr, evals=out,
+                     result=result_of(v, evals) if (all_done and (mgr or is_teacher or mine)) else None)
+        return jsonify(d)
+
+    # ── จัดการนัด (ฝ่ายวิชาการ) ─────────────────────────────
+    def visit_fields(con, b, settings):
+        tid, tname, _ = person(con, {'id': b.get('teacher_id')})
+        if not tid:
+            return None, 'เลือกครูผู้รับการนิเทศ'
+        date = str(b.get('date') or '')
+        if not DATE_RE.fullmatch(date):
+            return None, 'เลือกวันที่นิเทศ'
+        term = term_for_date(con, date, settings)
+        if not term:
+            return None, 'วันที่เลือกอยู่นอกภาคเรียนในตารางสอน'
+        code = clean(b.get('code'), 20)
+        if not code:
+            return None, 'เลือกคาบสอนที่จะนิเทศ'
+        com = b.get('committee') or []
+        if len(com) != 3:
+            return None, 'ต้องมีกรรมการนิเทศ 3 คน'
+        people = [person(con, p) for p in com]
+        if any(not p[1] for p in people):
+            return None, 'ระบุชื่อกรรมการให้ครบ 3 คน'
+        keys = [p[0] or bare_name(p[1]) for p in people]
+        if len(set(keys)) != 3:
+            return None, 'กรรมการซ้ำกัน'
+        if tid in [p[0] for p in people]:
+            return None, 'ผู้รับการนิเทศเป็นกรรมการของตัวเองไม่ได้'
+        try:
+            peer = int(b.get('peer_seat') or 0)
+        except (TypeError, ValueError):
+            peer = 0
+        if peer not in (1, 2, 3):
+            return None, 'เลือกว่ากรรมการคนไหนเป็นเพื่อนคู่นิเทศ'
+        pre_date = str(b.get('pre_date') or '')
+        if pre_date and not DATE_RE.fullmatch(pre_date):
+            return None, 'วันที่สังเกตก่อนนิเทศไม่ถูกต้อง'
+        if pre_date and pre_date > date:
+            return None, 'วันที่เพื่อนคู่นิเทศสังเกต ต้องไม่เกินวันนิเทศจริง'
+        f = dict(term=term['name'], teacher_id=tid, teacher_name=tname, area=clean(b.get('area'), 60) or area_of(con, code),
+                 date=date, period=clean(b.get('period'), 10), code=code, title=clean(b.get('title'), 120),
+                 class_label=clean(b.get('class_label'), 60), peer_seat=peer, pre_date=pre_date,
+                 pre_period=clean(b.get('pre_period'), 10), pre_lesson=clean(b.get('pre_lesson'), 160))
+        return (f, people), None
+
+    def sync_evals(con, vid, people, peer_seat):
+        """ตั้ง/ปรับกรรมการของนัด — เปลี่ยนตัวคนแล้วแบบประเมินของที่นั่งนั้นเริ่มใหม่ ไม่เปลี่ยนตัวคงคะแนนเดิมไว้"""
+        want = {('main', i + 1): p for i, p in enumerate(people)}
+        want[('pre', peer_seat)] = people[peer_seat - 1]
+        have = {(e['round'], e['seat']): e for e in con.execute('SELECT * FROM sv_evals WHERE visit_id=?', (vid,))}
+        for key, e in have.items():
+            p = want.get(key)
+            if not p or not same(('t', p[0], p[1]) if p[0] else ('n', None, p[1]), e['evaluator_id'], e['evaluator_name']):
+                con.execute('DELETE FROM sv_evals WHERE id=?', (e['id'],))
+                have[key] = None
+        for (rnd, seat), (pid, pname, pos) in want.items():
+            if have.get((rnd, seat)):
+                con.execute('UPDATE sv_evals SET position=? WHERE id=?', (pos, have[(rnd, seat)]['id']))
+            else:
+                con.execute('INSERT INTO sv_evals (visit_id, round, seat, evaluator_id, evaluator_name, position) '
+                            'VALUES (?,?,?,?,?,?)', (vid, rnd, seat, pid, pname, pos))
+
+    @app.post('/api/sv/visits')
+    @login_required
+    def sv_create():
+        u = current_user()
+        if not can_manage(u):
+            return bad('เฉพาะฝ่ายวิชาการหรือแอดมิน', 403)
+        with get_db() as con:
+            got, err = visit_fields(con, request.get_json() or {}, get_settings())
+            if err:
+                return bad(err)
+            f, people = got
+            if con.execute('SELECT 1 FROM sv_visits WHERE term=? AND teacher_id=?', (f['term'], f['teacher_id'])).fetchone():
+                return bad(f"{f['teacher_name']} มีนัดนิเทศในภาคเรียน {f['term']} แล้ว (นิเทศคนละ 1 ครั้ง)")
+            cur = con.execute(
+                f"INSERT INTO sv_visits ({', '.join(f)}, form, created_by) VALUES ({', '.join('?' * len(f))}, ?, ?)",
+                list(f.values()) + [DEFAULT_FORM, u['id']])
+            sync_evals(con, cur.lastrowid, people, f['peer_seat'])
+        return jsonify(success=True, id=cur.lastrowid, message='สร้างนัดนิเทศแล้ว')
+
+    @app.put('/api/sv/visits/<int:vid>')
+    @login_required
+    def sv_update(vid):
+        if not can_manage(current_user()):
+            return bad('เฉพาะฝ่ายวิชาการหรือแอดมิน', 403)
+        with get_db() as con:
+            v, _ = load(con, vid)
+            if not v:
+                return bad('ไม่พบนัดนิเทศ', 404)
+            got, err = visit_fields(con, request.get_json() or {}, get_settings())
+            if err:
+                return bad(err)
+            f, people = got
+            if con.execute('SELECT 1 FROM sv_visits WHERE term=? AND teacher_id=? AND id<>?',
+                           (f['term'], f['teacher_id'], vid)).fetchone():
+                return bad(f"{f['teacher_name']} มีนัดนิเทศในภาคเรียน {f['term']} แล้ว")
+            con.execute(f"UPDATE sv_visits SET {', '.join(k + '=?' for k in f)} WHERE id=?", list(f.values()) + [vid])
+            sync_evals(con, vid, people, f['peer_seat'])
+        return jsonify(success=True, message='บันทึกนัดนิเทศแล้ว')
+
+    @app.delete('/api/sv/visits/<int:vid>')
+    @login_required
+    def sv_delete(vid):
+        if not can_manage(current_user()):
+            return bad('เฉพาะฝ่ายวิชาการหรือแอดมิน', 403)
+        with get_db() as con:
+            con.execute('DELETE FROM sv_evals WHERE visit_id=?', (vid,))
+            con.execute('DELETE FROM sv_visits WHERE id=?', (vid,))
+        return jsonify(success=True, message='ลบนัดนิเทศแล้ว')
+
+    # ── กรรมการ: ให้คะแนน / คอมเมนต์ / ส่ง ─────────────────
+    def my_eval(con, vid, rnd, seat, as_raw):
+        u = current_user()
+        v, evals = load(con, vid)
+        if not v:
+            return None, None, bad('ไม่พบนัดนิเทศ', 404)
+        e = next((x for x in evals if x['round'] == rnd and x['seat'] == seat), None)
+        if not e:
+            return None, None, bad('ไม่พบแบบประเมินนี้', 404)
+        if not same(acting(con, u, as_raw), e['evaluator_id'], e['evaluator_name']):
+            return None, None, bad(f"แบบประเมินนี้เป็นของ {e['evaluator_name']} — เลือกชื่อตัวเองให้ตรงก่อน")
+        return v, e, None
+
+    @app.put('/api/sv/visits/<int:vid>/eval/<rnd>/<int:seat>')
+    @login_required
+    def sv_eval_save(vid, rnd, seat):
+        """บันทึกร่าง (หน้าเว็บบันทึกให้อัตโนมัติระหว่างกรอก)"""
+        b = request.get_json() or {}
+        with get_db() as con:
+            v, e, err = my_eval(con, vid, rnd, seat, b.get('as'))
+            if err:
+                return err
+            if e['status'] == 'submitted':
+                return bad('ส่งผลแล้ว แก้ไขไม่ได้ — ให้ฝ่ายวิชาการเปิดคืนก่อน')
+            ids = {it['id'] for it in form_items(FORMS.get(v['form'], FORMS[DEFAULT_FORM]))}
+            scores = {}
+            for k, val in (b.get('scores') or {}).items():
+                if k in ids and isinstance(val, int) and not isinstance(val, bool) and 0 <= val <= 4:
+                    scores[k] = val
+            comments = {k: clean(val, 1000) for k, val in (b.get('comments') or {}).items() if k in ids and clean(val, 1000)}
+            con.execute("""UPDATE sv_evals SET scores=?, comments=?, highlight=?, strengths=?, improvements=?, updated_at=?
+                           WHERE id=?""",
+                        (json.dumps(scores), json.dumps(comments, ensure_ascii=False), clean(b.get('highlight')),
+                         clean(b.get('strengths')), clean(b.get('improvements')), now(), e['id']))
+        return jsonify(success=True, saved_at=now())
+
+    @app.post('/api/sv/visits/<int:vid>/eval/<rnd>/<int:seat>/submit')
+    @login_required
+    def sv_eval_submit(vid, rnd, seat):
+        b = request.get_json() or {}
+        with get_db() as con:
+            v, e, err = my_eval(con, vid, rnd, seat, b.get('as'))
+            if err:
+                return err
+            if e['status'] == 'submitted':
+                return bad('ส่งผลไปแล้ว')
+            items = form_items(FORMS.get(v['form'], FORMS[DEFAULT_FORM]))
+            scores = jl(e['scores'], {})
+            missing = [it['title'] for it in items if it['id'] not in scores]
+            if missing:
+                return bad(f'ยังให้คะแนนไม่ครบ {len(missing)} ข้อ เช่น "{missing[0]}"')
+            con.execute("UPDATE sv_evals SET status='submitted', submitted_at=? WHERE id=?", (now(), e['id']))
+            _, evals = load(con, vid)
+            prog = progress(v, evals)
+        msg = 'ส่งผลแล้ว' + (' — กรรมการครบ 3 คน ระบบแปลผลให้แล้ว' if prog['status'] == 'done' else '')
+        return jsonify(success=True, message=msg, status=prog['status'])
+
+    @app.post('/api/sv/visits/<int:vid>/eval/<rnd>/<int:seat>/reopen')
+    @login_required
+    def sv_eval_reopen(vid, rnd, seat):
+        """ฝ่ายวิชาการเปิดคืนให้กรรมการแก้คะแนน (ผู้รับการนิเทศต้องรับทราบผลใหม่)"""
+        if not can_manage(current_user()):
+            return bad('เฉพาะฝ่ายวิชาการหรือแอดมิน', 403)
+        with get_db() as con:
+            con.execute("UPDATE sv_evals SET status='draft', submitted_at=NULL WHERE visit_id=? AND round=? AND seat=?",
+                        (vid, rnd, seat))
+            if rnd == 'main':
+                con.execute('UPDATE sv_visits SET ack_at=NULL WHERE id=?', (vid,))
+        return jsonify(success=True, message='เปิดคืนแบบประเมินแล้ว')
+
+    # ── ผู้รับการนิเทศ: ข้อมูลก่อนสอน / สะท้อนคิด / รับทราบ ──
+    def my_visit(con, vid, as_raw):
+        u = current_user()
+        v, evals = load(con, vid)
+        if not v:
+            return None, None, bad('ไม่พบนัดนิเทศ', 404)
+        if not (can_manage(u) or same(acting(con, u, as_raw), v['teacher_id'], v['teacher_name'])):
+            return None, None, bad(f"ส่วนนี้ให้ {v['teacher_name']} เป็นผู้กรอก — เลือกชื่อตัวเองให้ตรงก่อน")
+        return v, evals, None
+
+    @app.put('/api/sv/visits/<int:vid>/pre')
+    @login_required
+    def sv_pre(vid):
+        b = request.get_json() or {}
+        with get_db() as con:
+            v, _, err = my_visit(con, vid, b.get('as'))
+            if err:
+                return err
+            con.execute('UPDATE sv_visits SET plan_no=?, unit=?, topic=?, focus=? WHERE id=?',
+                        (clean(b.get('plan_no'), 20), clean(b.get('unit'), 160), clean(b.get('topic'), 200),
+                         clean(b.get('focus')), vid))
+        return jsonify(success=True, message='บันทึกข้อมูลก่อนสอนแล้ว')
+
+    @app.put('/api/sv/visits/<int:vid>/reflect')
+    @login_required
+    def sv_reflect(vid):
+        b = request.get_json() or {}
+        with get_db() as con:
+            v, evals, err = my_visit(con, vid, b.get('as'))
+            if err:
+                return err
+            keys = {k for k, _ in FORMS.get(v['form'], FORMS[DEFAULT_FORM])['reflect']}
+            ref = {k: clean(val, 2000) for k, val in (b.get('reflection') or {}).items() if k in keys and clean(val, 2000)}
+            ack = v['ack_at']
+            if b.get('ack'):
+                if progress(v, evals)['status'] not in ('done', 'ack'):
+                    return bad('กรรมการยังประเมินไม่ครบ ยังกดรับทราบไม่ได้')
+                ack = ack or now()
+            con.execute('UPDATE sv_visits SET reflection=?, agreed=?, ack_at=? WHERE id=?',
+                        (json.dumps(ref, ensure_ascii=False), clean(b.get('agreed')), ack, vid))
+        return jsonify(success=True, message='รับทราบผลการนิเทศแล้ว' if b.get('ack') else 'บันทึกแล้ว')
+
+    # ── สรุปทั้งโรงเรียน (ฝ่ายวิชาการ / ผู้บริหาร) ─────────────
+    @app.get('/api/sv/summary')
+    @login_required
+    def sv_summary():
+        if not can_manage(current_user()):
+            return bad('เฉพาะฝ่ายวิชาการหรือแอดมิน', 403)
+        term = request.args.get('term', '')
+        with get_db() as con:
+            teachers = [dict(r) for r in con.execute(
+                'SELECT id, name FROM tt_teachers WHERE COALESCE(active,1)=1 ORDER BY sort_order, id')]
+            rows, item_sum, item_n, seen = [], {}, {}, set()
+            for v in con.execute('SELECT * FROM sv_visits WHERE term=? ORDER BY date, id', (term,)).fetchall():
+                evals = con.execute('SELECT * FROM sv_evals WHERE visit_id=?', (v['id'],)).fetchall()
+                seen.add(v['teacher_id'])
+                d = visit_brief(v, evals)
+                res = result_of(v, evals)
+                if res:
+                    d.update(percent=res['percent'], level=res['level'], total=res['total'], full=res['full'],
+                             strengths=res['strengths'], improve=res['improve'])
+                    for it in res['items']:
+                        item_sum[it['id']] = item_sum.get(it['id'], 0) + it['mean']
+                        item_n[it['id']] = item_n.get(it['id'], 0) + 1
+                rows.append(d)
+            form = FORMS[DEFAULT_FORM]
+            items = [dict(id=it['id'], title=it['title'], n=item_n.get(it['id'], 0),
+                          mean=r2(item_sum[it['id']] / item_n[it['id']]) if item_n.get(it['id']) else None,
+                          level=level_of(r2(item_sum[it['id']] / item_n[it['id']]), form['mean_levels'])
+                          if item_n.get(it['id']) else '')
+                     for it in form_items(form)]
+            done = [r for r in rows if 'percent' in r]
+            areas = {}
+            for r in done:
+                areas.setdefault(r['area'] or 'ไม่ระบุ', []).append(r['percent'])
+        return jsonify(
+            visits=rows, items=items,
+            areas=[dict(area=a, n=len(v), percent=r2(sum(v) / len(v))) for a, v in sorted(areas.items())],
+            not_scheduled=[t['name'] for t in teachers if t['id'] not in seen],
+            count=dict(teachers=len(teachers), scheduled=len(rows), done=len(done)),
+            percent=r2(sum(r['percent'] for r in done) / len(done)) if done else None,
+            level=level_of(r2(sum(r['percent'] for r in done) / len(done)), form['pct_levels']) if done else '')

@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>นิเทศการสอน - Baanburi One</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css?v=20261102f" rel="stylesheet">
+  <style>
+    .sv-card { border: 1px solid var(--bs-border-color); border-radius: .75rem; padding: .8rem 1rem; background: var(--bs-body-bg);
+               display: flex; flex-wrap: wrap; gap: .4rem 1rem; align-items: center; cursor: pointer; }
+    .sv-card:hover { border-color: var(--bs-primary); }
+    .sv-card .main { flex: 1 1 16rem; min-width: 0; }
+    .sv-card .meta { color: var(--bs-secondary-color); font-size: .9rem; }
+    .st { font-weight: 600; }
+    .st-scheduled { background: #f1f3f5; color: #495057; } .st-pre_done { background: #e8e2f7; color: #5b3aa8; }
+    .st-evaluating { background: #fff1d6; color: #8a5200; } .st-done { background: #dbeafe; color: #1e4fa8; }
+    .st-ack { background: #d9f2e1; color: #17653a; }
+    .todo { background: #fde2e1; color: #b42318; }
+    .sec { border: 1px solid var(--bs-border-color); border-radius: .75rem; background: var(--bs-body-bg); margin-bottom: 1rem; }
+    .sec > h2 { font-size: 1.05rem; font-weight: 700; margin: 0; padding: .7rem 1rem; border-bottom: 1px solid var(--bs-border-color); }
+    .sec > .body { padding: 1rem; }
+    .item { padding: .9rem 0 1rem; border-top: 1px solid var(--bs-border-color); }
+    .item:first-of-type { border-top: 0; }
+    .item .head { display: flex; gap: .6rem; align-items: flex-start; }
+    .item .no { flex: none; width: 1.9rem; height: 1.9rem; border-radius: 50%; display: grid; place-items: center;
+                font-weight: 700; font-size: .9rem; background: var(--bs-secondary-bg); color: var(--bs-secondary-color);
+                transition: background .15s, color .15s; }
+    .item.is-scored .no { background: var(--bs-primary); color: #fff; }
+    .item .t { font-weight: 600; flex: 1; min-width: 0; }
+    .item .pick { flex: none; font-size: .8rem; font-weight: 700; padding: .15rem .6rem; border-radius: 999px;
+                  color: #fff; background: var(--c, transparent); white-space: nowrap; }
+    .item .pick:empty { display: none; }
+    .item .d { color: var(--bs-secondary-color); font-size: .9rem; margin: .15rem 0 .65rem 2.5rem; }
+    .item .below { margin-left: 2.5rem; }
+    /* ปุ่มให้คะแนน 0–4: สีไล่จากแดง (0) ถึงเขียว (4) */
+    .s0 { --c: #c62828; } .s1 { --c: #d9620a; } .s2 { --c: #b07d00; } .s3 { --c: #2e8b78; } .s4 { --c: #1d7a41; }
+    .scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: .45rem; max-width: 27rem; margin-left: 2.5rem; }
+    .scale input { position: absolute; opacity: 0; pointer-events: none; }
+    .scale label { display: flex; flex-direction: column; align-items: center; gap: .3rem; height: 100%;
+                   padding: .55rem .15rem .45rem; border-radius: .9rem; cursor: pointer; user-select: none;
+                   border: 1.5px solid var(--bs-border-color); background: var(--bs-body-bg);
+                   transition: transform .12s, box-shadow .12s, background .12s, border-color .12s;
+                   -webkit-tap-highlight-color: transparent; }
+    .scale label b { width: 2.5rem; height: 2.5rem; border-radius: 50%; display: grid; place-items: center;
+                     font-size: 1.25rem; line-height: 1; color: var(--c); border: 2px solid var(--c);
+                     background: var(--bs-body-bg); transition: background .12s, color .12s; }
+    .scale label small { font-size: .7rem; line-height: 1.15; text-align: center; color: var(--bs-secondary-color); }
+    .scale label:hover { border-color: var(--c); }
+    .scale label:active { transform: scale(.96); }
+    .scale input:checked + label { border-color: var(--c); border-width: 2px; transform: translateY(-2px);
+                                   background: color-mix(in srgb, var(--c) 13%, var(--bs-body-bg));
+                                   box-shadow: 0 6px 14px color-mix(in srgb, var(--c) 28%, transparent); }
+    .scale input:checked + label b { background: var(--c); color: #fff; }
+    .scale input:checked + label small { color: var(--bs-body-color); font-weight: 700; }
+    .scale input:focus-visible + label { outline: 3px solid color-mix(in srgb, var(--c) 45%, transparent); outline-offset: 2px; }
+    @media (max-width: 575px) {
+      .item .d, .item .below, .scale { margin-left: 0; }
+      .scale { gap: .3rem; max-width: none; }
+      .scale label b { width: 2.3rem; height: 2.3rem; font-size: 1.15rem; }
+    }
+    @media (prefers-reduced-motion: reduce) { .scale label, .scale label b, .item .no { transition: none; } }
+    .legend { display: flex; flex-wrap: wrap; gap: .35rem .5rem; margin-bottom: .25rem; }
+    .legend span { display: inline-flex; align-items: center; gap: .35rem; font-size: .82rem; color: var(--bs-secondary-color); }
+    .legend i { width: 1.3rem; height: 1.3rem; border-radius: 50%; background: var(--c); color: #fff; font-style: normal;
+                font-weight: 700; font-size: .78rem; display: grid; place-items: center; }
+    .part-h { font-weight: 700; margin: 1.1rem 0 .2rem; padding: .45rem .8rem; border-radius: .6rem; background: var(--bs-secondary-bg); }
+    .prog { flex: 1 1 100%; height: .4rem; border-radius: 999px; background: var(--bs-secondary-bg); overflow: hidden; }
+    .prog > div { height: 100%; width: 0; border-radius: 999px; background: var(--bs-primary); transition: width .2s; }
+    .savebar { position: sticky; bottom: 3.2rem; z-index: 5; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color);
+               border-radius: .75rem; padding: .6rem .9rem; display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center;
+               box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+    table.res th, table.res td { vertical-align: middle; }
+    table.res td.n, table.res th.n { text-align: center; white-space: nowrap; }
+    .lv { font-weight: 600; white-space: nowrap; }
+    .flag { color: #b42318; }
+    .cm { border-left: 3px solid var(--bs-border-color); padding: .15rem .7rem; margin: .35rem 0; }
+    .cm .who { font-size: .85rem; color: var(--bs-secondary-color); }
+    .big { font-size: 2rem; font-weight: 700; line-height: 1.1; }
+    .pre-wrap { white-space: pre-wrap; }
+    .com-row { display: grid; grid-template-columns: 1.5rem 1fr 1fr auto; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+    @media (max-width: 575px) { .com-row { grid-template-columns: 1.5rem 1fr; } .com-row .pos, .com-row .peer { grid-column: 2; } }
+    @media print {
+      .sec { border: 0; break-inside: avoid; } .sec > h2 { padding-left: 0; } .sec > .body { padding: .4rem 0; }
+      body { font-size: 12pt; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>หน้าหลัก</a></li>
+      </ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header no-print">
+  <div class="container">
+    <h1><i class="bi bi-clipboard2-check me-2"></i>นิเทศการสอน</h1>
+    <div class="subtitle">กรรมการนิเทศ 3 คนให้คะแนนและข้อเสนอแนะออนไลน์ — ระบบรวมคะแนนและแปลผลให้</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+  <!-- แถบบน -->
+  <div class="d-flex flex-wrap gap-2 align-items-end mb-3 no-print" id="topbar">
+    <div>
+      <label class="form-label small mb-1" for="term">ภาคเรียน</label>
+      <select id="term" class="form-select" onchange="loadList()"></select>
+    </div>
+    <div style="min-width:15rem">
+      <label class="form-label small mb-1" for="who">ฉันคือ</label>
+      <select id="who" class="form-select" onchange="onWho()"></select>
+    </div>
+    <div class="btn-group ms-sm-2" role="group">
+      <button class="btn btn-outline-primary active" id="tabMine" onclick="showTab('mine')"><i class="bi bi-person-check me-1"></i>งานของฉัน</button>
+      <button class="btn btn-outline-primary" id="tabAll" onclick="showTab('all')"><i class="bi bi-calendar2-week me-1"></i>ตารางนิเทศ</button>
+      <button class="btn btn-outline-primary" id="tabSum" onclick="showTab('sum')" hidden><i class="bi bi-bar-chart me-1"></i>สรุปผล</button>
+    </div>
+    <button class="btn btn-primary ms-auto" id="btnNew" onclick="openVisitModal()" hidden><i class="bi bi-plus-lg me-1"></i>สร้างนัดนิเทศ</button>
+  </div>
+
+  <div id="listView"></div>
+  <div id="detailView" hidden></div>
+</div>
+
+<!-- สร้าง/แก้นัด -->
+<div class="modal fade" id="visitModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="vmTitle">สร้างนัดนิเทศ</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="ปิด"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-sm-7">
+            <label class="form-label" for="vmTeacher">ครูผู้รับการนิเทศ</label>
+            <select id="vmTeacher" class="form-select" onchange="vmLoadSlots('')"></select>
+          </div>
+          <div class="col-sm-5">
+            <label class="form-label" for="vmDate">วันที่นิเทศ</label>
+            <input type="date" id="vmDate" class="form-control" onchange="vmLoadSlots('')">
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="vmSlot">คาบสอนที่จะนิเทศ (จากตารางสอน)</label>
+            <select id="vmSlot" class="form-select"></select>
+          </div>
+          <div class="col-12">
+            <label class="form-label mb-1">กรรมการนิเทศ 3 คน</label>
+            <div class="small text-muted mb-2">เลือกจากรายชื่อหรือพิมพ์ชื่อเอง · ติ๊กคนที่เป็นเพื่อนคู่นิเทศ (มาสังเกตการสอนก่อนวันนิเทศจริง)</div>
+            <div id="vmCom"></div>
+            <datalist id="people"></datalist>
+          </div>
+          <div class="col-12"><hr class="my-1"><div class="fw-semibold">เพื่อนคู่นิเทศสังเกตการสอนก่อน <span class="text-muted fw-normal">(กรอกทีหลังได้)</span></div></div>
+          <div class="col-sm-5">
+            <label class="form-label" for="vmPreDate">วันที่สังเกต</label>
+            <input type="date" id="vmPreDate" class="form-control" onchange="vmLoadSlots('pre')">
+          </div>
+          <div class="col-sm-7">
+            <label class="form-label" for="vmPreSlot">คาบที่สังเกต</label>
+            <select id="vmPreSlot" class="form-select"></select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-danger me-auto" id="vmDelete" onclick="deleteVisit()" hidden><i class="bi bi-trash me-1"></i>ลบนัดนี้</button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+        <button class="btn btn-primary" onclick="saveVisit()"><i class="bi bi-check-lg me-1"></i>บันทึก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js?v=20261110a"></script>
+<script>
+let META = null, TAB = 'mine', VISITS = [], CUR = null, EDIT_ID = null, VM_SLOTS = { '': [], pre: [] };
+const DRAFT = {};          // 'round/seat' → {scores, comments, highlight, strengths, improvements, timer}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const $ = id => document.getElementById(id);
+const modal = id => bootstrap.Modal.getOrCreateInstance($(id));
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+const thDate = d => d ? formatThaiDateShort(d) : '';
+const term = () => $('term').value;
+const who = () => $('who').value;
+const form = v => META.forms[(v && v.form) || META.default_form];
+const items = f => f.parts.flatMap(p => p.items);
+const num = x => x == null ? '–' : Number(x).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+const roundTh = e => e.round === 'pre' ? 'สังเกตก่อนนิเทศ (เพื่อนคู่นิเทศ)' : 'นิเทศจริง';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  try { META = await apiFetch('/api/sv/meta'); }
+  catch (e) { showToast(e.message, 'danger'); return; }
+  $('term').innerHTML = (META.terms.length ? META.terms : [META.default_term]).filter(Boolean)
+    .map(t => `<option ${t === META.default_term ? 'selected' : ''}>${esc(t)}</option>`).join('');
+  fillWho();
+  $('tabSum').hidden = $('btnNew').hidden = !META.can_manage;
+  if (META.can_manage && !who()) TAB = 'all';
+  setTabButtons();
+  const open = new URLSearchParams(location.search).get('visit');
+  if (open) openVisit(Number(open)); else loadList();
+});
+
+// ── ฉันคือใคร ─────────────────────────────────────────
+function fillWho() {
+  const extra = [...new Set([META.director, ...META.others].filter(n => n && !META.teachers.some(t => t.name === n)))];
+  $('who').innerHTML = '<option value="">— เลือกชื่อตัวเอง —</option>' +
+    META.teachers.map(t => `<option value="t:${t.id}">${esc(t.name)}</option>`).join('') +
+    extra.map(n => `<option value="n:${esc(n)}">${esc(n)}</option>`).join('');
+  if (META.my_teacher_id) { $('who').value = 't:' + META.my_teacher_id; $('who').disabled = true; }
+  else { const s = store.get('sv.who'); if (s && [...$('who').options].some(o => o.value === s)) $('who').value = s; }
+  $('people').innerHTML = [...META.teachers.map(t => t.name), ...extra].map(n => `<option value="${esc(n)}">`).join('');
+}
+function onWho() { store.set('sv.who', who()); CUR ? openVisit(CUR.id) : loadList(); }
+
+// ── รายการ ───────────────────────────────────────────
+function setTabButtons() { for (const [k, id] of [['mine', 'tabMine'], ['all', 'tabAll'], ['sum', 'tabSum']]) $(id).classList.toggle('active', TAB === k); }
+function showTab(t) { TAB = t; setTabButtons(); backToList(); }
+function backToList() {
+  CUR = null; history.replaceState(null, '', location.pathname);
+  $('detailView').hidden = true; $('listView').hidden = false; $('topbar').hidden = false;
+  loadList();
+}
+
+async function loadList() {
+  const box = $('listView');
+  if (TAB === 'sum') return loadSummary();
+  try {
+    VISITS = (await apiFetch(`/api/sv/visits?term=${encodeURIComponent(term())}&as=${encodeURIComponent(who())}`)).visits;
+  } catch (e) { box.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; return; }
+  let list = VISITS, empty = 'ยังไม่มีนัดนิเทศในภาคเรียนนี้';
+  if (TAB === 'mine') {
+    if (!who()) { box.innerHTML = '<div class="alert alert-info"><i class="bi bi-person-check me-1"></i>เลือกชื่อตัวเองในช่อง "ฉันคือ" ก่อน เพื่อดูงานนิเทศของตัวเอง</div>'; return; }
+    list = VISITS.filter(v => v.my_roles.length); empty = 'ยังไม่มีงานนิเทศของคุณในภาคเรียนนี้';
+  }
+  box.innerHTML = list.length ? '<div class="d-grid gap-2">' + list.map(card).join('') + '</div>'
+    : `<div class="text-center text-muted py-5"><i class="bi bi-clipboard2 fs-1 d-block mb-2"></i>${empty}</div>`;
+}
+
+function card(v) {
+  const role = v.my_roles.includes('teacher') ? 'ผู้รับการนิเทศ'
+    : v.my_roles.some(r => r.startsWith('pre')) ? 'เพื่อนคู่นิเทศ' : v.my_roles.length ? 'กรรมการ' : '';
+  const com = v.committee.map(c => esc(c.name) + (c.peer ? ' (เพื่อนคู่นิเทศ)' : '')).join(' · ');
+  return `<div class="sv-card" onclick="openVisit(${v.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter')openVisit(${v.id})">
+    <div class="main">
+      <div class="fw-semibold">${esc(v.teacher_name)} ${role ? `<span class="badge text-bg-light border ms-1">${role}</span>` : ''}</div>
+      <div class="meta">${thDate(v.date)} · คาบ ${esc(v.period)} · ${esc(v.code)} ${esc(v.title)} · ${esc(v.class_label)}</div>
+      <div class="meta">กรรมการ: ${com}</div>
+    </div>
+    <div class="text-end">
+      <span class="badge st st-${v.status}">${esc(v.status_th)}</span>
+      ${v.percent != null ? `<div class="small mt-1">${num(v.percent)}% · ${esc(v.level)}</div>` : ''}
+      ${(TAB === 'mine' ? v.todo : []).map(t => `<div class="mt-1"><span class="badge todo">${esc(t)}</span></div>`).join('')}
+    </div>
+  </div>`;
+}
+
+// ── รายละเอียดนัด ─────────────────────────────────────
+async function openVisit(id) {
+  let v;
+  try { v = await apiFetch(`/api/sv/visits/${id}?as=${encodeURIComponent(who())}`); }
+  catch (e) { showToast(e.message, 'danger'); if (!CUR) loadList(); return; }
+  CUR = v; history.replaceState(null, '', '?visit=' + id);
+  $('listView').hidden = true; $('detailView').hidden = false;
+  renderVisit();
+  window.scrollTo(0, 0);
+}
+
+function renderVisit() {
+  const v = CUR, f = form(v);
+  const canPre = v.is_teacher || v.can_manage;
+  let h = `<div class="d-flex flex-wrap gap-2 mb-3 no-print">
+      <button class="btn btn-outline-secondary" onclick="backToList()"><i class="bi bi-arrow-left me-1"></i>กลับ</button>
+      ${v.can_manage ? `<button class="btn btn-outline-primary" onclick="openVisitModal(${v.id})"><i class="bi bi-pencil me-1"></i>แก้นัด</button>` : ''}
+      ${v.result ? '<button class="btn btn-outline-primary ms-auto" onclick="window.print()"><i class="bi bi-printer me-1"></i>พิมพ์ผล</button>' : ''}
+    </div>
+    <div class="sec"><h2>${esc(f.name)} · ภาคเรียนที่ ${esc(v.term)} <span class="badge st st-${v.status} ms-1">${esc(v.status_th)}</span></h2>
+      <div class="body">
+        <div class="row g-2">
+          <div class="col-md-6"><span class="text-muted">ผู้รับการนิเทศ</span> <b>${esc(v.teacher_name)}</b></div>
+          <div class="col-md-6"><span class="text-muted">กลุ่มสาระการเรียนรู้</span> ${esc(v.area || '–')}</div>
+          <div class="col-md-6"><span class="text-muted">วันที่สอน</span> ${thDate(v.date)} · คาบที่ ${esc(v.period)}</div>
+          <div class="col-md-6"><span class="text-muted">วิชา</span> ${esc(v.code)} ${esc(v.title)} · ${esc(v.class_label)}</div>
+        </div>
+        <div class="mt-2"><span class="text-muted">กรรมการนิเทศ</span>
+          ${v.committee.map(c => `<div>${c.seat}. ${esc(c.name)}${c.position ? ` <span class="text-muted">(${esc(c.position)})</span>` : ''}
+            ${c.peer ? '<span class="badge text-bg-light border">เพื่อนคู่นิเทศ</span>' : ''}
+            ${c.submitted ? '<i class="bi bi-check-circle-fill text-success" title="ส่งผลแล้ว"></i>' : '<span class="text-muted small">ยังไม่ส่ง</span>'}</div>`).join('')}
+        </div>
+        ${v.pre_date ? `<div class="mt-2"><span class="text-muted">เพื่อนคู่นิเทศสังเกตก่อน</span> ${thDate(v.pre_date)}${v.pre_period ? ' · คาบที่ ' + esc(v.pre_period) : ''} ${esc(v.pre_lesson)}</div>` : ''}
+      </div></div>`;
+
+  // ข้อมูลก่อนสอน
+  h += `<div class="sec"><h2>ข้อมูลก่อนสอน <span class="fw-normal text-muted small">ผู้รับการนิเทศกรอก</span></h2><div class="body">`;
+  if (canPre) {
+    h += `<div class="row g-2">
+        <div class="col-sm-3"><label class="form-label small mb-1" for="plan_no">แผนการเรียนรู้ที่</label><input id="plan_no" class="form-control" value="${esc(v.plan_no)}"></div>
+        <div class="col-sm-9"><label class="form-label small mb-1" for="unit">หน่วยการเรียนรู้</label><input id="unit" class="form-control" value="${esc(v.unit)}"></div>
+        <div class="col-12"><label class="form-label small mb-1" for="topic">เรื่อง</label><input id="topic" class="form-control" value="${esc(v.topic)}"></div>
+        <div class="col-12"><label class="form-label small mb-1" for="focus">เป้าหมายการสอนในคาบ / ประเด็นที่อยากให้กรรมการสังเกตเป็นพิเศษ</label>
+          <textarea id="focus" class="form-control" rows="2">${esc(v.focus)}</textarea></div>
+      </div>
+      <button class="btn btn-primary mt-3 no-print" onclick="savePre()"><i class="bi bi-check-lg me-1"></i>บันทึกข้อมูลก่อนสอน</button>`;
+  } else {
+    h += (v.unit || v.topic || v.focus)
+      ? `<div>แผนที่ ${esc(v.plan_no || '–')} · หน่วย ${esc(v.unit || '–')} · เรื่อง ${esc(v.topic || '–')}</div>
+         ${v.focus ? `<div class="mt-1"><span class="text-muted">ประเด็นที่อยากให้สังเกต:</span> <span class="pre-wrap">${esc(v.focus)}</span></div>` : ''}`
+      : '<span class="text-muted">ผู้รับการนิเทศยังไม่ได้กรอก</span>';
+  }
+  h += '</div></div>';
+
+  // แบบประเมินของฉันที่ยังไม่ส่ง → ฟอร์มให้คะแนน
+  for (const e of v.evals.filter(e => e.mine && e.status !== 'submitted')) h += evalForm(v, f, e);
+  // ผลรอบสังเกตก่อน (ที่ส่งแล้วและมองเห็นได้)
+  const pre = v.evals.find(e => e.round === 'pre' && e.status === 'submitted' && e.scores);
+  if (pre) h += preView(f, pre);
+  // ผลรวม
+  if (v.result) h += resultView(v, f);
+  else {
+    const waiting = v.evals.filter(e => e.round === 'main' && e.mine && e.status === 'submitted').length;
+    if (waiting) h += `<div class="alert alert-info">คุณส่งผลแล้ว — รอกรรมการท่านอื่นส่งให้ครบ (${v.main_done}/${v.main_total}) แล้วระบบจะแปลผลให้</div>`;
+    else if (v.is_teacher) h += `<div class="alert alert-info">กรรมการส่งผลแล้ว ${v.main_done}/${v.main_total} คน — เมื่อครบ ระบบจะแสดงผลและคำแปลผลที่นี่</div>`;
+  }
+  // สะท้อนคิด + รับทราบ
+  if (v.result && (v.is_teacher || v.can_manage || Object.keys(v.reflection).length || v.agreed)) h += reflectView(v, f);
+  if (v.can_manage) h += manageView(v);
+  $('detailView').innerHTML = h;
+  for (const e of v.evals.filter(e => e.mine && e.status !== 'submitted')) refreshBar(e);
+}
+
+// ── ฟอร์มให้คะแนน ─────────────────────────────────────
+const dkey = e => e.round + '/' + e.seat;
+function evalForm(v, f, e) {
+  const k = dkey(e);
+  DRAFT[k] = { scores: { ...e.scores }, comments: { ...e.comments }, highlight: e.highlight || '',
+               strengths: e.strengths || '', improvements: e.improvements || '', timer: null, e };
+  let h = `<div class="sec" id="ev-${e.round}-${e.seat}"><h2><i class="bi bi-pencil-square me-1"></i>แบบให้คะแนน — ${roundTh(e)}
+      <span class="fw-normal text-muted small">ผู้ประเมิน ${esc(e.evaluator_name)}</span></h2><div class="body">
+      <div class="legend">${[...f.scale].reverse().map(([n, t]) => `<span class="s${n}"><i>${n}</i>${esc(t)}</span>`).join('')}</div>`;
+  for (const p of f.parts) {
+    h += `<div class="part-h">${esc(p.title)}</div>`;
+    p.items.forEach((it, i) => {
+      const c = DRAFT[k].comments[it.id] || '', cur = DRAFT[k].scores[it.id];
+      h += `<div class="item ${cur != null ? 'is-scored' : ''}" id="it-${k}-${it.id}">
+        <div class="head"><div class="no">${i + 1}</div><div class="t">${esc(it.title)}</div>
+          <div class="pick ${cur != null ? 's' + cur : ''}" id="pk-${k}-${it.id}">${cur != null ? esc(scaleName(f, cur)) : ''}</div></div>
+        <div class="d">${esc(it.desc)}</div>
+        <div class="scale" role="radiogroup" aria-label="${esc(it.title)}">
+          ${[0, 1, 2, 3, 4].map(n => `<div class="s${n}"><input type="radio" name="s-${k}-${it.id}" id="s-${k}-${it.id}-${n}" value="${n}"
+              ${cur === n ? 'checked' : ''} onchange="setScore('${k}','${it.id}',${n})">
+            <label for="s-${k}-${it.id}-${n}"><b>${n}</b><small>${esc(scaleName(f, n))}</small></label></div>`).join('')}
+        </div>
+        <div class="below">
+        <button class="btn btn-sm btn-link px-0 mt-2 no-print" id="cb-${k}-${it.id}" onclick="toggleComment('${k}','${it.id}')" ${c ? 'hidden' : ''}>
+          <i class="bi bi-chat-left-text me-1"></i>พิมพ์ข้อเสนอแนะข้อนี้</button>
+        <textarea class="form-control mt-2" rows="2" id="c-${k}-${it.id}" placeholder="ข้อเสนอแนะ / สิ่งที่สังเกตเห็น"
+          oninput="setText('${k}','comments','${it.id}',this.value)" ${c ? '' : 'hidden'}>${esc(c)}</textarea></div></div>`;
+    });
+  }
+  h += `<div class="mt-3"><label class="form-label fw-semibold" for="hl-${k}">พฤติกรรมเด่น / นวัตกรรมที่พบในการสอนคาบนี้</label>
+      <textarea class="form-control" rows="2" id="hl-${k}" oninput="setText('${k}','highlight',null,this.value)">${esc(DRAFT[k].highlight)}</textarea></div>
+    <div class="mt-3"><label class="form-label fw-semibold" for="st-${k}">จุดเด่น / สิ่งที่ควรรักษาไว้</label>
+      <textarea class="form-control" rows="2" id="st-${k}" oninput="setText('${k}','strengths',null,this.value)">${esc(DRAFT[k].strengths)}</textarea></div>
+    <div class="mt-3 mb-3"><label class="form-label fw-semibold" for="im-${k}">จุดที่ควรพัฒนาและแนวทาง</label>
+      <textarea class="form-control" rows="2" id="im-${k}" oninput="setText('${k}','improvements',null,this.value)">${esc(DRAFT[k].improvements)}</textarea></div>
+    <div class="savebar no-print">
+      <div><b id="cnt-${k}"></b> <span class="text-muted" id="sum-${k}"></span></div>
+      <div class="small text-muted" id="sv-${k}">บันทึกร่างให้อัตโนมัติ</div>
+      <button class="btn btn-success ms-auto" onclick="submitEval('${k}')"><i class="bi bi-send me-1"></i>ส่งผล</button>
+      <div class="prog" aria-hidden="true"><div id="pg-${k}"></div></div>
+    </div></div></div>`;
+  return h;
+}
+function toggleComment(k, id) { $(`cb-${k}-${id}`).hidden = true; const t = $(`c-${k}-${id}`); t.hidden = false; t.focus(); }
+const scaleName = (f, n) => (f.scale.find(s => s[0] === n) || [])[1] || '';
+function setScore(k, id, n) {
+  DRAFT[k].scores[id] = n;
+  $(`it-${k}-${id}`).classList.add('is-scored');
+  const pk = $(`pk-${k}-${id}`); pk.className = 'pick s' + n; pk.textContent = scaleName(form(CUR), n);
+  refreshBar(DRAFT[k].e); queueSave(k);
+}
+function setText(k, field, id, val) { if (id) DRAFT[k][field][id] = val; else DRAFT[k][field] = val; queueSave(k); }
+function refreshBar(e) {
+  const k = dkey(e), d = DRAFT[k], all = items(form(CUR));
+  const done = all.filter(it => d.scores[it.id] != null).length;
+  $(`cnt-${k}`).textContent = `ให้คะแนนแล้ว ${done}/${all.length} ข้อ`;
+  $(`sum-${k}`).textContent = `รวม ${all.reduce((s, it) => s + (d.scores[it.id] || 0), 0)}/${all.length * 4}`;
+  $(`pg-${k}`).style.width = (done * 100 / all.length) + '%';
+}
+function queueSave(k) {
+  const d = DRAFT[k]; clearTimeout(d.timer);
+  $(`sv-${k}`).textContent = 'กำลังบันทึก…';
+  d.timer = setTimeout(() => saveDraft(k), 1200);
+}
+async function saveDraft(k) {
+  const d = DRAFT[k]; clearTimeout(d.timer); d.timer = null;
+  try {
+    await apiFetch(`/api/sv/visits/${CUR.id}/eval/${k}`, { method: 'PUT', body: JSON.stringify({
+      as: who(), scores: d.scores, comments: d.comments, highlight: d.highlight, strengths: d.strengths, improvements: d.improvements }) });
+    const el = $(`sv-${k}`); if (el) el.textContent = 'บันทึกร่างแล้ว ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    return true;
+  } catch (e) { const el = $(`sv-${k}`); if (el) el.innerHTML = `<span class="text-danger">บันทึกไม่สำเร็จ: ${esc(e.message)}</span>`; return false; }
+}
+async function submitEval(k) {
+  const all = items(form(CUR)), miss = all.filter(it => DRAFT[k].scores[it.id] == null);
+  if (miss.length) { showToast(`ยังให้คะแนนไม่ครบ ${miss.length} ข้อ`, 'warning'); $(`s-${k}-${miss[0].id}-0`).closest('.item').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+  if (!confirm('ส่งผลการประเมิน?\nส่งแล้วแก้ไขไม่ได้ (ต้องให้ฝ่ายวิชาการเปิดคืน)')) return;
+  if (!await saveDraft(k)) return;
+  try {
+    const r = await apiFetch(`/api/sv/visits/${CUR.id}/eval/${k}/submit`, { method: 'POST', body: JSON.stringify({ as: who() }) });
+    showToast(r.message); openVisit(CUR.id);
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+window.addEventListener('beforeunload', ev => { if (Object.values(DRAFT).some(d => d.timer)) { ev.preventDefault(); ev.returnValue = ''; } });
+
+// ── แสดงผล ────────────────────────────────────────────
+function lvBadge(t) {
+  const c = { 'ดีมาก': 'success', 'ดี': 'primary', 'พอใช้': 'warning', 'น้อยมาก': 'danger', 'ควรพัฒนา': 'danger', 'ไม่มีการปฏิบัติ': 'danger' }[t] || 'secondary';
+  return `<span class="lv text-${c}">${esc(t)}</span>`;
+}
+function notes(evals) {
+  const row = (label, key) => {
+    const got = evals.filter(e => e[key]);
+    return got.length ? `<div class="mt-3"><div class="fw-semibold">${label}</div>${got.map(e =>
+      `<div class="cm"><div class="pre-wrap">${esc(e[key])}</div><div class="who">${esc(e.evaluator_name)}</div></div>`).join('')}</div>` : '';
+  };
+  return row('พฤติกรรมเด่น / นวัตกรรมที่พบ', 'highlight') + row('จุดเด่น / สิ่งที่ควรรักษาไว้', 'strengths') + row('จุดที่ควรพัฒนาและแนวทาง', 'improvements');
+}
+function preView(f, e) {
+  const all = items(f), total = all.reduce((s, it) => s + (e.scores[it.id] || 0), 0);
+  return `<div class="sec"><h2>ผลการสังเกตก่อนนิเทศ <span class="fw-normal text-muted small">เพื่อนคู่นิเทศ ${esc(e.evaluator_name)}</span></h2><div class="body">
+    <div class="table-responsive"><table class="table table-sm res mb-2">
+      <thead><tr><th>รายการ</th><th class="n">คะแนน</th><th>ข้อเสนอแนะ</th></tr></thead>
+      <tbody>${all.map(it => `<tr><td>${esc(it.title)}</td><td class="n">${e.scores[it.id] ?? '–'}</td><td class="pre-wrap">${esc(e.comments[it.id] || '')}</td></tr>`).join('')}
+        <tr class="fw-bold"><td>รวม</td><td class="n">${total}/${all.length * 4}</td><td>ร้อยละ ${num(total * 100 / (all.length * 4))}</td></tr></tbody>
+    </table></div>${notes([e])}</div></div>`;
+}
+function resultView(v, f) {
+  const r = v.result, mains = v.evals.filter(e => e.round === 'main');
+  let h = `<div class="sec"><h2><i class="bi bi-award me-1"></i>ผลการนิเทศ (กรรมการ ${r.raters} คน)</h2><div class="body">
+    <div class="row g-3 align-items-center mb-3">
+      <div class="col-auto text-center"><div class="big">${num(r.percent)}%</div><div>${lvBadge(r.level)}</div></div>
+      <div class="col"><div>${esc(r.summary)}</div>
+        ${r.flagged.length ? `<div class="flag mt-1"><i class="bi bi-flag-fill me-1"></i>กรรมการให้คะแนนต่างกันตั้งแต่ 2 ระดับในข้อ: ${r.flagged.map(esc).join(' · ')} — ควรพูดคุยกันตอนสะท้อนผล</div>` : ''}</div>
+    </div>
+    <div class="table-responsive"><table class="table table-sm res">
+      <thead><tr><th>รายการประเมิน</th>${mains.map(e => `<th class="n" title="${esc(e.evaluator_name)}">คนที่ ${e.seat}</th>`).join('')}<th class="n">เฉลี่ย</th><th>แปลผล</th></tr></thead><tbody>`;
+  for (const p of f.parts) {
+    h += `<tr class="table-light"><td colspan="${mains.length + 3}" class="fw-semibold">${esc(p.title)}</td></tr>`;
+    for (const it of p.items) {
+      const row = r.items.find(x => x.id === it.id);
+      h += `<tr><td>${esc(it.title)} ${row.flag ? '<i class="bi bi-flag-fill flag" title="คะแนนต่างกันมาก"></i>' : ''}</td>
+        ${mains.map(e => `<td class="n">${e.scores ? (e.scores[it.id] ?? '–') : '–'}</td>`).join('')}
+        <td class="n fw-semibold">${num(row.mean)}</td><td>${lvBadge(row.level)}</td></tr>`;
+    }
+  }
+  h += `<tr class="fw-bold"><td>รวม</td>${mains.map(e => `<td class="n">${e.scores ? items(f).reduce((s, it) => s + (e.scores[it.id] || 0), 0) : '–'}</td>`).join('')}
+        <td class="n">${num(r.total)}/${r.full}</td><td>ร้อยละ ${num(r.percent)} ${lvBadge(r.level)}</td></tr></tbody></table></div>
+    <div class="small text-muted">${mains.map(e => `คนที่ ${e.seat} = ${esc(e.evaluator_name)}`).join(' · ')}</div>`;
+  // ข้อเสนอแนะรายข้อ
+  const cm = items(f).map(it => [it, mains.filter(e => e.comments && e.comments[it.id])]).filter(x => x[1].length);
+  if (cm.length) h += `<div class="mt-3"><div class="fw-semibold">ข้อเสนอแนะรายข้อ</div>${cm.map(([it, es]) =>
+    `<div class="mt-2"><div>${esc(it.title)}</div>${es.map(e => `<div class="cm"><div class="pre-wrap">${esc(e.comments[it.id])}</div><div class="who">${esc(e.evaluator_name)}</div></div>`).join('')}</div>`).join('')}</div>`;
+  h += notes(mains) + '</div></div>';
+  // ส่วนที่ 4
+  const a = r.aspects;
+  h += `<div class="sec"><h2>ส่วนที่ 4 การติดตามพัฒนาการ <span class="fw-normal text-muted small">ก่อนนิเทศ = เพื่อนคู่นิเทศสังเกตก่อน · หลังนิเทศ = ค่าเฉลี่ยกรรมการ</span></h2><div class="body">
+    <div class="table-responsive"><table class="table table-sm res mb-0">
+      <thead><tr><th>ด้านที่ประเมิน</th><th class="n">ก่อนนิเทศ</th><th class="n">หลังนิเทศ</th><th>แนวโน้ม</th></tr></thead>
+      <tbody>${a.rows.map((x, i) => `<tr><td>${i + 1}. ${esc(x.name)}</td><td class="n">${num(x.before)}</td><td class="n">${num(x.after)}</td>
+          <td>${x.trend === 'ดีขึ้น' ? '<span class="text-success"><i class="bi bi-arrow-up-right"></i> ดีขึ้น</span>' : x.trend === 'ลดลง' ? '<span class="text-danger"><i class="bi bi-arrow-down-right"></i> ลดลง</span>' : esc(x.trend || '–')}</td></tr>`).join('')}
+        <tr class="fw-bold"><td>รวม / ร้อยละ</td><td class="n">${a.before ? `${num(a.before.score)}/${a.full} (${num(a.before.percent)}%)` : '–'}</td>
+          <td class="n">${a.after ? `${num(a.after.score)}/${a.full} (${num(a.after.percent)}%)` : '–'}</td><td></td></tr></tbody>
+    </table></div>${a.before ? '' : '<div class="small text-muted mt-2">ยังไม่มีผลรอบเพื่อนคู่นิเทศสังเกตก่อน จึงยังเทียบไม่ได้</div>'}</div></div>`;
+  return h;
+}
+function reflectView(v, f) {
+  const edit = v.is_teacher || v.can_manage;
+  let h = `<div class="sec"><h2>ส่วนที่ 3 การสะท้อนคิดหลังการสอน <span class="fw-normal text-muted small">ผู้รับการนิเทศกรอก</span></h2><div class="body">`;
+  for (const [k, label] of f.reflect) {
+    h += edit ? `<div class="mb-3"><label class="form-label" for="rf-${k}">${esc(label)}</label><textarea class="form-control" rows="2" id="rf-${k}">${esc(v.reflection[k] || '')}</textarea></div>`
+              : `<div class="mb-2"><div class="text-muted">${esc(label)}</div><div class="pre-wrap">${esc(v.reflection[k] || '–')}</div></div>`;
+  }
+  h += edit ? `<div class="mb-3"><label class="form-label" for="agreed">ข้อตกลงร่วม / แนวทางพัฒนา</label><textarea class="form-control" rows="2" id="agreed">${esc(v.agreed)}</textarea></div>`
+            : `<div class="mb-2"><div class="text-muted">ข้อตกลงร่วม / แนวทางพัฒนา</div><div class="pre-wrap">${esc(v.agreed || '–')}</div></div>`;
+  if (v.ack_at) h += `<div class="alert alert-success mb-2"><i class="bi bi-check-circle-fill me-1"></i>รับทราบผลการนิเทศแล้ว เมื่อ ${thDate(v.ack_at.slice(0, 10))} ${esc(v.ack_at.slice(11, 16))} น.</div>`;
+  if (edit) h += `<div class="d-flex flex-wrap gap-2 no-print">
+      <button class="btn btn-outline-primary" onclick="saveReflect(false)"><i class="bi bi-check-lg me-1"></i>บันทึก</button>
+      ${v.ack_at ? '' : '<button class="btn btn-success" onclick="saveReflect(true)"><i class="bi bi-hand-thumbs-up me-1"></i>บันทึกและรับทราบผล</button>'}</div>`;
+  return h + '</div></div>';
+}
+function manageView(v) {
+  const sub = v.evals.filter(e => e.status === 'submitted');
+  return `<div class="sec no-print"><h2>สำหรับฝ่ายวิชาการ</h2><div class="body">
+    ${sub.length ? sub.map(e => `<div class="d-flex align-items-center gap-2 mb-2"><div class="flex-grow-1">${roundTh(e)} — ${esc(e.evaluator_name)}
+        <span class="text-muted small">ส่งเมื่อ ${thDate((e.submitted_at || '').slice(0, 10))}</span></div>
+      <button class="btn btn-sm btn-outline-secondary" onclick="reopen('${dkey(e)}')">เปิดคืนให้แก้</button></div>`).join('')
+      : '<span class="text-muted">ยังไม่มีกรรมการส่งผล</span>'}</div></div>`;
+}
+
+async function savePre() {
+  try {
+    const r = await apiFetch(`/api/sv/visits/${CUR.id}/pre`, { method: 'PUT', body: JSON.stringify({
+      as: who(), plan_no: $('plan_no').value, unit: $('unit').value, topic: $('topic').value, focus: $('focus').value }) });
+    showToast(r.message);
+    Object.assign(CUR, { plan_no: $('plan_no').value, unit: $('unit').value, topic: $('topic').value, focus: $('focus').value });
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+async function saveReflect(ack) {
+  if (ack && !confirm('ยืนยันรับทราบผลการนิเทศ?')) return;
+  const f = form(CUR), reflection = {};
+  for (const [k] of f.reflect) reflection[k] = $('rf-' + k).value;
+  try {
+    const r = await apiFetch(`/api/sv/visits/${CUR.id}/reflect`, { method: 'PUT', body: JSON.stringify({ as: who(), reflection, agreed: $('agreed').value, ack }) });
+    showToast(r.message); if (ack) openVisit(CUR.id);
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+async function reopen(k) {
+  if (!confirm('เปิดคืนแบบประเมินนี้ให้กรรมการแก้คะแนน?\nผลรวมจะหายไปจนกว่าจะส่งใหม่')) return;
+  try { const r = await apiFetch(`/api/sv/visits/${CUR.id}/eval/${k}/reopen`, { method: 'POST' }); showToast(r.message); openVisit(CUR.id); }
+  catch (e) { showToast(e.message, 'danger'); }
+}
+
+// ── สร้าง / แก้นัด ─────────────────────────────────────
+function openVisitModal(id) {
+  EDIT_ID = id || null;
+  const v = id ? CUR : null;
+  $('vmTitle').textContent = v ? 'แก้นัดนิเทศ' : 'สร้างนัดนิเทศ';
+  $('vmDelete').hidden = !v;
+  $('vmTeacher').innerHTML = '<option value="">— เลือกครู —</option>' + META.teachers.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  $('vmTeacher').value = v ? (v.teacher_id || '') : '';
+  $('vmDate').value = v ? v.date : '';
+  $('vmPreDate').value = v ? v.pre_date : '';
+  const com = v ? v.committee : [{}, {}, {}], peer = v ? v.peer_seat : 1;
+  $('vmCom').innerHTML = [0, 1, 2].map(i => `<div class="com-row">
+      <div class="text-muted">${i + 1}.</div>
+      <input class="form-control" id="vmN${i}" list="people" placeholder="ชื่อกรรมการ" value="${esc(com[i].name || '')}" aria-label="ชื่อกรรมการคนที่ ${i + 1}">
+      <input class="form-control pos" id="vmP${i}" placeholder="ตำแหน่ง เช่น ผู้อำนวยการ / ครู" value="${esc(com[i].position || '')}" aria-label="ตำแหน่งกรรมการคนที่ ${i + 1}">
+      <div class="form-check peer"><input class="form-check-input" type="radio" name="vmPeer" id="vmPeer${i}" value="${i + 1}" ${peer === i + 1 ? 'checked' : ''}>
+        <label class="form-check-label" for="vmPeer${i}">เพื่อนคู่นิเทศ</label></div></div>`).join('');
+  vmLoadSlots('', v && `${v.period}|${v.code}`);
+  vmLoadSlots('pre', v && v.pre_period ? `${v.pre_period}|` : '');
+  modal('visitModal').show();
+}
+async function vmLoadSlots(kind, keep) {
+  const sel = $(kind ? 'vmPreSlot' : 'vmSlot'), date = $(kind ? 'vmPreDate' : 'vmDate').value, tid = $('vmTeacher').value;
+  if (!kind && !keep) vmLoadSlots('pre');          // เปลี่ยนครู → คาบของรอบสังเกตก่อนต้องโหลดใหม่ด้วย
+  if (!tid || !date) { sel.innerHTML = `<option value="">— เลือกครูและวันที่ก่อน —</option>`; VM_SLOTS[kind] = []; return; }
+  try {
+    const r = await apiFetch(`/api/sv/slots?teacher_id=${tid}&date=${date}`);
+    VM_SLOTS[kind] = r.lessons;
+    sel.innerHTML = r.lessons.length
+      ? (kind ? '<option value="">— ยังไม่ระบุ —</option>' : '') + r.lessons.map((l, i) =>
+          `<option value="${i}">คาบ ${esc(l.period)} (${esc(l.time)}) · ${esc(l.code)} ${esc(l.title)} · ${esc(l.class_label)}</option>`).join('')
+      : `<option value="">${r.term ? 'วันนั้นครูไม่มีคาบสอนในตารางสอน' : 'วันที่อยู่นอกภาคเรียน'}</option>`;
+    if (keep) { const i = r.lessons.findIndex(l => `${l.period}|${l.code}`.startsWith(keep)); if (i >= 0) sel.value = String(i); }
+  } catch (e) { sel.innerHTML = `<option value="">${esc(e.message)}</option>`; }
+}
+async function saveVisit() {
+  const l = VM_SLOTS[''][$('vmSlot').value], p = VM_SLOTS.pre[$('vmPreSlot').value];
+  if (!$('vmTeacher').value) return showToast('เลือกครูผู้รับการนิเทศ', 'warning');
+  if (!l) return showToast('เลือกวันที่และคาบสอนที่จะนิเทศ', 'warning');
+  const body = { teacher_id: Number($('vmTeacher').value), date: $('vmDate').value, period: l.period, code: l.code, title: l.title,
+    class_label: l.class_label, area: l.area,
+    committee: [0, 1, 2].map(i => ({ name: $('vmN' + i).value, position: $('vmP' + i).value })),
+    peer_seat: Number((document.querySelector('input[name=vmPeer]:checked') || {}).value || 0),
+    pre_date: $('vmPreDate').value, pre_period: p ? p.period : '', pre_lesson: p ? `${p.code} ${p.title} · ${p.class_label}` : '' };
+  try {
+    const r = await apiFetch(EDIT_ID ? `/api/sv/visits/${EDIT_ID}` : '/api/sv/visits', { method: EDIT_ID ? 'PUT' : 'POST', body: JSON.stringify(body) });
+    showToast(r.message); modal('visitModal').hide();
+    META = await apiFetch('/api/sv/meta'); fillWho();
+    EDIT_ID ? openVisit(EDIT_ID) : (TAB = 'all', setTabButtons(), loadList());
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+async function deleteVisit() {
+  if (!confirm(`ลบนัดนิเทศของ ${CUR.teacher_name}?\nคะแนนและข้อเสนอแนะของนัดนี้จะถูกลบทั้งหมด กู้คืนไม่ได้`)) return;
+  try { const r = await apiFetch(`/api/sv/visits/${EDIT_ID}`, { method: 'DELETE' }); showToast(r.message); modal('visitModal').hide(); backToList(); }
+  catch (e) { showToast(e.message, 'danger'); }
+}
+
+// ── สรุปทั้งโรงเรียน ───────────────────────────────────
+async function loadSummary() {
+  const box = $('listView');
+  let s;
+  try { s = await apiFetch('/api/sv/summary?term=' + encodeURIComponent(term())); }
+  catch (e) { box.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; return; }
+  const c = s.count;
+  box.innerHTML = `
+    <div class="sec"><h2>ภาพรวมการนิเทศ ภาคเรียนที่ ${esc(term())}</h2><div class="body">
+      <div class="row g-3 text-center">
+        <div class="col-6 col-md-3"><div class="big">${c.teachers}</div><div class="text-muted">ครูทั้งหมด</div></div>
+        <div class="col-6 col-md-3"><div class="big">${c.scheduled}</div><div class="text-muted">นัดแล้ว</div></div>
+        <div class="col-6 col-md-3"><div class="big">${c.done}</div><div class="text-muted">ประเมินครบแล้ว</div></div>
+        <div class="col-6 col-md-3"><div class="big">${s.percent == null ? '–' : num(s.percent) + '%'}</div><div class="text-muted">เฉลี่ยทั้งโรงเรียน ${s.level ? lvBadge(s.level) : ''}</div></div>
+      </div>
+      ${s.not_scheduled.length ? `<div class="mt-3"><span class="text-muted">ยังไม่มีนัดนิเทศ (${s.not_scheduled.length} คน):</span> ${s.not_scheduled.map(esc).join(' · ')}</div>` : ''}
+    </div></div>
+    <div class="sec"><h2>ผลรายครู</h2><div class="body"><div class="table-responsive"><table class="table table-sm table-hover res mb-0">
+      <thead><tr><th>ครู</th><th>กลุ่มสาระ</th><th>วันที่</th><th>สถานะ</th><th class="n">คะแนน</th><th class="n">ร้อยละ</th><th>ระดับ</th></tr></thead>
+      <tbody>${s.visits.map(v => `<tr role="button" onclick="openVisit(${v.id})"><td>${esc(v.teacher_name)}</td><td>${esc(v.area || '–')}</td><td>${thDate(v.date)}</td>
+        <td><span class="badge st st-${v.status}">${esc(v.status_th)}</span></td>
+        <td class="n">${v.total != null ? `${num(v.total)}/${v.full}` : '–'}</td><td class="n">${v.percent != null ? num(v.percent) : '–'}</td>
+        <td>${v.level ? lvBadge(v.level) : '–'}</td></tr>`).join('') || '<tr><td colspan="7" class="text-center text-muted">ยังไม่มีนัดนิเทศ</td></tr>'}</tbody>
+    </table></div></div></div>
+    <div class="row g-3">
+      <div class="col-lg-7"><div class="sec"><h2>ค่าเฉลี่ยรายข้อทั้งโรงเรียน</h2><div class="body"><div class="table-responsive"><table class="table table-sm res mb-0">
+        <thead><tr><th>รายการประเมิน</th><th class="n">เฉลี่ย</th><th>แปลผล</th></tr></thead>
+        <tbody>${s.items.map(it => `<tr><td>${esc(it.title)}</td><td class="n">${num(it.mean)}</td><td>${it.level ? lvBadge(it.level) : '–'}</td></tr>`).join('')}</tbody>
+      </table></div></div></div></div>
+      <div class="col-lg-5"><div class="sec"><h2>รายกลุ่มสาระ</h2><div class="body"><div class="table-responsive"><table class="table table-sm res mb-0">
+        <thead><tr><th>กลุ่มสาระ</th><th class="n">ครู</th><th class="n">ร้อยละเฉลี่ย</th></tr></thead>
+        <tbody>${s.areas.map(a => `<tr><td>${esc(a.area)}</td><td class="n">${a.n}</td><td class="n">${num(a.percent)}</td></tr>`).join('') || '<tr><td colspan="3" class="text-center text-muted">ยังไม่มีผล</td></tr>'}</tbody>
+      </table></div></div></div></div>
+    </div>`;
+}
+</script>
+</body>
+</html>

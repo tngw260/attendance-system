@@ -515,6 +515,7 @@ const NAV_GROUPS = [
     ['/timetable.html', 'bi-calendar-week', 'ตารางสอน'],
     ['/timetable.html?tab=sub', 'bi-person-up', 'สอนแทน'],
     ['/remedial.html', 'bi-arrow-repeat', 'สอบแก้ตัว'],
+    ['/supervision.html', 'bi-clipboard2-check', 'นิเทศการสอน'],
   ] },
   { label: 'รายงาน', icon: 'bi-bar-chart', items: [
     ['/report.html', 'bi-bar-chart', 'รายงานการมาเรียน'],

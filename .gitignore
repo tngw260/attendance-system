@@ -16,3 +16,4 @@ public/assets
 
 # Editor / Claude
 .claude/
+.preview/

@@ -5180,6 +5180,8 @@ import submemo                                       # บันทึกข้�
 submemo.init(app, get_db, login_required, current_user, get_settings)
 import remedial                                      # สอบแก้ตัว 0 ร มส มผ — ครูส่งผลออนไลน์ นายทะเบียนตรวจรับ
 remedial.init(app, get_db, login_required, current_user, get_settings)
+import supervision                                   # นิเทศการสอนออนไลน์ — กรรมการ 3 คน (1 คนเป็นเพื่อนคู่นิเทศ) ให้คะแนน คอมเมนต์ แปลผล
+supervision.init(app, get_db, login_required, current_user, get_settings)
 
 if __name__ == '__main__':
     import sys
