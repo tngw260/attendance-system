@@ -186,6 +186,9 @@
 <script src="/js/common.js?v=20261110a"></script>
 <script>
 let META = null, TAB = 'mine', VISITS = [], CUR = null, EDIT_ID = null, VM_SLOTS = { '': [], pre: [] };
+// เข้าทางลิงก์เฉพาะกิจ /sv/<รหัส> → ไม่ต้องล็อกอิน เห็นเฉพาะนัดนี้ในนามคนในลิงก์
+const LINK = (location.pathname.match(/^\/sv\/([\w-]{10,64})$/) || [])[1] || '';
+const base = () => LINK ? `/api/svl/${LINK}` : `/api/sv/visits/${CUR.id}`;
 const DRAFT = {};          // 'round/seat' → {scores, comments, highlight, strengths, improvements, timer}
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const $ = id => document.getElementById(id);
@@ -207,6 +210,7 @@ const num = x => x == null ? '–' : Number(x).toLocaleString('th-TH', { maximum
 const roundTh = e => e.round === 'pre' ? 'สังเกตการสอน (เพื่อนคู่นิเทศ)' : 'นิเทศจริง';
 
 document.addEventListener('DOMContentLoaded', async () => {
+  if (LINK) return startLink();
   await loadCurrentUser();
   try { META = await apiFetch('/api/sv/meta'); }
   catch (e) { showToast(e.message, 'danger'); return; }
@@ -219,6 +223,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const open = new URLSearchParams(location.search).get('visit');
   if (open) openVisit(Number(open)); else loadList();
 });
+
+async function startLink() {
+  $('topbar').classList.add('d-none'); $('listView').hidden = true;     // d-flex ชนะ [hidden] จึงต้องใช้ d-none
+  document.querySelector('.page-header p') && (document.querySelector('.page-header p').textContent = 'กรอกผ่านลิงก์เฉพาะกิจ ไม่ต้องล็อกอิน');
+  await openVisit();
+}
 
 // ── ฉันคือใคร ─────────────────────────────────────────
 function fillWho() {
@@ -277,9 +287,14 @@ function card(v) {
 // ── รายละเอียดนัด ─────────────────────────────────────
 async function openVisit(id) {
   let v;
-  try { v = await apiFetch(`/api/sv/visits/${id}?as=${encodeURIComponent(who())}`); }
-  catch (e) { showToast(e.message, 'danger'); if (!CUR) loadList(); return; }
-  CUR = v; history.replaceState(null, '', '?visit=' + id);
+  if (LINK) {
+    try { const d = await apiFetch(`/api/svl/${LINK}`); META = Object.assign(META || {}, d); v = d.visit; }
+    catch (e) { $('detailView').hidden = false; $('detailView').innerHTML = `<div class="alert alert-warning my-4"><i class="bi bi-link-45deg me-1"></i>${esc(e.message)}</div>`; return; }
+  } else {
+    try { v = await apiFetch(`/api/sv/visits/${id}?as=${encodeURIComponent(who())}`); }
+    catch (e) { showToast(e.message, 'danger'); if (!CUR) loadList(); return; }
+  }
+  CUR = v; if (!LINK) history.replaceState(null, '', '?visit=' + v.id);
   $('listView').hidden = true; $('detailView').hidden = false;
   renderVisit();
   window.scrollTo(0, 0);
@@ -288,8 +303,11 @@ async function openVisit(id) {
 function renderVisit() {
   const v = CUR, f = form(v);
   const canPre = v.is_teacher || v.can_manage;
-  let h = `<div class="d-flex flex-wrap gap-2 mb-3 no-print">
-      <button class="btn btn-outline-secondary" onclick="backToList()"><i class="bi bi-arrow-left me-1"></i>กลับ</button>
+  let h = LINK && v.link ? `<div class="alert alert-primary no-print"><i class="bi bi-person-badge me-1"></i>คุณคือ <b>${esc(v.link.name)}</b> · หน้าที่: <b>${esc(v.link.role)}</b>
+      ${v.link.peer ? '<div class="small mt-1">รอบที่ 1 สังเกตการสอนคนเดียว: กรอกแบบบันทึกการสังเกตชั้นเรียนแล้วกดส่ง<br>รอบที่ 2 วันนิเทศจริง: ให้คะแนนร่วมกับกรรมการอีก 2 คน ใช้ลิงก์เดียวกันนี้</div>' : ''}
+      <div class="small text-muted mt-1">ลิงก์นี้ใช้เฉพาะคุณ อย่าส่งต่อให้ผู้อื่น</div></div>` : '';
+  h += `<div class="d-flex flex-wrap gap-2 mb-3 no-print">
+      ${LINK ? '' : '<button class="btn btn-outline-secondary" onclick="backToList()"><i class="bi bi-arrow-left me-1"></i>กลับ</button>'}
       ${v.can_manage ? `<button class="btn btn-outline-primary" onclick="openVisitModal(${v.id})"><i class="bi bi-pencil me-1"></i>แก้นัด</button>` : ''}
       ${v.result ? '<button class="btn btn-outline-primary ms-auto" onclick="window.print()"><i class="bi bi-printer me-1"></i>พิมพ์ผล</button>' : ''}
     </div>
@@ -412,7 +430,7 @@ function queueSave(k) {
 async function saveDraft(k) {
   const d = DRAFT[k]; clearTimeout(d.timer); d.timer = null;
   try {
-    await apiFetch(`/api/sv/visits/${CUR.id}/eval/${k}`, { method: 'PUT', body: JSON.stringify({
+    await apiFetch(`${base()}/eval/${k}`, { method: 'PUT', body: JSON.stringify({
       as: who(), scores: d.scores, comments: d.comments, highlight: d.highlight, strengths: d.strengths, improvements: d.improvements }) });
     const el = $(`sv-${k}`); if (el) el.textContent = 'บันทึกร่างแล้ว ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
     return true;
@@ -424,7 +442,7 @@ async function submitEval(k) {
   if (!confirm('ส่งผลการประเมิน?\nส่งแล้วแก้ไขไม่ได้ (ต้องให้ฝ่ายวิชาการเปิดคืน)')) return;
   if (!await saveDraft(k)) return;
   try {
-    const r = await apiFetch(`/api/sv/visits/${CUR.id}/eval/${k}/submit`, { method: 'POST', body: JSON.stringify({ as: who() }) });
+    const r = await apiFetch(`${base()}/eval/${k}/submit`, { method: 'POST', body: JSON.stringify({ as: who() }) });
     showToast(r.message); openVisit(CUR.id);
   } catch (e) { showToast(e.message, 'danger'); }
 }
@@ -446,7 +464,7 @@ function notes(evals, f) {
 function preView(f, e, r) {
   const head = `<div class="sec"><h2><i class="bi bi-eye me-1"></i>ผลการสังเกตการสอน <span class="fw-normal text-muted small">เพื่อนคู่นิเทศ ${esc(e.evaluator_name)}</span>
       ${f.kind === 'observe' ? `<a class="btn btn-sm btn-outline-primary float-end no-print" target="_blank" rel="noopener"
-        href="/sv-print.html?doc=obs&visit=${CUR.id}&as=${encodeURIComponent(who())}"><i class="bi bi-printer me-1"></i>พิมพ์แบบสังเกต</a>` : ''}</h2><div class="body">`;
+        href="/sv-print.html?doc=obs&${LINK ? 't=' + LINK : `visit=${CUR.id}&as=${encodeURIComponent(who())}`}"><i class="bi bi-printer me-1"></i>พิมพ์แบบสังเกต</a>` : ''}</h2><div class="body">`;
   if (f.kind === 'observe' && r) {                // แบบสังเกตชั้นเรียน: รวม/ค่าเฉลี่ยรายด้าน + รวมเฉลี่ยทุกด้าน
     let h = head + `<div class="row g-3 align-items-center mb-3">
         <div class="col-auto text-center"><div class="big">${num(r.mean)}</div><div>${lvBadge(r.level)}</div></div>
@@ -528,7 +546,9 @@ function reflectView(v, f) {
 }
 function manageView(v) {
   const sub = v.evals.filter(e => e.status === 'submitted');
-  return `<div class="sec no-print"><h2>สำหรับฝ่ายวิชาการ</h2><div class="body">
+  return `<div class="sec no-print"><h2><i class="bi bi-link-45deg me-1"></i>ลิงก์ส่งทางไลน์ <span class="fw-normal text-muted small">กดแล้วกรอกได้เลย ไม่ต้องล็อกอิน · ลิงก์ของใครของมัน</span></h2>
+    <div class="body" id="linkBox"><button class="btn btn-outline-primary" onclick="loadLinks()"><i class="bi bi-link-45deg me-1"></i>แสดงลิงก์ของผู้รับการนิเทศและกรรมการ</button></div></div>
+    <div class="sec no-print"><h2>สำหรับฝ่ายวิชาการ</h2><div class="body">
     ${sub.length ? sub.map(e => `<div class="d-flex align-items-center gap-2 mb-2"><div class="flex-grow-1">${roundTh(e)} — ${esc(e.evaluator_name)}
         <span class="text-muted small">ส่งเมื่อ ${thDate((e.submitted_at || '').slice(0, 10))}</span></div>
       <button class="btn btn-sm btn-outline-secondary" onclick="reopen('${dkey(e)}')">เปิดคืนให้แก้</button></div>`).join('')
@@ -537,7 +557,7 @@ function manageView(v) {
 
 async function savePre() {
   try {
-    const r = await apiFetch(`/api/sv/visits/${CUR.id}/pre`, { method: 'PUT', body: JSON.stringify({
+    const r = await apiFetch(`${base()}/pre`, { method: 'PUT', body: JSON.stringify({
       as: who(), plan_no: $('plan_no').value, unit: $('unit').value, topic: $('topic').value, focus: $('focus').value }) });
     showToast(r.message);
     Object.assign(CUR, { plan_no: $('plan_no').value, unit: $('unit').value, topic: $('topic').value, focus: $('focus').value });
@@ -548,10 +568,43 @@ async function saveReflect(ack) {
   const f = form(CUR), reflection = {};
   for (const [k] of f.reflect) reflection[k] = $('rf-' + k).value;
   try {
-    const r = await apiFetch(`/api/sv/visits/${CUR.id}/reflect`, { method: 'PUT', body: JSON.stringify({ as: who(), reflection, agreed: $('agreed').value, ack }) });
+    const r = await apiFetch(`${base()}/reflect`, { method: 'PUT', body: JSON.stringify({ as: who(), reflection, agreed: $('agreed').value, ack }) });
     showToast(r.message); if (ack) openVisit(CUR.id);
   } catch (e) { showToast(e.message, 'danger'); }
 }
+// ── ลิงก์เฉพาะกิจ ───────────────────────────────────────
+let LINKS = [];
+const linkUrl = l => `${location.origin}/sv/${l.token}`;
+function linkText(l) {
+  const v = CUR, d = x => x ? thDate(x) : '';
+  let job = l.seat === 0 ? `รับการนิเทศ ${d(v.date)} คาบ ${v.period} (${v.code} ${v.title} ${v.class_label})\nก่อนวันสอนกรอก "ข้อมูลก่อนสอน" ในลิงก์ · หลังกรรมการส่งครบ ดูผล เขียนสะท้อนคิด และกดรับทราบ`
+    : l.peer ? `เพื่อนคู่นิเทศของ ${v.teacher_name}\n1) สังเกตการสอน${v.pre_date ? ' ' + d(v.pre_date) + (v.pre_period ? ' คาบ ' + v.pre_period : '') : ''} กรอกแบบบันทึกการสังเกตชั้นเรียน แล้วกดส่ง\n2) วันนิเทศจริง ${d(v.date)} คาบ ${v.period} ให้คะแนนร่วมกับกรรมการอีก 2 คน`
+    : `กรรมการนิเทศ ${v.teacher_name}\nวันนิเทศ ${d(v.date)} คาบ ${v.period} (${v.code} ${v.title} ${v.class_label})`;
+  return `📋 นิเทศการสอน ภาคเรียนที่ ${v.term}\nเรียน ${l.name}\nหน้าที่: ${l.role}\n${job}\n\nกดลิงก์เพื่อกรอก (ไม่ต้องล็อกอิน):\n${linkUrl(l)}\n\n* ลิงก์นี้สำหรับ ${l.name} เท่านั้น กรุณาอย่าส่งต่อ`;
+}
+async function loadLinks(renewSeat) {
+  try {
+    const r = renewSeat != null
+      ? await apiFetch(`/api/sv/visits/${CUR.id}/links/renew`, { method: 'POST', body: JSON.stringify({ seat: renewSeat }) })
+      : await apiFetch(`/api/sv/visits/${CUR.id}/links`);
+    if (r.message) showToast(r.message);
+    LINKS = r.links;
+  } catch (e) { showToast(e.message, 'danger'); return; }
+  $('linkBox').innerHTML = LINKS.map((l, i) => `<div class="d-flex flex-wrap align-items-center gap-2 py-2 border-bottom">
+      <div class="flex-grow-1"><b>${esc(l.name)}</b> <span class="badge text-bg-light border">${esc(l.role)}</span>
+        <div class="small text-muted text-break">${esc(linkUrl(l))}</div></div>
+      <button class="btn btn-sm btn-success" onclick="copyLink(${i}, true)"><i class="bi bi-line me-1"></i>คัดลอกข้อความส่งไลน์</button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="copyLink(${i}, false)"><i class="bi bi-clipboard me-1"></i>ลิงก์</button>
+      <button class="btn btn-sm btn-outline-danger" onclick="renewLink(${l.seat}, '${esc(l.name)}')" title="ยกเลิกลิงก์เดิมแล้วออกลิงก์ใหม่"><i class="bi bi-arrow-repeat"></i></button>
+    </div>`).join('') + '<div class="small text-muted mt-2">ลิงก์หมดอายุ 14 วันหลังผู้รับการนิเทศกดรับทราบ · ถ้าลิงก์หลุดไปถึงคนอื่น กด <i class="bi bi-arrow-repeat"></i> เพื่อออกลิงก์ใหม่ ลิงก์เดิมจะใช้ไม่ได้ทันที</div>';
+}
+async function copyLink(i, full) {
+  const l = LINKS[i], text = full ? linkText(l) : linkUrl(l);
+  try { await navigator.clipboard.writeText(text); showToast(full ? `คัดลอกข้อความของ ${l.name} แล้ว วางในไลน์ได้เลย` : 'คัดลอกลิงก์แล้ว'); }
+  catch { prompt('คัดลอกข้อความนี้', text); }
+}
+function renewLink(seat, name) { if (confirm(`ออกลิงก์ใหม่ให้ ${name}?\nลิงก์เดิมจะใช้ไม่ได้ทันที`)) loadLinks(seat); }
+
 async function reopen(k) {
   if (!confirm('เปิดคืนแบบประเมินนี้ให้กรรมการแก้คะแนน?\nผลรวมจะหายไปจนกว่าจะส่งใหม่')) return;
   try { const r = await apiFetch(`/api/sv/visits/${CUR.id}/eval/${k}/reopen`, { method: 'POST' }); showToast(r.message); openVisit(CUR.id); }

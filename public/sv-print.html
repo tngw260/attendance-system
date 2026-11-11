@@ -91,8 +91,10 @@ const F = (v, cls = '') => `<span class="f ${cls}" contenteditable="true">${esc(
 const $ = id => document.getElementById(id);
 let THEME = {};
 
+const LINK = (Q.get('t') || '').replace(/[^\w-]/g, '');      // เปิดจากลิงก์เฉพาะกิจ → ไม่ต้องล็อกอิน
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadCurrentUser();
+  if (!LINK) await loadCurrentUser();
+  else $('btnBack').href = '/sv/' + LINK;
   try { THEME = await apiFetch('/api/public/theme'); } catch { THEME = {}; }
   const doc = Q.get('doc') || 'obs';
   if (Q.get('visit')) $('btnBack').href = '/supervision.html?visit=' + encodeURIComponent(Q.get('visit'));
@@ -111,10 +113,11 @@ function termParts(term) { const m = String(term || '').match(/^(\d)\/(\d{4})$/)
 
 // ── แบบบันทึกการสังเกตชั้นเรียน (กรอกแล้ว หรือฟอร์มเปล่า ?blank=1) ─────────────
 async function renderObs() {
-  const meta = await apiFetch('/api/sv/meta');
-  let v = null, e = null, r = null, f;
-  if (Q.get('visit') && !Q.get('blank')) {
-    v = await apiFetch(`/api/sv/visits/${encodeURIComponent(Q.get('visit'))}?as=${encodeURIComponent(Q.get('as') || '')}`);
+  let meta, v = null, e = null, r = null, f;
+  if (LINK) { meta = await apiFetch('/api/svl/' + LINK); meta.default_term = meta.visit.term; }
+  else meta = await apiFetch('/api/sv/meta');
+  if (LINK || (Q.get('visit') && !Q.get('blank'))) {
+    v = LINK ? meta.visit : await apiFetch(`/api/sv/visits/${encodeURIComponent(Q.get('visit'))}?as=${encodeURIComponent(Q.get('as') || '')}`);
     f = meta.forms[v.pre_form] || meta.forms[meta.default_pre_form];
     e = v.evals.find(x => x.round === 'pre');
     if (e && !e.scores) e = Object.assign({}, e, { scores: {}, comments: {} });   // มองไม่เห็นคะแนน → พิมพ์เฉพาะหัว

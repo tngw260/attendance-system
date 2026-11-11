@@ -10,6 +10,9 @@
   + ส่วนที่ 4 เทียบ "ก่อนนิเทศ" (รอบเพื่อนคู่นิเทศ) กับ "หลังนิเทศ" (ค่าเฉลี่ยกรรมการ) รายด้าน
 ผู้รับการนิเทศ: กรอกข้อมูลก่อนสอน → ดูผล → เขียนสะท้อนคิด → กดรับทราบ
 
+ลิงก์เฉพาะกิจ (sv_links): ฝ่ายวิชาการออกลิงก์ให้ผู้รับการนิเทศ + กรรมการแต่ละที่นั่ง ส่งทางไลน์ เปิดแล้วกรอกได้เลยไม่ต้องล็อกอิน
+  ลิงก์ = รหัสสุ่มยาว ผูกกับ "คน" ในนัดนั้น (เพื่อนคู่นิเทศใช้ลิงก์เดียวทั้งรอบสังเกตและวันจริง) · ออกลิงก์ใหม่แล้วลิงก์เก่าใช้ไม่ได้
+  เปลี่ยนตัวกรรมการแล้วลิงก์ของที่นั่งนั้นใช้ไม่ได้ · หมดอายุ 14 วันหลังผู้รับการนิเทศกดรับทราบ
 บัญชีครูส่วนใหญ่เป็นบัญชีรวม → ผู้ใช้ "เลือกชื่อตัวเอง" บนหน้าเว็บ (ส่งมาเป็น as=t:<id> หรือ n:<ชื่อ>)
   บัญชีที่ผูกกับครูในตารางสอนแล้ว (tt_teachers.user_id) ถูกบังคับให้เป็นครูคนนั้น เลือกชื่อคนอื่นไม่ได้
 สิทธิ์จัดการนัด/เปิดคืนแบบประเมิน/ดูสรุปทั้งโรงเรียน = แอดมิน หรือผู้ช่วยจัดตาราง (tt_editors = ฝ่ายวิชาการ)
@@ -19,6 +22,7 @@
 import datetime
 import json
 import re
+import secrets
 
 from timetable import bare_name, jl, term_for_date
 
@@ -69,6 +73,15 @@ CREATE TABLE IF NOT EXISTS sv_evals (
     updated_at     TEXT,
     UNIQUE(visit_id, round, seat)
 );
+CREATE TABLE IF NOT EXISTS sv_links (
+    token       TEXT PRIMARY KEY,
+    visit_id    INTEGER NOT NULL REFERENCES sv_visits(id) ON DELETE CASCADE,
+    seat        INTEGER NOT NULL CHECK (seat BETWEEN 0 AND 3),   -- 0 = ผู้รับการนิเทศ · 1–3 = กรรมการที่นั่งนั้น
+    name        TEXT NOT NULL,                                   -- ชื่อคนตอนออกลิงก์ (เปลี่ยนตัวแล้วลิงก์ใช้ไม่ได้)
+    created_at  TEXT DEFAULT (datetime('now','localtime')),
+    revoked_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sv_links_visit ON sv_links(visit_id);
 """
 
 # ── แบบประเมิน (ร่างจาก "แบบนิเทศการจัดการเรียนรู้" ของโรงเรียน) ─────────────
@@ -173,6 +186,7 @@ DEFAULT_PRE_FORM = 'obs1'    # เพื่อนคู่นิเทศสั�
 DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}')
 SPREAD_FLAG = 2          # กรรมการให้คะแนนข้อเดียวกันห่างกันตั้งแต่กี่ระดับ จึงติดธงให้คุยกัน
 TREND_EPS = 0.25         # ส่วนที่ 4: ต่างกันเกินเท่านี้จึงนับว่าดีขึ้น/ลดลง
+LINK_DAYS = 14           # ลิงก์เฉพาะกิจใช้ได้อีกกี่วันหลังผู้รับการนิเทศกดรับทราบ
 
 
 def form_items(form):
@@ -279,7 +293,7 @@ def interpret(form, mains, pre=None):
 
 
 def init(app, get_db, login_required, current_user, get_settings):
-    from flask import jsonify, request
+    from flask import g, jsonify, request, send_from_directory
 
     with get_db() as con:
         con.executescript(SCHEMA)
@@ -307,7 +321,11 @@ def init(app, get_db, login_required, current_user, get_settings):
     # ── "ฉันคือใคร" ───────────────────────────────────────
     def acting(con, u, raw):
         """ตัวตนของผู้ใช้บนหน้าเว็บ → ('t', id, ชื่อ) | ('n', None, ชื่อ) | None
-        บัญชีที่ผูกกับครูในตารางสอนแล้วใช้ครูคนนั้นเสมอ (เลือกชื่อคนอื่นไม่ได้)"""
+        บัญชีที่ผูกกับครูในตารางสอนแล้วใช้ครูคนนั้นเสมอ (เลือกชื่อคนอื่นไม่ได้) · เข้าทางลิงก์เฉพาะกิจ = คนในลิงก์"""
+        if getattr(g, 'sv_who', None):
+            return g.sv_who
+        if not u:
+            return None
         me = con.execute('SELECT id, name FROM tt_teachers WHERE user_id=?', (u['id'],)).fetchone()
         if me:
             return ('t', me['id'], me['name'])
@@ -646,6 +664,7 @@ def init(app, get_db, login_required, current_user, get_settings):
             return bad('เฉพาะฝ่ายวิชาการหรือแอดมิน', 403)
         with get_db() as con:
             con.execute('DELETE FROM sv_evals WHERE visit_id=?', (vid,))
+            con.execute('DELETE FROM sv_links WHERE visit_id=?', (vid,))
             con.execute('DELETE FROM sv_visits WHERE id=?', (vid,))
         return jsonify(success=True, message='ลบนัดนิเทศแล้ว')
 
@@ -761,6 +780,128 @@ def init(app, get_db, login_required, current_user, get_settings):
             con.execute('UPDATE sv_visits SET reflection=?, agreed=?, ack_at=? WHERE id=?',
                         (json.dumps(ref, ensure_ascii=False), clean(b.get('agreed')), ack, vid))
         return jsonify(success=True, message='รับทราบผลการนิเทศแล้ว' if b.get('ack') else 'บันทึกแล้ว')
+
+    # ── ลิงก์เฉพาะกิจ (ไม่ต้องล็อกอิน) ───────────────────────
+    def seat_person(v, evals, seat):
+        """(ตัวตน, ชื่อ, หน้าที่) ของที่นั่ง 0 = ผู้รับการนิเทศ · 1–3 = กรรมการ"""
+        if seat == 0:
+            return (('t', v['teacher_id'], v['teacher_name']) if v['teacher_id'] else ('n', None, v['teacher_name'])), \
+                v['teacher_name'], 'ผู้รับการนิเทศ'
+        e = next((x for x in evals if x['round'] == 'main' and x['seat'] == seat), None)
+        if not e:
+            return None, '', ''
+        who = ('t', e['evaluator_id'], e['evaluator_name']) if e['evaluator_id'] else ('n', None, e['evaluator_name'])
+        return who, e['evaluator_name'], ('เพื่อนคู่นิเทศ' if seat == v['peer_seat'] else f'กรรมการนิเทศคนที่ {seat}')
+
+    def link_open(con, token):
+        """ลิงก์ → (นัด, ตัวตน, ข้อมูลลิงก์) หรือข้อความแจ้งว่าใช้ไม่ได้"""
+        row = con.execute('SELECT * FROM sv_links WHERE token=?', (str(token)[:64],)).fetchone()
+        if not row or row['revoked_at']:
+            return None, None, None, 'ลิงก์นี้ใช้ไม่ได้แล้ว (อาจมีการออกลิงก์ใหม่) — ขอลิงก์ล่าสุดจากฝ่ายวิชาการ'
+        v, evals = load(con, row['visit_id'])
+        if not v:
+            return None, None, None, 'นัดนิเทศนี้ถูกลบแล้ว'
+        if v['ack_at'] and v['ack_at'][:10] < (datetime.date.today() - datetime.timedelta(days=LINK_DAYS)).isoformat():
+            return None, None, None, 'ลิงก์หมดอายุแล้ว (นัดนิเทศนี้ปิดไปแล้ว)'
+        who, name, role = seat_person(v, evals, row['seat'])
+        if not who or not same(who, None, row['name']):
+            return None, None, None, 'ที่นั่งนี้เปลี่ยนตัวผู้ประเมินแล้ว — ขอลิงก์ใหม่จากฝ่ายวิชาการ'
+        return v, who, dict(seat=row['seat'], name=name, role=role, peer=row['seat'] == v['peer_seat']), None
+
+    def via_link(token, fn, *args):
+        """เรียก API เดิมในนามคนในลิงก์ (ตรวจสิทธิ์ด้วยตัวตน เหมือนเลือกชื่อตัวเอง)"""
+        with get_db() as con:
+            v, who, info, err = link_open(con, token)
+        if err:
+            return bad(err, 404)
+        g.sv_who = who
+        return fn.__wrapped__(v['id'], *args)
+
+    @app.get('/sv/<token>')
+    def sv_link_page(token):
+        resp = send_from_directory(app.static_folder, 'supervision.html')
+        resp.headers['Cache-Control'] = 'no-store'
+        resp.headers['Referrer-Policy'] = 'no-referrer'          # ไม่ส่งรหัสลิงก์ต่อไปยังเว็บอื่น
+        return resp
+
+    @app.get('/api/svl/<token>')
+    def sv_link_visit(token):
+        with get_db() as con:
+            v, who, info, err = link_open(con, token)
+        if err:
+            return bad(err, 404)
+        g.sv_who = who
+        r = sv_visit.__wrapped__(v['id'])
+        if isinstance(r, tuple):
+            return r
+        d = r.get_json()
+        d['link'] = info
+        s = get_settings()
+        return jsonify(visit=d, forms=FORMS, default_form=DEFAULT_FORM, default_pre_form=DEFAULT_PRE_FORM,
+                       school=s.get('school_name') or '')
+
+    @app.put('/api/svl/<token>/eval/<rnd>/<int:seat>')
+    def sv_link_eval_save(token, rnd, seat):
+        return via_link(token, sv_eval_save, rnd, seat)
+
+    @app.post('/api/svl/<token>/eval/<rnd>/<int:seat>/submit')
+    def sv_link_eval_submit(token, rnd, seat):
+        return via_link(token, sv_eval_submit, rnd, seat)
+
+    @app.put('/api/svl/<token>/pre')
+    def sv_link_pre(token):
+        return via_link(token, sv_pre)
+
+    @app.put('/api/svl/<token>/reflect')
+    def sv_link_reflect(token):
+        return via_link(token, sv_reflect)
+
+    def links_of(con, v, renew=None):
+        """ลิงก์ที่ยังใช้ได้ของทุกคนในนัด (ออกให้อัตโนมัติถ้ายังไม่มี/เปลี่ยนตัวแล้ว) · renew = ที่นั่งที่จะออกลิงก์ใหม่"""
+        _, evals = load(con, v['id'])
+        out = []
+        for seat in (0, 1, 2, 3):
+            who, name, role = seat_person(v, evals, seat)
+            if not who:
+                continue
+            row = con.execute('SELECT * FROM sv_links WHERE visit_id=? AND seat=? AND revoked_at IS NULL ORDER BY created_at DESC',
+                              (v['id'], seat)).fetchone()
+            if row and (seat == renew or not same(who, None, row['name'])):
+                con.execute('UPDATE sv_links SET revoked_at=? WHERE token=?', (now(), row['token']))
+                row = None
+            if not row:
+                tok = secrets.token_urlsafe(16)
+                con.execute('INSERT INTO sv_links (token, visit_id, seat, name) VALUES (?,?,?,?)', (tok, v['id'], seat, name))
+                row = dict(token=tok, created_at=now())
+            out.append(dict(seat=seat, name=name, role=role, peer=seat == v['peer_seat'], token=row['token'],
+                            created_at=row['created_at']))
+        return out
+
+    @app.get('/api/sv/visits/<int:vid>/links')
+    @login_required
+    def sv_links(vid):
+        if not can_manage(current_user()):
+            return bad('เฉพาะฝ่ายวิชาการหรือแอดมิน', 403)
+        with get_db() as con:
+            v, _ = load(con, vid)
+            if not v:
+                return bad('ไม่พบนัดนิเทศ', 404)
+            return jsonify(links=links_of(con, v))
+
+    @app.post('/api/sv/visits/<int:vid>/links/renew')
+    @login_required
+    def sv_links_renew(vid):
+        if not can_manage(current_user()):
+            return bad('เฉพาะฝ่ายวิชาการหรือแอดมิน', 403)
+        try:
+            seat = int((request.get_json() or {}).get('seat'))
+        except (TypeError, ValueError):
+            return bad('ระบุที่นั่ง')
+        with get_db() as con:
+            v, _ = load(con, vid)
+            if not v:
+                return bad('ไม่พบนัดนิเทศ', 404)
+            return jsonify(links=links_of(con, v, renew=seat), message='ออกลิงก์ใหม่แล้ว ลิงก์เดิมใช้ไม่ได้แล้ว')
 
     # ── สรุปทั้งโรงเรียน (ฝ่ายวิชาการ / ผู้บริหาร) ─────────────
     @app.get('/api/sv/summary')
