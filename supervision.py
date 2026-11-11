@@ -430,15 +430,15 @@ def init(app, get_db, login_required, current_user, get_settings):
         pre_done = bool(pre) and pre['status'] == 'submitted'
         if v['ack_at']:
             st, th = 'ack', 'รับทราบผลแล้ว'
-        elif mains and done == len(mains):
+        elif len(mains) == 3 and done == 3:
             st, th = 'done', 'ประเมินครบ รอรับทราบ'
         elif done:
-            st, th = 'evaluating', f'กำลังประเมิน {done}/{len(mains)}'
+            st, th = 'evaluating', f'กำลังประเมิน {done}/3'
         elif pre_done:
             st, th = 'pre_done', 'เพื่อนคู่นิเทศสังเกตแล้ว'
         else:
             st, th = 'scheduled', 'รอนิเทศ'
-        return dict(status=st, status_th=th, main_done=done, main_total=len(mains), pre_done=pre_done)
+        return dict(status=st, status_th=th, main_done=done, main_total=3, main_set=len(mains), pre_done=pre_done)
 
     def visit_brief(v, evals):
         d = {k: v[k] for k in ('id', 'term', 'teacher_id', 'teacher_name', 'area', 'date', 'period', 'code', 'title',
@@ -452,7 +452,7 @@ def init(app, get_db, login_required, current_user, get_settings):
     def result_of(v, evals):
         form = FORMS.get(v['form'], FORMS[DEFAULT_FORM])
         mains = [e for e in evals if e['round'] == 'main']
-        if not mains or any(e['status'] != 'submitted' for e in mains):
+        if len(mains) < 3 or any(e['status'] != 'submitted' for e in mains):
             return None
         pre = next((e for e in evals if e['round'] == 'pre' and e['status'] == 'submitted'), None)
         same_form = v['pre_form'] == v['form']       # ส่วนที่ 4 เทียบก่อน-หลังได้เมื่อสองรอบใช้แบบเดียวกัน
@@ -573,23 +573,23 @@ def init(app, get_db, login_required, current_user, get_settings):
         code = clean(b.get('code'), 20)
         if not code:
             return None, 'เลือกคาบสอนที่จะนิเทศ'
-        com = b.get('committee') or []
-        if len(com) != 3:
-            return None, 'ต้องมีกรรมการนิเทศ 3 คน'
+        com = (b.get('committee') or [])[:3]
+        com += [{}] * (3 - len(com))
+        # ที่นั่งว่างได้: เพื่อนคู่นิเทศเข้าสังเกตก่อน กรรมการอีก 2 คนกำหนดทีหลังได้ (ต้องครบ 3 คนก่อนวันนิเทศจริงจึงแปลผล)
         people = [person(con, p) for p in com]
-        if any(not p[1] for p in people):
-            return None, 'ระบุชื่อกรรมการให้ครบ 3 คน'
-        keys = [p[0] or bare_name(p[1]) for p in people]
-        if len(set(keys)) != 3:
-            return None, 'กรรมการซ้ำกัน'
-        if tid in [p[0] for p in people]:
-            return None, 'ผู้รับการนิเทศเป็นกรรมการของตัวเองไม่ได้'
         try:
             peer = int(b.get('peer_seat') or 0)
         except (TypeError, ValueError):
             peer = 0
         if peer not in (1, 2, 3):
             return None, 'เลือกว่ากรรมการคนไหนเป็นเพื่อนคู่นิเทศ'
+        if not people[peer - 1][1]:
+            return None, f'ใส่ชื่อเพื่อนคู่นิเทศ (แถวที่ {peer}) — กรรมการอีก 2 คนเว้นไว้ก่อนได้'
+        keys = [p[0] or bare_name(p[1]) for p in people if p[1]]
+        if len(set(keys)) != len(keys):
+            return None, 'กรรมการซ้ำกัน'
+        if tid in [p[0] for p in people]:
+            return None, 'ผู้รับการนิเทศเป็นกรรมการของตัวเองไม่ได้'
         pre_date = str(b.get('pre_date') or '')
         if pre_date and not DATE_RE.fullmatch(pre_date):
             return None, 'วันที่สังเกตก่อนนิเทศไม่ถูกต้อง'
@@ -603,7 +603,7 @@ def init(app, get_db, login_required, current_user, get_settings):
 
     def sync_evals(con, vid, people, peer_seat):
         """ตั้ง/ปรับกรรมการของนัด — เปลี่ยนตัวคนแล้วแบบประเมินของที่นั่งนั้นเริ่มใหม่ ไม่เปลี่ยนตัวคงคะแนนเดิมไว้"""
-        want = {('main', i + 1): p for i, p in enumerate(people)}
+        want = {('main', i + 1): p for i, p in enumerate(people) if p[1]}     # ที่นั่งที่ยังไม่กำหนดตัว = ยังไม่มีแบบประเมิน
         want[('pre', peer_seat)] = people[peer_seat - 1]
         have = {(e['round'], e['seat']): e for e in con.execute('SELECT * FROM sv_evals WHERE visit_id=?', (vid,))}
         for key, e in have.items():

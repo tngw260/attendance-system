@@ -158,7 +158,7 @@
           </div>
           <div class="col-12">
             <label class="form-label mb-1">กรรมการนิเทศ 3 คน</label>
-            <div class="small text-muted mb-2">เลือกจากรายชื่อหรือพิมพ์ชื่อเอง · ติ๊กคนที่เป็นเพื่อนคู่นิเทศ (มาสังเกตการสอนก่อนวันนิเทศจริง)</div>
+            <div class="small text-muted mb-2">เลือกจากรายชื่อหรือพิมพ์ชื่อเอง · ติ๊กคนที่เป็นเพื่อนคู่นิเทศ (มาสังเกตการสอนก่อนวันนิเทศจริง) · ใส่แค่เพื่อนคู่นิเทศก่อนได้ อีก 2 คนเพิ่มทีหลังด้วย "แก้นัด"</div>
             <div id="vmCom"></div>
             <datalist id="people"></datalist>
           </div>
@@ -173,6 +173,7 @@
           </div>
         </div>
       </div>
+      <div class="alert alert-danger mx-3 mb-0 py-2" id="vmErr" role="alert" hidden></div>
       <div class="modal-footer">
         <button class="btn btn-outline-danger me-auto" id="vmDelete" onclick="deleteVisit()" hidden><i class="bi bi-trash me-1"></i>ลบนัดนี้</button>
         <button class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
@@ -320,7 +321,9 @@ function renderVisit() {
           <div class="col-md-6"><span class="text-muted">วิชา</span> ${esc(v.code)} ${esc(v.title)} · ${esc(v.class_label)}</div>
         </div>
         <div class="mt-2"><span class="text-muted">กรรมการนิเทศ</span>
-          ${v.committee.map(c => `<div>${c.seat}. ${esc(c.name)}${c.position ? ` <span class="text-muted">(${esc(c.position)})</span>` : ''}
+          ${[1, 2, 3].map(n => v.committee.find(c => c.seat === n) || { seat: n, unset: true }).map(c => c.unset
+            ? `<div class="text-muted">${c.seat}. ยังไม่ได้กำหนด${v.can_manage ? ' — กด "แก้นัด" เพื่อเพิ่มก่อนวันนิเทศจริง' : ''}</div>`
+            : `<div>${c.seat}. ${esc(c.name)}${c.position ? ` <span class="text-muted">(${esc(c.position)})</span>` : ''}
             ${c.peer ? '<span class="badge text-bg-light border">เพื่อนคู่นิเทศ</span>' : ''}
             ${c.submitted ? '<i class="bi bi-check-circle-fill text-success" title="ส่งผลแล้ว"></i>' : '<span class="text-muted small">ยังไม่ส่ง</span>'}</div>`).join('')}
         </div>
@@ -621,15 +624,16 @@ function openVisitModal(id) {
   $('vmTeacher').value = v ? (v.teacher_id || '') : '';
   $('vmDate').value = v ? v.date : '';
   $('vmPreDate').value = v ? v.pre_date : '';
-  const com = v ? v.committee : [{}, {}, {}], peer = v ? v.peer_seat : 1;
+  const com = [1, 2, 3].map(n => (v ? v.committee.find(c => c.seat === n) : null) || {}), peer = v ? v.peer_seat : 1;
   $('vmCom').innerHTML = [0, 1, 2].map(i => `<div class="com-row">
       <div class="text-muted">${i + 1}.</div>
-      <input class="form-control" id="vmN${i}" list="people" placeholder="ชื่อกรรมการ" value="${esc(com[i].name || '')}" aria-label="ชื่อกรรมการคนที่ ${i + 1}">
+      <input class="form-control" id="vmN${i}" list="people" placeholder="ชื่อกรรมการ (เว้นไว้ก่อนได้)" value="${esc(com[i].name || '')}" aria-label="ชื่อกรรมการคนที่ ${i + 1}">
       <input class="form-control pos" id="vmP${i}" placeholder="ตำแหน่ง เช่น ผู้อำนวยการ / ครู" value="${esc(com[i].position || '')}" aria-label="ตำแหน่งกรรมการคนที่ ${i + 1}">
       <div class="form-check peer"><input class="form-check-input" type="radio" name="vmPeer" id="vmPeer${i}" value="${i + 1}" ${peer === i + 1 ? 'checked' : ''}>
         <label class="form-check-label" for="vmPeer${i}">เพื่อนคู่นิเทศ</label></div></div>`).join('');
   vmLoadSlots('', v && `${v.period}|${v.code}`);
   vmLoadSlots('pre', v && v.pre_period ? `${v.pre_period}|` : '');
+  vmErr('');
   modal('visitModal').show();
 }
 async function vmLoadSlots(kind, keep) {
@@ -646,10 +650,13 @@ async function vmLoadSlots(kind, keep) {
     if (keep) { const i = r.lessons.findIndex(l => `${l.period}|${l.code}`.startsWith(keep)); if (i >= 0) sel.value = String(i); }
   } catch (e) { sel.innerHTML = `<option value="">${esc(e.message)}</option>`; }
 }
+// ข้อความเตือนแสดงในหน้าต่าง (toast อยู่หลังหน้าต่าง มองไม่เห็น)
+const vmErr = msg => { $('vmErr').textContent = msg || ''; $('vmErr').hidden = !msg; if (msg) $('vmErr').scrollIntoView({ block: 'nearest' }); };
 async function saveVisit() {
   const l = VM_SLOTS[''][$('vmSlot').value], p = VM_SLOTS.pre[$('vmPreSlot').value];
-  if (!$('vmTeacher').value) return showToast('เลือกครูผู้รับการนิเทศ', 'warning');
-  if (!l) return showToast('เลือกวันที่และคาบสอนที่จะนิเทศ', 'warning');
+  vmErr('');
+  if (!$('vmTeacher').value) return vmErr('เลือกครูผู้รับการนิเทศ');
+  if (!l) return vmErr('เลือกวันที่และคาบสอนที่จะนิเทศ');
   const body = { teacher_id: Number($('vmTeacher').value), date: $('vmDate').value, period: l.period, code: l.code, title: l.title,
     class_label: l.class_label, area: l.area,
     committee: [0, 1, 2].map(i => ({ name: $('vmN' + i).value, position: $('vmP' + i).value })),
@@ -660,7 +667,7 @@ async function saveVisit() {
     showToast(r.message); modal('visitModal').hide();
     META = await apiFetch('/api/sv/meta'); fillWho();
     EDIT_ID ? openVisit(EDIT_ID) : (TAB = 'all', setTabButtons(), loadList());
-  } catch (e) { showToast(e.message, 'danger'); }
+  } catch (e) { vmErr(e.message); }
 }
 async function deleteVisit() {
   if (!confirm(`ลบนัดนิเทศของ ${CUR.teacher_name}?\nคะแนนและข้อเสนอแนะของนัดนี้จะถูกลบทั้งหมด กู้คืนไม่ได้`)) return;
