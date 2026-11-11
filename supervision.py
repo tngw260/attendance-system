@@ -3,7 +3,8 @@
 นัดนิเทศ (sv_visits) = ครูผู้รับการนิเทศ 1 คน × คาบสอน 1 คาบจากตารางสอน × กรรมการ 3 คน
   กรรมการ 1 ใน 3 คนเป็น "เพื่อนคู่นิเทศ" (peer_seat) — มาสังเกตการสอนก่อนวันนิเทศจริง 1 รอบ
 แบบประเมิน (sv_evals) ต่อ 1 นัด มีได้ 4 ใบ
-  round='pre'   ของเพื่อนคู่นิเทศ (สังเกตก่อน)  ผู้รับการนิเทศเห็นผลทันทีที่ส่ง เพื่อปรับก่อนวันจริง
+  round='pre'   ของเพื่อนคู่นิเทศ (สังเกตก่อน) ใช้ "แบบบันทึกการสังเกตชั้นเรียน" (sv_visits.pre_form)
+                ผู้รับการนิเทศเห็นผลทันทีที่ส่ง เพื่อปรับก่อนวันจริง
   round='main'  ของกรรมการที่นั่ง 1–3 (วันนิเทศจริง) ต่างคนต่างให้คะแนน เห็นของกันเมื่อส่งครบ 3 คน
 ส่งครบ 3 คน → ระบบแปลผล (ค่าเฉลี่ยรายข้อ ระดับคุณภาพ ร้อยละ จุดเด่น ข้อที่ควรพัฒนา ข้อที่ให้คะแนนต่างกันมาก)
   + ส่วนที่ 4 เทียบ "ก่อนนิเทศ" (รอบเพื่อนคู่นิเทศ) กับ "หลังนิเทศ" (ค่าเฉลี่ยกรรมการ) รายด้าน
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS sv_visits (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     term          TEXT NOT NULL,
     form          TEXT NOT NULL DEFAULT 'v1',
+    pre_form      TEXT NOT NULL DEFAULT 'v1',
     teacher_id    INTEGER REFERENCES tt_teachers(id) ON DELETE SET NULL,
     teacher_name  TEXT NOT NULL,
     area          TEXT DEFAULT '',
@@ -112,6 +114,11 @@ FORMS = {
             ['การวัดและประเมินผลระหว่างเรียน', ['p2_6']],
             ['บุคลิกภาพและมาตรฐานวิชาชีพ', ['p2_7']],
         ],
+        # ช่องข้อความท้ายแบบ (คอลัมน์ใน sv_evals → หัวข้อ)
+        'texts': [['highlight', 'พฤติกรรมเด่น / นวัตกรรมที่พบในการสอนคาบนี้'],
+                  ['strengths', 'จุดเด่น / สิ่งที่ควรรักษาไว้'],
+                  ['improvements', 'จุดที่ควรพัฒนาและแนวทาง']],
+        'item_note': 'ข้อเสนอแนะ',
         'reflect': [
             ['r1', 'สิ่งที่ดำเนินไปได้ดีที่สุดในคาบนี้ และการมีส่วนร่วมของผู้เรียน'],
             ['r2', 'เทคนิค Active Learning / การคิดขั้นสูงที่ผู้เรียนแสดงออก'],
@@ -122,8 +129,46 @@ FORMS = {
         'mean_levels': [[3.51, 'ดีมาก'], [2.51, 'ดี'], [1.51, 'พอใช้'], [0.51, 'น้อยมาก'], [0, 'ไม่มีการปฏิบัติ']],
         'pct_levels': [[80, 'ดีมาก'], [70, 'ดี'], [60, 'พอใช้'], [0, 'ควรพัฒนา']],
     },
+    # แบบบันทึกการสังเกตชั้นเรียน (CLASSROOM OBSERVATION) ตามระบบนิเทศภายใน PEER CARE Model ของโรงเรียน
+    # ใช้กับรอบเพื่อนคู่นิเทศสังเกตการสอน · คะแนน 1–5 · แปลผลด้วยค่าเฉลี่ยรายด้านและรวมทุกด้าน
+    'obs1': {
+        'name': 'แบบบันทึกการสังเกตชั้นเรียน (CLASSROOM OBSERVATION)',
+        'subtitle': 'ตามระบบการนิเทศภายในสถานศึกษา PEER CARE Model',
+        'kind': 'observe',
+        'scale': [[5, 'ดีมาก'], [4, 'ดี'], [3, 'ปานกลาง'], [2, 'พอใช้'], [1, 'ควรปรับปรุงแก้ไข']],
+        'parts': [
+            {'id': 'a', 'title': 'ก. การจัดบรรยากาศในชั้นเรียน', 'items': [
+                {'id': 'a1', 'title': 'มีบรรยากาศเหมาะสมต่อการเรียนรู้'},
+                {'id': 'a2', 'title': 'มีความเป็นระเบียบของห้อง เช่น โต๊ะเก้าอี้ครู-นักเรียน'},
+                {'id': 'a3', 'title': 'บรรยากาศในห้องเรียนเป็นบรรยากาศทางวิชาการ มีการจัดมุมความรู้/ป้ายนิเทศ/มุมสื่อการเรียนรู้ ข่าวสารความรู้ต่าง ๆ'},
+                {'id': 'a4', 'title': 'มีการจัดแสดงผลงานนักเรียน/ผลงานห้องเรียน'},
+                {'id': 'a5', 'title': 'การจัดมุมเก็บอุปกรณ์ทำความสะอาดมีความเหมาะสม ห้องเรียนสะอาด สะดวก เรียบร้อย ปลอดภัย'},
+            ]},
+            {'id': 'b', 'title': 'ข. การประเมินสมรรถนะการจัดการเรียนรู้เชิงรุก', 'items': [
+                {'id': 'b1', 'title': 'มีการวางแผนและออกแบบการจัดการเรียนรู้เชิงรุก'},
+                {'id': 'b2', 'title': 'มีการนำกิจกรรมการเรียนรู้เชิงรุกสู่การปฏิบัติในชั้นเรียน'},
+                {'id': 'b3', 'title': 'การจัดบรรยากาศและบริหารจัดการชั้นเรียนเชิงรุก'},
+                {'id': 'b4', 'title': 'การวัดและประเมินผลตามสภาพจริง'},
+                {'id': 'b5', 'title': 'การส่งเสริมทักษะการคิดขั้นสูงและสมรรถนะศตวรรษที่ 21'},
+            ]},
+            {'id': 'c', 'title': 'ค. ด้านพฤติกรรมของนักเรียน', 'items': [
+                {'id': 'c1', 'title': 'สามารถแสดงออก/สื่อสารและกล้าซักถามครูผู้สอนได้อย่างเหมาะสม'},
+                {'id': 'c2', 'title': 'นักเรียนมีความสนใจใฝ่รู้และกระตือรือร้นที่จะเรียนรู้'},
+                {'id': 'c3', 'title': 'มีความสนใจปฏิบัติกิจกรรมที่ได้รับมอบหมาย'},
+                {'id': 'c4', 'title': 'แต่งกายสะอาด เรียบร้อย มีระเบียบวินัยดี และมีมารยาท'},
+                {'id': 'c5', 'title': 'มีระเบียบวินัยดี และมีมารยาทเรียบร้อย'},
+            ]},
+        ],
+        'texts': [['improvements', 'ตอนที่ 3 ข้อเสนอแนะ']],
+        'item_note': 'หมายเหตุ',
+        'aspects': [],
+        'reflect': [],
+        # ต้นฉบับพิมพ์ช่วง "ปานกลาง" ผิดเป็น 2.51–2.50 → ใช้ 2.51–3.50
+        'mean_levels': [[4.51, 'ดีมาก'], [3.51, 'ดี'], [2.51, 'ปานกลาง'], [1.51, 'พอใช้'], [0, 'ควรปรับปรุงแก้ไข']],
+    },
 }
-DEFAULT_FORM = 'v1'
+DEFAULT_FORM = 'v1'          # วันนิเทศจริง (กรรมการ 3 คน) — รอแบบประเมินฉบับจริงจากโรงเรียน
+DEFAULT_PRE_FORM = 'obs1'    # เพื่อนคู่นิเทศสังเกตการสอน
 DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}')
 SPREAD_FLAG = 2          # กรรมการให้คะแนนข้อเดียวกันห่างกันตั้งแต่กี่ระดับ จึงติดธงให้คุยกัน
 TREND_EPS = 0.25         # ส่วนที่ 4: ต่างกันเกินเท่านี้จึงนับว่าดีขึ้น/ลดลง
@@ -131,6 +176,33 @@ TREND_EPS = 0.25         # ส่วนที่ 4: ต่างกันเก�
 
 def form_items(form):
     return [it for p in form['parts'] for it in p['items']]
+
+
+def scale_range(form):
+    vals = [n for n, _ in form['scale']]
+    return min(vals), max(vals)
+
+
+def form_of(v, rnd):
+    """แบบที่ใช้กับรอบนั้นของนัด: รอบสังเกตก่อนใช้ pre_form · วันนิเทศจริงใช้ form"""
+    key = v['pre_form'] if rnd == 'pre' else v['form']
+    return FORMS.get(key) or FORMS[DEFAULT_PRE_FORM if rnd == 'pre' else DEFAULT_FORM]
+
+
+def observe_result(form, scores):
+    """แปลผลแบบสังเกตชั้นเรียน 1 ใบ: รวม/ค่าเฉลี่ยรายด้าน + รวมเฉลี่ยทุกด้าน (ตามแบบฟอร์มกระดาษ)"""
+    parts, means = [], []
+    for p in form['parts']:
+        vals = [scores[it['id']] for it in p['items'] if it['id'] in scores]
+        mean = r2(sum(vals) / len(vals)) if vals else None
+        parts.append(dict(id=p['id'], title=p['title'], total=sum(vals), n=len(vals), mean=mean,
+                          level=level_of(mean, form['mean_levels']) if mean is not None else ''))
+        if mean is not None:
+            means.append(mean)
+    overall = r2(sum(means) / len(means)) if len(means) == len(parts) and parts else None
+    ranked = sorted((p for p in parts if p['mean'] is not None), key=lambda p: -p['mean'])
+    return dict(parts=parts, mean=overall, level=level_of(overall, form['mean_levels']) if overall is not None else '',
+                best=ranked[0]['title'] if ranked else '', weakest=ranked[-1]['title'] if len(ranked) > 1 else '')
 
 
 def level_of(value, table):
@@ -165,17 +237,19 @@ def interpret(form, mains, pre=None):
                          level=level_of(r2(mean), form['mean_levels']),
                          spread=(max(vals) - min(vals)) if vals else 0,
                          flag=bool(vals) and max(vals) - min(vals) >= SPREAD_FLAG))
-    full = 4 * len(items)
+    top_score = scale_range(form)[1]
+    full = top_score * len(items)
     pct = r2(total * 100 / full) if full else 0
     parts = []
     for p in form['parts']:
         ids = {it['id'] for it in p['items']}
         s = sum(r['mean'] for r in rows if r['id'] in ids)
-        parts.append(dict(id=p['id'], title=p['title'], score=r2(s), full=4 * len(ids)))
+        parts.append(dict(id=p['id'], title=p['title'], score=r2(s), full=top_score * len(ids)))
     # จุดเด่น = 3 ข้อคะแนนสูงสุดที่ได้ระดับดีขึ้นไป · ควรพัฒนา = 3 ข้อต่ำสุดที่ยังไม่ถึงดีมาก (ไม่ซ้ำกับจุดเด่น)
     ranked = sorted(rows, key=lambda r: -r['mean'])          # sorted คงลำดับเดิมเมื่อคะแนนเท่ากัน
-    top = [r['title'] for r in ranked[:3] if r['mean'] >= 2.51]
-    low = [r['title'] for r in sorted(rows, key=lambda r: r['mean']) if r['mean'] < 3.51 and r['title'] not in top][:3]
+    good, best = form['mean_levels'][1][0], form['mean_levels'][0][0]     # เกณฑ์ระดับ "ดี" และ "ดีมาก"
+    top = [r['title'] for r in ranked[:3] if r['mean'] >= good]
+    low = [r['title'] for r in sorted(rows, key=lambda r: r['mean']) if r['mean'] < best and r['title'] not in top][:3]
     level = level_of(pct, form['pct_levels'])
     text = f'ผลการนิเทศอยู่ในระดับ{level} ได้ {r2(total):g} จาก {full} คะแนน คิดเป็นร้อยละ {pct:g} '
     if top:
@@ -194,7 +268,7 @@ def interpret(form, mains, pre=None):
         if b is not None and a is not None:
             trend = 'ดีขึ้น' if a - b > TREND_EPS else 'ลดลง' if b - a > TREND_EPS else 'คงที่'
         asp.append(dict(name=name, before=b, after=a, trend=trend))
-    full4 = 4 * len(asp)
+    full4 = top_score * len(asp)
 
     def tot(vals):
         vals = [v for v in vals if v is not None]
@@ -208,6 +282,9 @@ def init(app, get_db, login_required, current_user, get_settings):
 
     with get_db() as con:
         con.executescript(SCHEMA)
+        cols = {r[1] for r in con.execute('PRAGMA table_info(sv_visits)')}
+        if 'pre_form' not in cols:                  # ฐานข้อมูลเดิมก่อนมีแบบสังเกตชั้นเรียน: นัดเก่ายังใช้แบบเดิมทั้งสองรอบ
+            con.execute("ALTER TABLE sv_visits ADD COLUMN pre_form TEXT NOT NULL DEFAULT 'v1'")
 
     def bad(msg, code=400):
         return jsonify(success=False, message=msg), code
@@ -359,8 +436,9 @@ def init(app, get_db, login_required, current_user, get_settings):
         if not mains or any(e['status'] != 'submitted' for e in mains):
             return None
         pre = next((e for e in evals if e['round'] == 'pre' and e['status'] == 'submitted'), None)
+        same_form = v['pre_form'] == v['form']       # ส่วนที่ 4 เทียบก่อน-หลังได้เมื่อสองรอบใช้แบบเดียวกัน
         return interpret(form, [dict(name=e['evaluator_name'], scores=jl(e['scores'], {})) for e in mains],
-                         jl(pre['scores'], {}) if pre else None)
+                         jl(pre['scores'], {}) if (pre and same_form) else None)
 
     # ── อ่าน ──────────────────────────────────────────────
     @app.get('/api/sv/meta')
@@ -379,7 +457,7 @@ def init(app, get_db, login_required, current_user, get_settings):
             me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (u['id'],)).fetchone()
         return jsonify(terms=terms, default_term=cur['name'] if cur else (terms[0] if terms else ''),
                        teachers=teachers, others=others, my_teacher_id=me['id'] if me else None,
-                       can_manage=can_manage(u), forms=FORMS, default_form=DEFAULT_FORM,
+                       can_manage=can_manage(u), forms=FORMS, default_form=DEFAULT_FORM, default_pre_form=DEFAULT_PRE_FORM,
                        director=s.get('director_name') or '')
 
     @app.get('/api/sv/slots')
@@ -452,7 +530,11 @@ def init(app, get_db, login_required, current_user, get_settings):
                     full = mgr or own or all_done
                 out.append(dict(eval_dict(e, full), mine=own, peer=e['seat'] == v['peer_seat']))
             d = visit_brief(v, evals)
-            d.update(form=v['form'], plan_no=v['plan_no'], unit=v['unit'], topic=v['topic'], focus=v['focus'],
+            pre_e = next((e for e in evals if e['round'] == 'pre'), None)
+            pre_seen = pre_e is not None and pre_e['status'] == 'submitted' and \
+                (mgr or pre_e in mine or is_teacher or all_done)
+            d.update(pre_result=observe_result(form_of(v, 'pre'), jl(pre_e['scores'], {})) if pre_seen else None)
+            d.update(form=v['form'], pre_form=v['pre_form'], plan_no=v['plan_no'], unit=v['unit'], topic=v['topic'], focus=v['focus'],
                      reflection=jl(v['reflection'], {}), agreed=v['agreed'], ack_at=v['ack_at'],
                      is_teacher=is_teacher, can_manage=mgr, evals=out,
                      result=result_of(v, evals) if (all_done and (mgr or is_teacher or mine)) else None)
@@ -531,8 +613,8 @@ def init(app, get_db, login_required, current_user, get_settings):
             if con.execute('SELECT 1 FROM sv_visits WHERE term=? AND teacher_id=?', (f['term'], f['teacher_id'])).fetchone():
                 return bad(f"{f['teacher_name']} มีนัดนิเทศในภาคเรียน {f['term']} แล้ว (นิเทศคนละ 1 ครั้ง)")
             cur = con.execute(
-                f"INSERT INTO sv_visits ({', '.join(f)}, form, created_by) VALUES ({', '.join('?' * len(f))}, ?, ?)",
-                list(f.values()) + [DEFAULT_FORM, u['id']])
+                f"INSERT INTO sv_visits ({', '.join(f)}, form, pre_form, created_by) VALUES ({', '.join('?' * len(f))}, ?, ?, ?)",
+                list(f.values()) + [DEFAULT_FORM, DEFAULT_PRE_FORM, u['id']])
             sync_evals(con, cur.lastrowid, people, f['peer_seat'])
         return jsonify(success=True, id=cur.lastrowid, message='สร้างนัดนิเทศแล้ว')
 
@@ -590,10 +672,11 @@ def init(app, get_db, login_required, current_user, get_settings):
                 return err
             if e['status'] == 'submitted':
                 return bad('ส่งผลแล้ว แก้ไขไม่ได้ — ให้ฝ่ายวิชาการเปิดคืนก่อน')
-            ids = {it['id'] for it in form_items(FORMS.get(v['form'], FORMS[DEFAULT_FORM]))}
+            f = form_of(v, rnd)
+            ids, (lo, hi) = {it['id'] for it in form_items(f)}, scale_range(f)
             scores = {}
             for k, val in (b.get('scores') or {}).items():
-                if k in ids and isinstance(val, int) and not isinstance(val, bool) and 0 <= val <= 4:
+                if k in ids and isinstance(val, int) and not isinstance(val, bool) and lo <= val <= hi:
                     scores[k] = val
             comments = {k: clean(val, 1000) for k, val in (b.get('comments') or {}).items() if k in ids and clean(val, 1000)}
             con.execute("""UPDATE sv_evals SET scores=?, comments=?, highlight=?, strengths=?, improvements=?, updated_at=?
@@ -612,7 +695,7 @@ def init(app, get_db, login_required, current_user, get_settings):
                 return err
             if e['status'] == 'submitted':
                 return bad('ส่งผลไปแล้ว')
-            items = form_items(FORMS.get(v['form'], FORMS[DEFAULT_FORM]))
+            items = form_items(form_of(v, rnd))
             scores = jl(e['scores'], {})
             missing = [it['title'] for it in items if it['id'] not in scores]
             if missing:
