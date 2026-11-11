@@ -444,7 +444,9 @@ function notes(evals, f) {
   return (f.texts || []).map(([key, label]) => row(label, key)).join('');
 }
 function preView(f, e, r) {
-  const head = `<div class="sec"><h2><i class="bi bi-eye me-1"></i>ผลการสังเกตการสอน <span class="fw-normal text-muted small">เพื่อนคู่นิเทศ ${esc(e.evaluator_name)}</span></h2><div class="body">`;
+  const head = `<div class="sec"><h2><i class="bi bi-eye me-1"></i>ผลการสังเกตการสอน <span class="fw-normal text-muted small">เพื่อนคู่นิเทศ ${esc(e.evaluator_name)}</span>
+      ${f.kind === 'observe' ? `<a class="btn btn-sm btn-outline-primary float-end no-print" target="_blank" rel="noopener"
+        href="/sv-print.html?doc=obs&visit=${CUR.id}&as=${encodeURIComponent(who())}"><i class="bi bi-printer me-1"></i>พิมพ์แบบสังเกต</a>` : ''}</h2><div class="body">`;
   if (f.kind === 'observe' && r) {                // แบบสังเกตชั้นเรียน: รวม/ค่าเฉลี่ยรายด้าน + รวมเฉลี่ยทุกด้าน
     let h = head + `<div class="row g-3 align-items-center mb-3">
         <div class="col-auto text-center"><div class="big">${num(r.mean)}</div><div>${lvBadge(r.level)}</div></div>
@@ -621,10 +623,13 @@ async function loadSummary() {
   catch (e) { box.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; return; }
   const c = s.count;
   box.innerHTML = `
-    <div class="sec"><h2>ภาพรวมการนิเทศ ภาคเรียนที่ ${esc(term())}</h2><div class="body">
+    <div class="sec"><h2>ภาพรวมการนิเทศ ภาคเรียนที่ ${esc(term())}
+      <span class="float-end d-flex gap-2 no-print">
+        <a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" href="/sv-print.html?doc=obs&blank=1"><i class="bi bi-file-earmark me-1"></i>แบบสังเกตเปล่า</a>
+        <a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="/sv-print.html?doc=summary&term=${encodeURIComponent(term())}"><i class="bi bi-printer me-1"></i>พิมพ์สรุปรวม</a></span></h2><div class="body">
       <div class="row g-3 text-center">
         <div class="col-6 col-md-3"><div class="big">${c.teachers}</div><div class="text-muted">ครูทั้งหมด</div></div>
-        <div class="col-6 col-md-3"><div class="big">${c.scheduled}</div><div class="text-muted">นัดแล้ว</div></div>
+        <div class="col-6 col-md-3"><div class="big">${c.observed}</div><div class="text-muted">เพื่อนคู่นิเทศสังเกตแล้ว ${s.observe.mean != null ? `<div>เฉลี่ย ${num(s.observe.mean)} ${lvBadge(s.observe.level)}</div>` : ''}</div></div>
         <div class="col-6 col-md-3"><div class="big">${c.done}</div><div class="text-muted">ประเมินครบแล้ว</div></div>
         <div class="col-6 col-md-3"><div class="big">${s.percent == null ? '–' : num(s.percent) + '%'}</div><div class="text-muted">เฉลี่ยทั้งโรงเรียน ${s.level ? lvBadge(s.level) : ''}</div></div>
       </div>

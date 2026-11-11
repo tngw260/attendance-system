@@ -159,6 +159,7 @@ FORMS = {
                 {'id': 'c5', 'title': 'มีระเบียบวินัยดี และมีมารยาทเรียบร้อย'},
             ]},
         ],
+        'office': 'สำนักงานเขตพื้นที่การศึกษามัธยมศึกษาพังงา ภูเก็ต ระนอง',
         'texts': [['improvements', 'ตอนที่ 3 ข้อเสนอแนะ']],
         'item_note': 'หมายเหตุ',
         'aspects': [],
@@ -772,6 +773,7 @@ def init(app, get_db, login_required, current_user, get_settings):
             teachers = [dict(r) for r in con.execute(
                 'SELECT id, name FROM tt_teachers WHERE COALESCE(active,1)=1 ORDER BY sort_order, id')]
             rows, item_sum, item_n, seen = [], {}, {}, set()
+            obs_form, obs_sum, obs_n, obs_means = FORMS[DEFAULT_PRE_FORM], {}, {}, []
             for v in con.execute('SELECT * FROM sv_visits WHERE term=? ORDER BY date, id', (term,)).fetchall():
                 evals = con.execute('SELECT * FROM sv_evals WHERE visit_id=?', (v['id'],)).fetchall()
                 seen.add(v['teacher_id'])
@@ -783,6 +785,16 @@ def init(app, get_db, login_required, current_user, get_settings):
                     for it in res['items']:
                         item_sum[it['id']] = item_sum.get(it['id'], 0) + it['mean']
                         item_n[it['id']] = item_n.get(it['id'], 0) + 1
+                # ผลการสังเกตการสอนของเพื่อนคู่นิเทศ (แบบสังเกตชั้นเรียน)
+                pre = next((e for e in evals if e['round'] == 'pre' and e['status'] == 'submitted'), None)
+                if pre and v['pre_form'] == DEFAULT_PRE_FORM:
+                    ob = observe_result(obs_form, jl(pre['scores'], {}))
+                    if ob['mean'] is not None:
+                        d.update(obs_mean=ob['mean'], obs_level=ob['level'], observer=pre['evaluator_name'])
+                        obs_means.append(ob['mean'])
+                        for prt in ob['parts']:
+                            obs_sum[prt['id']] = obs_sum.get(prt['id'], 0) + prt['mean']
+                            obs_n[prt['id']] = obs_n.get(prt['id'], 0) + 1
                 rows.append(d)
             form = FORMS[DEFAULT_FORM]
             items = [dict(id=it['id'], title=it['title'], n=item_n.get(it['id'], 0),
@@ -790,6 +802,13 @@ def init(app, get_db, login_required, current_user, get_settings):
                           level=level_of(r2(item_sum[it['id']] / item_n[it['id']]), form['mean_levels'])
                           if item_n.get(it['id']) else '')
                      for it in form_items(form)]
+            obs_parts = [dict(id=p['id'], title=p['title'], n=obs_n.get(p['id'], 0),
+                              mean=r2(obs_sum[p['id']] / obs_n[p['id']]) if obs_n.get(p['id']) else None,
+                              level=level_of(r2(obs_sum[p['id']] / obs_n[p['id']]), obs_form['mean_levels'])
+                              if obs_n.get(p['id']) else '') for p in obs_form['parts']]
+            obs_mean = r2(sum(obs_means) / len(obs_means)) if obs_means else None
+            tt = con.execute('SELECT config FROM tt_terms WHERE name=?', (term,)).fetchone()
+            signers = jl(tt['config'], {}).get('signers', []) if tt else []      # หัวหน้ากลุ่มบริหารงานวิชาการ ฯลฯ
             done = [r for r in rows if 'percent' in r]
             areas = {}
             for r in done:
@@ -798,6 +817,9 @@ def init(app, get_db, login_required, current_user, get_settings):
             visits=rows, items=items,
             areas=[dict(area=a, n=len(v), percent=r2(sum(v) / len(v))) for a, v in sorted(areas.items())],
             not_scheduled=[t['name'] for t in teachers if t['id'] not in seen],
-            count=dict(teachers=len(teachers), scheduled=len(rows), done=len(done)),
+            count=dict(teachers=len(teachers), scheduled=len(rows), done=len(done), observed=len(obs_means)),
+            observe=dict(parts=obs_parts, mean=obs_mean, form=DEFAULT_PRE_FORM,
+                         level=level_of(obs_mean, obs_form['mean_levels']) if obs_mean is not None else ''),
+            form=DEFAULT_FORM, signers=signers,
             percent=r2(sum(r['percent'] for r in done) / len(done)) if done else None,
             level=level_of(r2(sum(r['percent'] for r in done) / len(done)), form['pct_levels']) if done else '')

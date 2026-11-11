@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>พิมพ์เอกสารนิเทศการสอน</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <link rel="preload" href="/fonts/THSarabunNew-Regular.woff" as="font" type="font/woff" crossorigin>
+  <link rel="preload" href="/fonts/THSarabunNew-Bold.woff" as="font" type="font/woff" crossorigin>
+  <style>
+    /* ฟอนต์ฝังในเว็บ → ทุกเครื่องพิมพ์ออกมาขนาดเท่ากับ Word (ดู css/docforms.css) */
+    @font-face { font-family: 'THSarabunDoc'; font-weight: 400; font-display: block; src: url('/fonts/THSarabunNew-Regular.woff') format('woff'); }
+    @font-face { font-family: 'THSarabunDoc'; font-weight: 700; font-display: block; src: url('/fonts/THSarabunNew-Bold.woff') format('woff'); }
+    /* @page ต้องอยู่ชั้นนอก (Safari/iPad ไม่อ่าน @page ที่ซ้อนใน @media print) */
+    @page { size: A4; margin: 12mm 14mm 12mm 22mm; }
+
+    .controls { max-width: 210mm; margin: 14px auto 0; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    .paper { width: 210mm; min-height: 297mm; margin: 14px auto; padding: 12mm 14mm 12mm 22mm; box-sizing: border-box;
+             background: #fff; color: #000; box-shadow: 0 2px 14px rgba(0,0,0,.15);
+             font-family: 'THSarabunDoc', 'TH Sarabun New', 'TH SarabunPSK', sans-serif; font-size: 16pt; line-height: 1.32; }
+    .paper * { font-family: inherit; }
+    .paper, .paper * { color: #000 !important; }
+    .paper .muted { color: #444 !important; }
+    .paper.land { width: 297mm; min-height: 210mm; }
+    .paper h1 { font-size: 16pt; font-weight: 700; text-align: center; margin: 0; line-height: 1.32; }
+    .paper .logo { display: block; height: 27mm; margin: 0 auto 2mm; }
+    .paper .rule { width: 95mm; border-top: 1pt solid #000; margin: 1mm auto 3mm; }
+    .paper .b { font-weight: 700; }
+    .paper p { margin: 0; }
+    .paper .ind { padding-left: 14mm; }
+    .paper .hang { display: flex; } .paper .hang > b { flex: 0 0 auto; padding-right: 3mm; }
+    /* ช่องกรอก: ข้อความบนจุดไข่ปลา (แก้ไขบนจอได้ก่อนพิมพ์) */
+    .paper .fl { display: flex; align-items: baseline; gap: 1.5mm; white-space: nowrap; }
+    .paper .f { flex: 1 1 0; min-width: 12mm; border-bottom: 1.2pt dotted #000; padding: 0 2mm; line-height: 1.15; white-space: nowrap; overflow: hidden; outline: none; }
+    .paper .f.w { flex: 0 0 auto; }
+    .paper .f.c { text-align: center; }
+    @media screen { .paper [contenteditable] { background: #fff7d1; } .paper [contenteditable]:focus { background: #ffe98a; } }
+    .paper .sec-t { font-weight: 700; margin: 1.5mm 0 .8mm 8mm; }
+    .paper table.g { width: 100%; border-collapse: collapse; table-layout: fixed; break-inside: avoid; }
+    .paper table.g th, .paper table.g td { border: .75pt solid #000; padding: .3mm 1.6mm; vertical-align: middle; line-height: 1.17; }
+    .paper table.g th { font-weight: 700; text-align: center; }
+    .paper table.g td.c { text-align: center; } .paper table.g td.r { text-align: right; }
+    .paper table.g .tick { font-size: 15pt; font-weight: 700; text-align: center; }
+    .paper table.g .note { font-size: 13pt; line-height: 1.15; }
+    .paper .lines { border-bottom: 1.2pt dotted #000; min-height: 9mm; white-space: pre-wrap; line-height: 1.5; outline: none;
+                    background-image: repeating-linear-gradient(transparent 0 calc(1.5em - 1.2pt), #000 calc(1.5em - 1.2pt) 1.5em);
+                    background-size: 100% 1.5em; }
+    .paper .lines.dot { background-image: none; }
+    .paper .crit { display: grid; grid-template-columns: 28mm 34mm 20mm 1fr; margin-left: 22mm; line-height: 1.2; }
+    .paper .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm 10mm; margin-top: 6mm; break-inside: avoid; line-height: 1.25; }
+    .paper .sign .s { text-align: center; }
+    .paper .brk { break-before: page; }
+    .paper table.g.sum { break-inside: auto; }
+    .paper table.g.sum tr { break-inside: avoid; }
+    .paper table.g.sum td, .paper table.g.sum th { font-size: 14pt; padding: .4mm 1.4mm; }
+    .paper .stat { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; margin: 2mm 0 3mm; }
+    .paper .stat div { border: .75pt solid #000; text-align: center; padding: 1.5mm; line-height: 1.15; }
+    .paper .stat b { display: block; font-size: 20pt; }
+
+    @media print {
+      html { color-scheme: light !important; }
+      html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+      nav, footer, .controls, .no-print { display: none !important; }
+      .paper { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+      .paper.land { width: auto; }
+      .paper [contenteditable] { background: none !important; }
+    }
+  </style>
+</head>
+<body>
+<div class="controls no-print">
+  <a class="btn btn-outline-secondary" id="btnBack" href="/supervision.html"><i class="bi bi-arrow-left me-1"></i>กลับ</a>
+  <button class="btn btn-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>พิมพ์ / บันทึก PDF</button>
+  <span class="text-muted small" id="hint">ช่องสีเหลืองแก้ไขได้ก่อนพิมพ์ (ไม่บันทึกกลับเข้าระบบ)</span>
+</div>
+<div id="doc"><div class="text-center text-muted py-5">กำลังโหลด…</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js?v=20261110a"></script>
+<script>
+const Q = new URLSearchParams(location.search);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const TH = s => String(s ?? '').replace(/[0-9]/g, d => '๐๑๒๓๔๕๖๗๘๙'[d]);                 // เลขไทยแบบฟอร์มราชการ
+const N2 = x => x == null ? '' : TH(Number(x).toFixed(2));
+const MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+const dparts = iso => { if (!iso) return ['', '', '']; const [y, m, d] = iso.split('-').map(Number); return [TH(d), MONTHS[m - 1], TH(y + 543)]; };
+const F = (v, cls = '') => `<span class="f ${cls}" contenteditable="true">${esc(TH(v))}</span>`;
+const $ = id => document.getElementById(id);
+let THEME = {};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCurrentUser();
+  try { THEME = await apiFetch('/api/public/theme'); } catch { THEME = {}; }
+  const doc = Q.get('doc') || 'obs';
+  if (Q.get('visit')) $('btnBack').href = '/supervision.html?visit=' + encodeURIComponent(Q.get('visit'));
+  try {
+    if (doc === 'summary') await renderSummary();
+    else await renderObs();
+  } catch (e) { $('doc').innerHTML = `<div class="alert alert-danger m-3">${esc(e.message)}</div>`; }
+  if (Q.get('auto')) setTimeout(() => window.print(), 600);
+});
+
+function header(lines) {
+  return `${THEME.school_logo ? `<img class="logo" src="${esc(THEME.school_logo)}" alt="">` : ''}
+    ${lines.map(l => `<h1>${l}</h1>`).join('')}<div class="rule"></div>`;
+}
+function termParts(term) { const m = String(term || '').match(/^(\d)\/(\d{4})$/); return m ? [m[1], m[2]] : ['', '']; }
+
+// ── แบบบันทึกการสังเกตชั้นเรียน (กรอกแล้ว หรือฟอร์มเปล่า ?blank=1) ─────────────
+async function renderObs() {
+  const meta = await apiFetch('/api/sv/meta');
+  let v = null, e = null, r = null, f;
+  if (Q.get('visit') && !Q.get('blank')) {
+    v = await apiFetch(`/api/sv/visits/${encodeURIComponent(Q.get('visit'))}?as=${encodeURIComponent(Q.get('as') || '')}`);
+    f = meta.forms[v.pre_form] || meta.forms[meta.default_pre_form];
+    e = v.evals.find(x => x.round === 'pre');
+    if (e && !e.scores) e = Object.assign({}, e, { scores: {}, comments: {} });   // มองไม่เห็นคะแนน → พิมพ์เฉพาะหัว
+    r = v.pre_result;
+  } else f = meta.forms[meta.default_pre_form];
+  if (f.kind !== 'observe') throw new Error('นัดนี้รอบเพื่อนคู่นิเทศใช้แบบเดิม ไม่ใช่แบบบันทึกการสังเกตชั้นเรียน');
+  document.title = 'แบบบันทึกการสังเกตชั้นเรียน' + (v ? ' - ' + v.teacher_name : '');
+  const sc = (e && e.scores) || {}, cm = (e && e.comments) || {};
+  const [sem, yr] = termParts(v ? v.term : meta.default_term);
+  const [dd, mm, yy] = dparts(v && (v.pre_date || v.date));
+  const lesson = v ? (v.pre_lesson || `${v.code} ${v.title} · ${v.class_label}`) : '';
+  const [subj, cls] = lesson.split(' · ');
+  const room = (cls || '').replace(/^ม\./, '').split(/[ (]/)[0].split('/');
+  const scale = f.scale.map(s => s[0]);                                   // 5 4 3 2 1 ตามแบบกระดาษ
+  const table = p => {
+    const vals = p.items.map(it => sc[it.id]).filter(x => x != null);
+    const pr = r && r.parts.find(x => x.id === p.id);
+    return `<table class="g"><colgroup><col style="width:9mm"><col><col style="width:9.5mm"><col style="width:9.5mm"><col style="width:9.5mm"><col style="width:9.5mm"><col style="width:9.5mm"><col style="width:25mm"></colgroup>
+      <thead><tr><th rowspan="2">ที่</th><th rowspan="2">รายการ</th><th colspan="5">ระดับการปฏิบัติ</th><th rowspan="2">หมายเหตุ</th></tr>
+        <tr>${scale.map(n => `<th>${TH(n)}</th>`).join('')}</tr></thead>
+      <tbody>${p.items.map((it, i) => `<tr><td class="c">${TH(i + 1)}</td><td>${esc(it.title)}</td>
+          ${scale.map(n => `<td class="tick">${sc[it.id] === n ? '✓' : ''}</td>`).join('')}<td class="note">${esc(cm[it.id] || '')}</td></tr>`).join('')}
+        <tr><td colspan="2" class="c">รวม</td>${scale.map(n => { const k = vals.filter(x => x === n).length; return `<td class="c">${k ? TH(k * n) : ''}</td>`; }).join('')}<td></td></tr>
+        <tr><td colspan="2" class="c">ค่าเฉลี่ย</td><td colspan="5" class="c">${pr && pr.mean != null ? N2(pr.mean) : ''}</td><td class="c note">${pr ? esc(pr.level) : ''}</td></tr>
+      </tbody></table>`;
+  };
+  const [pA, pB, pC] = f.parts;
+  let h = `<div class="paper">${header([esc(f.name), esc(f.subtitle || ''),
+      `ภาคเรียนที่ ${F(sem, 'w c')} ปีการศึกษา ${F(yr, 'w c')}`.replace(/class="f w c"/g, 'class="f w c" style="min-width:16mm;display:inline-block"'),
+      `${esc(THEME.school_name || 'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม')} ${esc(f.office || '')}`])}
+    <div class="hang"><b>คำชี้แจง</b><p>แบบบันทึกการเยี่ยมชั้นเรียนนี้ เป็นแบบเยี่ยมการจัดการเรียนการสอนของครูในแต่ละรายวิชาที่สอน โดยผู้บริหารหรือผู้เยี่ยมชั้นเรียนหรือเพื่อนคู่นิเทศ บันทึกข้อมูลจากการเยี่ยมชั้นเรียน โดยทำเครื่องหมายถูก (✓) ในแบบประเมินทุกข้อ</p></div>
+    <p class="b">ตอนที่ ๑ ข้อมูลทั่วไป</p>
+    <div class="fl">๑. ผู้รับผิดชอบชั้นเรียน (ชื่อ-นามสกุล) ${F(v && v.teacher_name)}</div>
+    <div class="fl">๒. กลุ่มสาระการเรียนรู้/วิชา ${F(v ? [v.area, subj].filter(Boolean).join(' / ') : '')}</div>
+    <div class="fl ind">เรื่องที่สอน ${F(v && !v.pre_lesson ? v.topic : '')} ระดับชั้น/ห้องที่สอน ${F(room[0] ? 'ม.' + room[0] : '', 'w c')}/${F(room[1] || '', 'w c')}</div>
+    <div class="fl ind">วันที่ ${F(dd, 'c')} เดือน ${F(mm, 'c')} พ.ศ. ${F(yy, 'c')} คาบที่ ${F(v && (v.pre_period || (!v.pre_date ? v.period : '')), 'c')} เวลา ${F('', 'c')}</div>
+    <div class="fl">๓. ผู้เยี่ยมชั้นเรียน / เพื่อนคู่นิเทศ (ชื่อ-นามสกุล) ${F(e && e.evaluator_name)}</div>
+    <p class="b">ตอนที่ ๒ การเยี่ยมชั้นเรียน</p>
+    <div class="ind" style="display:grid;grid-template-columns:repeat(3,auto);justify-content:start;column-gap:9mm">
+      ${f.scale.map(([n, t]) => `<span>${TH(n)} = ${n === scale[scale.length - 1] ? esc(t) : 'ปฏิบัติได้ระดับ' + esc(t)}</span>`).join('')}</div>
+    <p class="sec-t">${esc(pA.title)}</p>${table(pA)}
+    <div class="brk"></div>
+    <p class="sec-t">${esc(pB.title)}</p>${table(pB)}
+    <p class="sec-t">${esc(pC.title)}</p>${table(pC)}
+    <table class="g" style="border-top:0"><colgroup><col><col style="width:47.5mm"><col style="width:25mm"></colgroup>
+      <tr><td class="c b" style="border-top:0">รวมเฉลี่ยทุกด้าน</td><td class="c b" style="border-top:0">${r && r.mean != null ? N2(r.mean) : ''}</td><td class="c note" style="border-top:0">${r ? esc(r.level) : ''}</td></tr></table>
+    <p class="b" style="margin-top:4mm">ตอนที่ ๓ ข้อเสนอแนะ</p>
+    <div class="lines" contenteditable="true" style="min-height:${e && e.improvements ? 0 : 18}mm">${esc(TH(e && e.improvements || ''))}</div>
+    <p class="b" style="margin-top:4mm">เกณฑ์การแปลความหมาย</p>
+    ${f.mean_levels.map(([lo, name], i) => { const hi = i ? f.mean_levels[i - 1][0] - 0.01 : 5; const low = i === f.mean_levels.length - 1 ? 1 : lo;
+        return `<div class="crit"><span>ระดับคะแนน</span><span>${N2(low)} – ${N2(hi)}</span><span>หมายถึง</span><span>${name === 'ควรปรับปรุงแก้ไข' ? esc(name) : 'ปฏิบัติได้ระดับ' + esc(name)}</span></div>`; }).join('')}
+    <div class="sign">
+      <div class="s">ลงชื่อ.......................................................<br>(${F(e && e.evaluator_name, 'w c').replace('class="f w c"', 'class="f w c" style="display:inline-block;min-width:50mm;border:0"')})<br>ผู้เยี่ยมชั้นเรียน / เพื่อนคู่นิเทศ</div>
+      <div class="s">ลงชื่อ.......................................................<br>(${F(v && v.teacher_name, 'w c').replace('class="f w c"', 'class="f w c" style="display:inline-block;min-width:50mm;border:0"')})<br>ผู้รับการนิเทศ</div>
+    </div>
+  </div>`;
+  $('doc').innerHTML = h;
+}
+
+// ── สรุปผลการนิเทศทั้งโรงเรียน ─────────────────────────────
+async function renderSummary() {
+  const term = Q.get('term') || '';
+  const [meta, s] = await Promise.all([apiFetch('/api/sv/meta'), apiFetch('/api/sv/summary?term=' + encodeURIComponent(term))]);
+  const [sem, yr] = termParts(term), c = s.count, of = meta.forms[s.observe.form], mf = meta.forms[s.form];
+  document.title = `สรุปผลการนิเทศการสอน ${term}`;
+  const lv = t => esc(t || '');
+  const signers = [...(s.signers || [])];
+  const dir = THEME.director_name ? { name: THEME.director_name, title: (THEME.director_title || 'ผู้อำนวยการโรงเรียน') + (String(THEME.director_title || '').includes('โรงเรียน') ? '' : esc(THEME.school_name || '').replace(/^โรงเรียน/, '')) } : null;
+  let h = `<div class="paper">${header(['สรุปผลการนิเทศการสอน',
+      `ตามระบบการนิเทศภายในสถานศึกษา ${esc(of.subtitle ? 'PEER CARE Model' : '')}`,
+      `ภาคเรียนที่ ${TH(sem)} ปีการศึกษา ${TH(yr)}`, esc(THEME.school_name || 'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม')])}
+    <div class="stat">
+      <div>ครูทั้งหมด<b>${TH(c.teachers)}</b>คน</div>
+      <div>เพื่อนคู่นิเทศสังเกตแล้ว<b>${TH(c.observed)}</b>คน</div>
+      <div>นิเทศครบแล้ว<b>${TH(c.done)}</b>คน</div>
+      <div>ยังไม่มีนัด<b>${TH(s.not_scheduled.length)}</b>คน</div>
+    </div>
+    <p class="b">๑. ผลรายบุคคล</p>
+    <table class="g sum"><colgroup><col style="width:9mm"><col style="width:46mm"><col><col style="width:21mm"><col style="width:16mm"><col style="width:16mm"><col style="width:16mm"><col style="width:17mm"></colgroup>
+      <thead><tr><th rowspan="2">ที่</th><th rowspan="2">ชื่อ-นามสกุล</th><th rowspan="2">กลุ่มสาระการเรียนรู้</th><th rowspan="2">วันที่นิเทศ</th>
+        <th colspan="2">สังเกตชั้นเรียน (เต็ม ๕)</th><th colspan="2">นิเทศการสอน</th></tr>
+        <tr><th>ค่าเฉลี่ย</th><th>ระดับ</th><th>ร้อยละ</th><th>ระดับ</th></tr></thead>
+      <tbody>${s.visits.map((v, i) => `<tr><td class="c">${TH(i + 1)}</td><td>${esc(v.teacher_name)}</td><td>${esc(v.area || '-')}</td>
+          <td class="c">${(() => { const [y, m, d] = v.date.split('-').map(Number); return TH(`${d} `) + MON[m - 1] + TH(` ${(y + 543) % 100}`); })()}</td>
+          <td class="c">${v.obs_mean != null ? N2(v.obs_mean) : '-'}</td><td class="c">${lv(v.obs_level) || '-'}</td>
+          <td class="c">${v.percent != null ? N2(v.percent) : '-'}</td><td class="c">${lv(v.level) || (v.status === 'scheduled' ? 'รอนิเทศ' : '-')}</td></tr>`).join('')
+        || '<tr><td colspan="8" class="c">ยังไม่มีนัดนิเทศ</td></tr>'}
+        <tr class="b"><td colspan="4" class="c b">เฉลี่ยทั้งโรงเรียน</td><td class="c b">${s.observe.mean != null ? N2(s.observe.mean) : '-'}</td><td class="c">${lv(s.observe.level) || '-'}</td>
+          <td class="c b">${s.percent != null ? N2(s.percent) : '-'}</td><td class="c">${lv(s.level) || '-'}</td></tr></tbody></table>
+    ${s.not_scheduled.length ? `<p class="muted" style="font-size:14pt;margin-top:1mm">ยังไม่มีนัดนิเทศ: ${s.not_scheduled.map(esc).join(', ')}</p>` : ''}
+    <p class="b" style="margin-top:3mm">๒. ผลการสังเกตชั้นเรียนรายด้าน (เพื่อนคู่นิเทศ ${TH(c.observed)} คน)</p>
+    <table class="g sum"><colgroup><col><col style="width:28mm"><col style="width:40mm"></colgroup>
+      <thead><tr><th>ด้าน</th><th>ค่าเฉลี่ย</th><th>ระดับ</th></tr></thead>
+      <tbody>${s.observe.parts.map(p => `<tr><td>${esc(p.title)}</td><td class="c">${p.mean != null ? N2(p.mean) : '-'}</td><td class="c">${lv(p.level) || '-'}</td></tr>`).join('')}
+        <tr><td class="c b">รวมเฉลี่ยทุกด้าน</td><td class="c b">${s.observe.mean != null ? N2(s.observe.mean) : '-'}</td><td class="c">${lv(s.observe.level) || '-'}</td></tr></tbody></table>
+    <p class="b" style="margin-top:3mm">๓. ผลการนิเทศการสอนรายข้อ (กรรมการ ๓ คน · ${TH(c.done)} คนที่ประเมินครบ · คะแนนเต็มข้อละ ${TH(Math.max(...mf.scale.map(x => x[0])))})</p>
+    <table class="g sum"><colgroup><col style="width:9mm"><col><col style="width:28mm"><col style="width:40mm"></colgroup>
+      <thead><tr><th>ที่</th><th>รายการประเมิน</th><th>ค่าเฉลี่ย</th><th>ระดับ</th></tr></thead>
+      <tbody>${s.items.map((it, i) => `<tr><td class="c">${TH(i + 1)}</td><td>${esc(it.title)}</td><td class="c">${it.mean != null ? N2(it.mean) : '-'}</td><td class="c">${lv(it.level) || '-'}</td></tr>`).join('')}</tbody></table>
+    ${s.areas.length ? `<p class="b" style="margin-top:3mm">๔. ร้อยละเฉลี่ยผลการนิเทศรายกลุ่มสาระการเรียนรู้</p>
+    <table class="g sum"><colgroup><col><col style="width:28mm"><col style="width:40mm"></colgroup>
+      <thead><tr><th>กลุ่มสาระการเรียนรู้</th><th>จำนวนครู</th><th>ร้อยละเฉลี่ย</th></tr></thead>
+      <tbody>${s.areas.map(a => `<tr><td>${esc(a.area)}</td><td class="c">${TH(a.n)}</td><td class="c">${N2(a.percent)}</td></tr>`).join('')}</tbody></table>` : ''}
+    <div class="sign">
+      <div class="s">ลงชื่อ.......................................................ผู้รายงาน<br>(.......................................................)<br>ผู้รับผิดชอบงานนิเทศภายใน</div>
+      ${signers.slice(0, 1).map(x => `<div class="s">ลงชื่อ.......................................................<br>(${esc(x.name)})<br>${esc(x.title)}</div>`).join('')
+        || '<div class="s">ลงชื่อ.......................................................<br>(.......................................................)<br>หัวหน้ากลุ่มบริหารงานวิชาการ</div>'}
+      <div class="s" style="grid-column:1/-1">ลงชื่อ.......................................................<br>(${dir ? esc(dir.name) : '.......................................................'})<br>${dir ? esc(THEME.director_title || 'ผู้อำนวยการโรงเรียน') : 'ผู้อำนวยการโรงเรียน'}</div>
+    </div>
+  </div>`;
+  $('doc').innerHTML = h;
+}
+</script>
+</body>
+</html>
