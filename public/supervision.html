@@ -138,6 +138,7 @@
       <button class="btn btn-outline-primary active" id="tabMine" onclick="showTab('mine')"><i class="bi bi-person-check me-1"></i>งานของฉัน</button>
       <button class="btn btn-outline-primary" id="tabAll" onclick="showTab('all')"><i class="bi bi-calendar2-week me-1"></i>ตารางนิเทศ</button>
       <button class="btn btn-outline-primary" id="tabSum" onclick="showTab('sum')" hidden><i class="bi bi-bar-chart me-1"></i>สรุปผล</button>
+      <button class="btn btn-outline-primary" id="tabLinks" onclick="showTab('links')" hidden><i class="bi bi-link-45deg me-1"></i>ลิงก์ทั้งหมด</button>
     </div>
     <button class="btn btn-primary ms-auto" id="btnNew" onclick="openVisitModal()" hidden><i class="bi bi-plus-lg me-1"></i>สร้างนัดนิเทศ</button>
   </div>
@@ -156,12 +157,15 @@
       </div>
       <div class="modal-body">
         <div class="row g-3">
+          <div class="col-12"><div class="form-check">
+            <input class="form-check-input" type="checkbox" id="vmKind" onchange="vmKindChanged()">
+            <label class="form-check-label" for="vmKind"><b>นัดสังเกตการสอนเพิ่มเติม</b> <span class="text-muted small">— มีแค่ผู้สังเกต 1 คน ไม่มีรอบนิเทศภายใน (เช่น ครูที่มีเพื่อนคู่นิเทศเข้าสังเกต 2 คน)</span></label></div></div>
           <div class="col-sm-7">
             <label class="form-label" for="vmTeacher">ครูผู้รับการนิเทศ</label>
             <select id="vmTeacher" class="form-select" onchange="vmLoadSlots('')"></select>
           </div>
           <div class="col-sm-5">
-            <label class="form-label" for="vmDate">วันที่นิเทศ</label>
+            <label class="form-label" for="vmDate">วันนิเทศภายใน <span class="text-muted fw-normal small">(ใส่ทีหลังได้)</span></label>
             <input type="date" id="vmDate" class="form-control" onchange="vmLoadSlots('')">
           </div>
           <div class="col-12">
@@ -230,7 +234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('term').innerHTML = (META.terms.length ? META.terms : [META.default_term]).filter(Boolean)
     .map(t => `<option ${t === META.default_term ? 'selected' : ''}>${esc(t)}</option>`).join('');
   fillWho();
-  $('tabSum').hidden = $('btnNew').hidden = !META.can_manage;
+  $('tabSum').hidden = $('tabLinks').hidden = $('btnNew').hidden = !META.can_manage;
   if (META.can_manage && !who()) TAB = 'all';
   setTabButtons();
   const open = new URLSearchParams(location.search).get('visit');
@@ -256,7 +260,7 @@ function fillWho() {
 function onWho() { store.set('sv.who', who()); CUR ? openVisit(CUR.id) : loadList(); }
 
 // ── รายการ ───────────────────────────────────────────
-function setTabButtons() { for (const [k, id] of [['mine', 'tabMine'], ['all', 'tabAll'], ['sum', 'tabSum']]) $(id).classList.toggle('active', TAB === k); }
+function setTabButtons() { for (const [k, id] of [['mine', 'tabMine'], ['all', 'tabAll'], ['sum', 'tabSum'], ['links', 'tabLinks']]) $(id).classList.toggle('active', TAB === k); }
 function showTab(t) { TAB = t; setTabButtons(); backToList(); }
 function backToList() {
   CUR = null; history.replaceState(null, '', location.pathname);
@@ -267,6 +271,7 @@ function backToList() {
 async function loadList() {
   const box = $('listView');
   if (TAB === 'sum') return loadSummary();
+  if (TAB === 'links') return loadAllLinks();
   try {
     VISITS = (await apiFetch(`/api/sv/visits?term=${encodeURIComponent(term())}&as=${encodeURIComponent(who())}`)).visits;
   } catch (e) { box.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; return; }
@@ -285,14 +290,16 @@ function card(v) {
   const com = v.committee.map(c => esc(c.name) + (c.peer ? ' (เพื่อนคู่นิเทศ)' : '')).join(' · ');
   return `<div class="sv-card" onclick="openVisit(${v.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter')openVisit(${v.id})">
     <div class="main">
-      <div class="fw-semibold">${esc(v.teacher_name)} ${role ? `<span class="badge text-bg-light border ms-1">${role}</span>` : ''}</div>
-      <div class="meta">${thDate(v.date)} · คาบ ${esc(v.period)} · ${esc(v.code)} ${esc(v.title)} · ${esc(v.class_label)}</div>
+      <div class="fw-semibold">${esc(v.teacher_name)} ${role ? `<span class="badge text-bg-light border ms-1">${role}</span>` : ''}
+        ${v.kind === 'obs' ? '<span class="badge text-bg-info ms-1">สังเกตเพิ่มเติม</span>' : ''}</div>
+      <div class="meta">${v.kind === 'obs' ? `<i class="bi bi-eye"></i> ผู้สังเกต: ${esc((v.committee.find(c => c.peer) || {}).name || '–')}`
+        : v.date ? `นิเทศภายใน ${thDate(v.date)} · คาบ ${esc(v.period)} · ${esc(v.code)} ${esc(v.title)} · ${esc(v.class_label)}` : '<span class="text-muted">นิเทศภายใน: ยังไม่กำหนดวัน</span>'}</div>
       <div class="meta">กรรมการ: ${com}</div>
     </div>
     <div class="text-end">
       <span class="badge st st-${v.status}">${esc(v.status_th)}</span>
       <div class="small mt-1 text-nowrap"><span class="${v.pre_done ? 'text-success' : 'text-muted'}"><i class="bi bi-eye"></i> ${v.pre_done ? 'สังเกตแล้ว' : 'ยังไม่สังเกต'}</span>
-        · <span class="${v.main_done === 3 ? 'text-success' : 'text-muted'}"><i class="bi bi-clipboard2-check"></i> นิเทศ ${v.main_done}/3</span></div>
+        ${v.kind === 'obs' ? '' : `·`} <span ${v.kind === 'obs' ? 'hidden' : ''} class="${v.main_done === 3 ? 'text-success' : 'text-muted'}"><i class="bi bi-clipboard2-check"></i> นิเทศ ${v.main_done}/3</span></div>
       ${v.percent != null ? `<div class="small mt-1">${num(v.percent)}% · ${esc(v.level)}</div>` : ''}
       ${(TAB === 'mine' ? v.todo : []).map(t => `<div class="mt-1"><span class="badge todo">${esc(t)}</span></div>`).join('')}
     </div>
@@ -319,11 +326,12 @@ async function openVisit(id) {
 const STAGE = {};
 function setStage(st) { STAGE[CUR.id] = st; renderVisit(); window.scrollTo(0, 0); }
 function stageOf(v) {
+  if (v.kind === 'obs') return 'obs';
   if (STAGE[v.id]) return STAGE[v.id];
   const pre = v.evals.find(e => e.round === 'pre');
   const preOpen = pre && pre.status !== 'submitted';
   // เพื่อนคู่นิเทศ/ผู้รับการนิเทศ/ฝ่ายวิชาการ ที่รอบสังเกตยังไม่เสร็จ → เปิดหน้าสังเกตก่อน · นอกนั้นเปิดนิเทศภายใน
-  return preOpen && (pre.mine || v.is_teacher || v.can_manage) ? 'obs' : 'main';
+  return (preOpen && (pre.mine || v.is_teacher || v.can_manage)) || !v.date ? 'obs' : 'main';
 }
 
 function renderVisit() {
@@ -350,11 +358,11 @@ function renderVisit() {
     : preE.status === 'submitted' ? '<span class="ok"><i class="bi bi-check-circle-fill"></i> ส่งผลแล้ว</span>' : '<span class="wait">ยังไม่ส่ง</span>';
   const mainState = v.result ? '<span class="ok"><i class="bi bi-check-circle-fill"></i> แปลผลแล้ว</span>'
     : `<span class="${v.main_done ? 'wait' : 'text-muted'}">ส่งแล้ว ${v.main_done}/3</span>`;
-  h += `<div class="stage-tabs no-print" role="tablist">
+  if (v.kind !== 'obs') h += `<div class="stage-tabs no-print" role="tablist">
       <button type="button" role="tab" aria-selected="${st === 'obs'}" class="${st === 'obs' ? 'on' : ''}" onclick="setStage('obs')">
         <i class="bi bi-eye"></i><span><b>สังเกตการสอน</b><small>รอบที่ 1 · เพื่อนคู่นิเทศ ${esc(peer ? peer.name : '–')}</small>${obsState}</span></button>
       <button type="button" role="tab" aria-selected="${st === 'main'}" class="${st === 'main' ? 'on' : ''}" onclick="setStage('main')">
-        <i class="bi bi-clipboard2-check"></i><span><b>นิเทศภายใน</b><small>รอบที่ 2 · ${thDate(v.date)} คาบ ${esc(v.period)} · กรรมการ 3 คน</small>${mainState}</span></button>
+        <i class="bi bi-clipboard2-check"></i><span><b>นิเทศภายใน</b><small>รอบที่ 2 · ${v.date ? `${thDate(v.date)} คาบ ${esc(v.period)}` : 'ยังไม่กำหนดวัน'} · กรรมการ 3 คน</small>${mainState}</span></button>
     </div>`;
 
   if (st === 'obs') {
@@ -375,8 +383,9 @@ function renderVisit() {
     // ── รอบที่ 2 นิเทศภายใน ──
     h += `<div class="sec"><h2><i class="bi bi-clipboard2-check me-1"></i>นิเทศภายใน <span class="fw-normal text-muted small">รอบที่ 2 · ${esc(f.name)}</span></h2><div class="body">
         <div class="row g-2">
-          <div class="col-md-6"><span class="text-muted">วันที่นิเทศ</span> ${thDate(v.date)} · คาบที่ ${esc(v.period)}</div>
-          <div class="col-md-6"><span class="text-muted">วิชา</span> ${esc(v.code)} ${esc(v.title)} · ${esc(v.class_label)}</div>
+          ${v.date ? `<div class="col-md-6"><span class="text-muted">วันที่นิเทศ</span> ${thDate(v.date)} · คาบที่ ${esc(v.period)}</div>
+          <div class="col-md-6"><span class="text-muted">วิชา</span> ${esc(v.code)} ${esc(v.title)} · ${esc(v.class_label)}</div>`
+          : `<div class="col-12 text-muted"><i class="bi bi-calendar-x me-1"></i>ยังไม่กำหนดวันนิเทศภายใน${v.can_manage ? ' — กด "แก้นัด" เพื่อใส่วันที่ คาบ และกรรมการอีก 2 คน' : ''}</div>`}
         </div>
         <div class="mt-2"><span class="text-muted">กรรมการนิเทศ 3 คน</span>
           ${[1, 2, 3].map(n => v.committee.find(c => c.seat === n) || { seat: n, unset: true }).map(c => c.unset
@@ -403,7 +412,7 @@ function renderVisit() {
         : '<span class="text-muted">ผู้รับการนิเทศยังไม่ได้กรอก</span>';
     }
     h += '</div></div>';
-    for (const e of v.evals.filter(e => e.round === 'main' && e.mine && e.status !== 'submitted')) h += evalForm(v, formFor(v, 'main'), e);
+    if (v.date) for (const e of v.evals.filter(e => e.round === 'main' && e.mine && e.status !== 'submitted')) h += evalForm(v, formFor(v, 'main'), e);
     if (v.result) h += resultView(v, f);
     else {
       const waiting = v.evals.filter(e => e.round === 'main' && e.mine && e.status === 'submitted').length;
@@ -415,7 +424,7 @@ function renderVisit() {
   if (v.history && v.history.length) h += historyView(v);
   if (v.can_manage) h += manageView(v);
   $('detailView').innerHTML = h;
-  for (const e of v.evals.filter(e => e.mine && e.status !== 'submitted' && (e.round === 'pre') === (st === 'obs'))) refreshBar(e);
+  for (const e of v.evals.filter(e => e.mine && e.status !== 'submitted' && (e.round === 'pre') === (st === 'obs') && (e.round === 'pre' || v.date))) refreshBar(e);
   if ($('obsDate')) obsLoad(true);
 }
 
@@ -667,14 +676,80 @@ async function saveReflect(ack) {
     showToast(r.message); if (ack) openVisit(CUR.id);
   } catch (e) { showToast(e.message, 'danger'); }
 }
+// ── ลิงก์ทั้งหมดรายคู่ (หน้าเดียว ไม่ต้องเปิดทีละนัด) ─────────
+let PEOPLE_MSG = {};
+async function loadAllLinks() {
+  const box = $('listView');
+  let d;
+  try { d = await apiFetch('/api/sv/links?term=' + encodeURIComponent(term())); }
+  catch (e) { box.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; return; }
+  const bare = n => String(n || '').replace(/^(นาย|นางสาว|นาง|ครู)\s*/, '').trim();
+  // งานของแต่ละคน: [{kind, text, url, visit}]
+  const jobs = {}, add = (name, j) => (jobs[bare(name)] = jobs[bare(name)] || { name, list: [] }).list.push(j);
+  const pairs = new Map();
+  for (const v of d.visits) {
+    const peer = v.committee.find(c => c.peer);
+    for (const l of v.links) {
+      const url = `${location.origin}/sv/${l.token}`;
+      if (l.seat === 0) add(l.name, { order: 2, icon: '📋', title: v.kind === 'obs' ? `รับการสังเกตการสอนเพิ่มเติม (ผู้สังเกต: ${peer ? peer.name : '-'})` : `ผู้รับการนิเทศ — ดูผลการสังเกต/ผลนิเทศของตัวเอง กรอกข้อมูลก่อนสอน`, url });
+      else if (l.peer) add(l.name, { order: 1, icon: '👁', title: `สังเกตการสอนครู${v.teacher_name} (เพื่อนคู่นิเทศ) — เข้าคาบไหนก็ได้ เลือกวัน/คาบเองในลิงก์ กรอกย้อนหลังได้${v.kind === 'obs' ? '' : ' และร่วมนิเทศภายในในลิงก์เดียวกัน'}`, url });
+      else add(l.name, { order: 3, icon: '🧑‍🏫', title: `กรรมการนิเทศภายในของครู${v.teacher_name}${v.date ? ' ' + thDate(v.date) + ' คาบ ' + v.period : ''}`, url });
+    }
+    if (peer) {
+      const key = [bare(v.teacher_name), bare(peer.name)].sort().join('|');
+      if (!pairs.has(key)) pairs.set(key, { names: [v.teacher_name, peer.name], visits: [] });
+      pairs.get(key).visits.push(v);
+    }
+  }
+  PEOPLE_MSG = {};
+  const msg = p => `📋 นิเทศการสอน ภาคเรียนที่ ${term()}\nเรียน ครู${bare(p.name)}\n\n` +
+    p.list.sort((a, b) => a.order - b.order).map((j, i) => `${i + 1}) ${j.icon} ${j.title}\n${j.url}`).join('\n\n') +
+    `\n\n* ลิงก์สำหรับครู${bare(p.name)} เท่านั้น กดแล้วกรอกได้เลย ไม่ต้องล็อกอิน`;
+  const person = (name, pairKey) => {
+    const p = jobs[bare(name)]; if (!p) return '';
+    const id = 'm' + Object.keys(PEOPLE_MSG).length; PEOPLE_MSG[id] = msg(p);
+    return `<div class="py-2 border-top">
+      <div class="d-flex flex-wrap align-items-center gap-2"><b class="flex-grow-1">ครู${esc(bare(name))}</b>
+        <button class="btn btn-sm btn-success" onclick="copyMsg('${id}')"><i class="bi bi-chat-dots me-1"></i>คัดลอกรวมทุกงาน</button></div>
+      ${p.list.sort((a, b) => a.order - b.order).map(j => { const jid = 'm' + Object.keys(PEOPLE_MSG).length;
+          PEOPLE_MSG[jid] = `📋 นิเทศการสอน ภาคเรียนที่ ${term()}\nเรียน ครู${bare(p.name)}\n${j.icon} ${j.title}\n${j.url}\n\n* ลิงก์สำหรับครู${bare(p.name)} เท่านั้น ไม่ต้องล็อกอิน`;
+          return `<div class="small mt-2 d-flex gap-2 align-items-start"><div class="flex-grow-1">${j.icon} ${esc(j.title)}<div class="text-muted text-break">${esc(j.url)}</div></div>
+            <button class="btn btn-sm btn-outline-success text-nowrap" onclick="copyMsg('${jid}')" title="คัดลอกเฉพาะงานนี้"><i class="bi bi-clipboard me-1"></i>แยก</button></div>`; }).join('')}</div>`;
+  };
+  let n = 0, html = `<div class="sec"><h2><i class="bi bi-link-45deg me-1"></i>ลิงก์ส่งไลน์รายคู่ · ภาคเรียนที่ ${esc(term())}
+      <span class="fw-normal text-muted small">${d.visits.length} นัด · แต่ละคนได้ข้อความเดียวรวมทุกงานของตัวเอง</span></h2>
+    <div class="body small text-muted">กดคัดลอกแล้ววางในไลน์ส่วนตัวของครูคนนั้น · ลิงก์ของใครของมัน ไม่ต้องล็อกอิน · ถ้าลิงก์หลุดไปถึงคนอื่น เปิดนัดนั้นแล้วกด <i class="bi bi-arrow-repeat"></i> ออกลิงก์ใหม่</div></div>`;
+  for (const [key, pr] of pairs) {
+    n++;
+    const [a, b] = pr.names.map(bare);                 // ลำดับตามที่สร้างนัด (ตรงกับรายชื่อคู่ของโรงเรียน)
+    html += `<div class="sec"><h2>คู่ที่ ${n}: ครู${esc(a)} ↔ ครู${esc(b)}
+        <span class="fw-normal text-muted small">${pr.visits.map(v => `${esc(bare(v.teacher_name))} ${v.pre_done ? '✓ ถูกสังเกตแล้ว' : 'รอสังเกต'}`).join(' · ')}</span></h2>
+      <div class="body pt-0">${person(a)}${person(b)}</div></div>`;
+  }
+  // คนที่มีงาน (เช่น กรรมการนิเทศภายใน) แต่ไม่อยู่ในคู่ใด
+  const inPairs = new Set([...pairs.keys()].flatMap(k => k.split('|')));
+  const others = Object.keys(jobs).filter(k => !inPairs.has(k));
+  if (others.length) html += `<div class="sec"><h2>กรรมการนิเทศภายใน (นอกคู่)</h2><div class="body pt-0">${others.map(k => person(jobs[k].name)).join('')}</div></div>`;
+  if (!d.visits.length) html += '<div class="text-center text-muted py-5">ยังไม่มีนัดในภาคเรียนนี้</div>';
+  box.innerHTML = html;
+}
+async function copyMsg(id) {
+  const text = PEOPLE_MSG[id];
+  try { await navigator.clipboard.writeText(text); showToast('คัดลอกแล้ว วางในไลน์ได้เลย'); }
+  catch { prompt('คัดลอกข้อความนี้', text); }
+}
+
 // ── ลิงก์เฉพาะกิจ ───────────────────────────────────────
 let LINKS = [];
 const linkUrl = l => `${location.origin}/sv/${l.token}`;
 function linkText(l) {
   const v = CUR, d = x => x ? thDate(x) : '';
-  let job = l.seat === 0 ? `รับการนิเทศ ${d(v.date)} คาบ ${v.period} (${v.code} ${v.title} ${v.class_label})\nก่อนวันสอนกรอก "ข้อมูลก่อนสอน" ในลิงก์ · หลังกรรมการส่งครบ ดูผล เขียนสะท้อนคิด และกดรับทราบ`
-    : l.peer ? `เพื่อนคู่นิเทศของ ${v.teacher_name}\n1) เข้าสังเกตการสอนคาบไหนก็ได้ แล้วกรอกแบบบันทึกการสังเกตชั้นเรียนในลิงก์ (เลือกวันและคาบที่เข้าสังเกตเอง กรอกย้อนหลังได้) แล้วกดส่ง\n2) วันนิเทศภายใน ${d(v.date)} คาบ ${v.period} ให้คะแนนร่วมกับกรรมการอีก 2 คน`
-    : `กรรมการนิเทศ ${v.teacher_name}\nวันนิเทศ ${d(v.date)} คาบ ${v.period} (${v.code} ${v.title} ${v.class_label})`;
+  const when = v.date ? `${d(v.date)} คาบ ${v.period} (${v.code} ${v.title} ${v.class_label})` : '(วันนิเทศภายในจะแจ้งภายหลัง)';
+  let job = v.kind === 'obs' ? (l.seat === 0 ? `รับการสังเกตการสอนเพิ่มเติม โดย ${(v.committee.find(c => c.peer) || {}).name || ''}\nดูผลการสังเกตได้ในลิงก์`
+      : `ผู้สังเกตการสอนของ ${v.teacher_name}\nเข้าสังเกตการสอนคาบไหนก็ได้ แล้วกรอกแบบบันทึกการสังเกตชั้นเรียนในลิงก์ (เลือกวันและคาบเอง กรอกย้อนหลังได้) แล้วกดส่ง`)
+    : l.seat === 0 ? `รับการนิเทศ ${when}\nก่อนวันสอนกรอก "ข้อมูลก่อนสอน" ในลิงก์ · หลังกรรมการส่งครบ ดูผล เขียนสะท้อนคิด และกดรับทราบ`
+    : l.peer ? `เพื่อนคู่นิเทศของ ${v.teacher_name}\n1) เข้าสังเกตการสอนคาบไหนก็ได้ แล้วกรอกแบบบันทึกการสังเกตชั้นเรียนในลิงก์ (เลือกวันและคาบที่เข้าสังเกตเอง กรอกย้อนหลังได้) แล้วกดส่ง\n2) วันนิเทศภายใน ${when} ให้คะแนนร่วมกับกรรมการอีก 2 คน`
+    : `กรรมการนิเทศ ${v.teacher_name}\nวันนิเทศภายใน ${when}`;
   return `📋 นิเทศการสอน ภาคเรียนที่ ${v.term}\nเรียน ${l.name}\nหน้าที่: ${l.role}\n${job}\n\nกดลิงก์เพื่อกรอก (ไม่ต้องล็อกอิน):\n${linkUrl(l)}\n\n* ลิงก์นี้สำหรับ ${l.name} เท่านั้น กรุณาอย่าส่งต่อ`;
 }
 async function loadLinks(renewSeat) {
@@ -715,6 +790,7 @@ function openVisitModal(id) {
   $('vmTeacher').innerHTML = '<option value="">— เลือกครู —</option>' + META.teachers.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
   $('vmTeacher').value = v ? (v.teacher_id || '') : '';
   $('vmDate').value = v ? v.date : '';
+  $('vmKind').checked = !!(v && v.kind === 'obs'); $('vmKind').disabled = !!v;
   $('vmPreDate').value = v ? v.pre_date : '';
   const com = [1, 2, 3].map(n => (v ? v.committee.find(c => c.seat === n) : null) || {}), peer = v ? v.peer_seat : 1;
   $('vmCom').innerHTML = [0, 1, 2].map(i => `<div class="com-row">
@@ -725,8 +801,15 @@ function openVisitModal(id) {
         <label class="form-check-label" for="vmPeer${i}">เพื่อนคู่นิเทศ</label></div></div>`).join('');
   vmLoadSlots('', v && `${v.period}|${v.code}`);
   vmLoadSlots('pre', v && v.pre_period ? `${v.pre_period}|` : '');
-  vmErr('');
+  vmErr(''); vmKindChanged();
   modal('visitModal').show();
+}
+// นัดสังเกตเพิ่มเติม: ปิดช่องวันนิเทศภายในและกรรมการที่นั่งอื่น เหลือแค่แถวผู้สังเกต
+function vmKindChanged() {
+  const obs = $('vmKind').checked;
+  for (const id of ['vmDate', 'vmSlot']) { $(id).disabled = obs; if (obs) $(id).value = ''; }
+  const peer = Number((document.querySelector('input[name=vmPeer]:checked') || {}).value || 1);
+  [0, 1, 2].forEach(i => { const off = obs && i + 1 !== peer; $('vmN' + i).disabled = off; $('vmP' + i).disabled = off; if (off) $('vmN' + i).value = ''; });
 }
 async function vmLoadSlots(kind, keep) {
   const sel = $(kind ? 'vmPreSlot' : 'vmSlot'), date = $(kind ? 'vmPreDate' : 'vmDate').value, tid = $('vmTeacher').value;
@@ -748,9 +831,10 @@ async function saveVisit() {
   const l = VM_SLOTS[''][$('vmSlot').value], p = VM_SLOTS.pre[$('vmPreSlot').value];
   vmErr('');
   if (!$('vmTeacher').value) return vmErr('เลือกครูผู้รับการนิเทศ');
-  if (!l) return vmErr('เลือกวันที่และคาบสอนที่จะนิเทศ');
-  const body = { teacher_id: Number($('vmTeacher').value), date: $('vmDate').value, period: l.period, code: l.code, title: l.title,
-    class_label: l.class_label, area: l.area,
+  if ($('vmDate').value && !l) return vmErr('เลือกคาบสอนที่จะนิเทศภายใน (หรือลบวันที่ออก ถ้ายังไม่กำหนด)');
+  const body = { teacher_id: Number($('vmTeacher').value), term: term(), kind: $('vmKind').checked ? 'obs' : 'full',
+    date: l ? $('vmDate').value : '', period: l ? l.period : '', code: l ? l.code : '', title: l ? l.title : '',
+    class_label: l ? l.class_label : '', area: l ? l.area : '',
     committee: [0, 1, 2].map(i => ({ name: $('vmN' + i).value, position: $('vmP' + i).value })),
     peer_seat: Number((document.querySelector('input[name=vmPeer]:checked') || {}).value || 0),
     pre_date: $('vmPreDate').value, pre_period: p ? p.period : '', pre_lesson: p ? `${p.code} ${p.title} · ${p.class_label}` : '' };

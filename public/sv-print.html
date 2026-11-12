@@ -201,7 +201,7 @@ async function renderSummary() {
         <th colspan="2">สังเกตชั้นเรียน (เต็ม ๕)</th><th colspan="2">นิเทศการสอน</th></tr>
         <tr><th>ค่าเฉลี่ย</th><th>ระดับ</th><th>ร้อยละ</th><th>ระดับ</th></tr></thead>
       <tbody>${s.visits.map((v, i) => `<tr><td class="c">${TH(i + 1)}</td><td>${esc(v.teacher_name)}</td><td>${esc(v.area || '-')}</td>
-          <td class="c">${(() => { const [y, m, d] = v.date.split('-').map(Number); return TH(`${d} `) + MON[m - 1] + TH(` ${(y + 543) % 100}`); })()}</td>
+          <td class="c">${v.date ? (() => { const [y, m, d] = v.date.split('-').map(Number); return TH(`${d} `) + MON[m - 1] + TH(` ${(y + 543) % 100}`); })() : (v.kind === 'obs' ? 'สังเกตเพิ่ม' : 'ยังไม่กำหนด')}</td>
           <td class="c">${v.obs_mean != null ? N2(v.obs_mean) : '-'}</td><td class="c">${lv(v.obs_level) || '-'}</td>
           <td class="c">${v.percent != null ? N2(v.percent) : '-'}</td><td class="c">${lv(v.level) || (v.status === 'scheduled' ? 'รอนิเทศ' : '-')}</td></tr>`).join('')
         || '<tr><td colspan="8" class="c">ยังไม่มีนัดนิเทศ</td></tr>'}

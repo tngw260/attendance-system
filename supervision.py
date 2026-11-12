@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS sv_visits (
     term          TEXT NOT NULL,
     form          TEXT NOT NULL DEFAULT 'v1',
     pre_form      TEXT NOT NULL DEFAULT 'v1',
+    kind          TEXT NOT NULL DEFAULT 'full',     -- full = สังเกตการสอน + นิเทศภายใน · obs = สังเกตการสอนเพิ่มเติมอย่างเดียว
     teacher_id    INTEGER REFERENCES tt_teachers(id) ON DELETE SET NULL,
     teacher_name  TEXT NOT NULL,
     area          TEXT DEFAULT '',
@@ -300,6 +301,8 @@ def init(app, get_db, login_required, current_user, get_settings):
         cols = {r[1] for r in con.execute('PRAGMA table_info(sv_visits)')}
         if 'pre_form' not in cols:                  # ฐานข้อมูลเดิมก่อนมีแบบสังเกตชั้นเรียน: นัดเก่ายังใช้แบบเดิมทั้งสองรอบ
             con.execute("ALTER TABLE sv_visits ADD COLUMN pre_form TEXT NOT NULL DEFAULT 'v1'")
+        if 'kind' not in cols:
+            con.execute("ALTER TABLE sv_visits ADD COLUMN kind TEXT NOT NULL DEFAULT 'full'")
 
     def bad(msg, code=400):
         return jsonify(success=False, message=msg), code
@@ -428,7 +431,9 @@ def init(app, get_db, login_required, current_user, get_settings):
         pre = next((e for e in evals if e['round'] == 'pre'), None)
         done = sum(e['status'] == 'submitted' for e in mains)
         pre_done = bool(pre) and pre['status'] == 'submitted'
-        if v['ack_at']:
+        if v['kind'] == 'obs':
+            st, th = ('pre_done', 'สังเกตแล้ว') if pre_done else ('scheduled', 'รอสังเกตการสอน')
+        elif v['ack_at']:
             st, th = 'ack', 'รับทราบผลแล้ว'
         elif len(mains) == 3 and done == 3:
             st, th = 'done', 'ประเมินครบ รอรับทราบ'
@@ -442,7 +447,7 @@ def init(app, get_db, login_required, current_user, get_settings):
 
     def visit_brief(v, evals):
         d = {k: v[k] for k in ('id', 'term', 'teacher_id', 'teacher_name', 'area', 'date', 'period', 'code', 'title',
-                               'class_label', 'peer_seat', 'pre_date', 'pre_period', 'pre_lesson')}
+                               'class_label', 'peer_seat', 'pre_date', 'pre_period', 'pre_lesson', 'kind')}
         d.update(progress(v, evals))
         d['committee'] = [dict(seat=e['seat'], id=e['evaluator_id'], name=e['evaluator_name'], position=e['position'],
                                peer=e['seat'] == v['peer_seat'], submitted=e['status'] == 'submitted')
@@ -581,16 +586,25 @@ def init(app, get_db, login_required, current_user, get_settings):
         tid, tname, _ = person(con, {'id': b.get('teacher_id')})
         if not tid:
             return None, 'เลือกครูผู้รับการนิเทศ'
-        date = str(b.get('date') or '')
-        if not DATE_RE.fullmatch(date):
-            return None, 'เลือกวันที่นิเทศ'
-        term = term_for_date(con, date, settings)
-        if not term:
-            return None, ('ยังไม่มีตารางสอนของภาคเรียนที่วันนี้อยู่ — สร้าง/นำเข้าตารางสอนภาคเรียนนั้นก่อน '
-                          '(เมนู วิชาการ → ตารางสอน) แล้วค่อยสร้างนัดนิเทศ เพราะคาบสอนดึงจากตารางสอน')
-        code = clean(b.get('code'), 20)
-        if not code:
-            return None, 'เลือกคาบสอนที่จะนิเทศ'
+        # วันนิเทศภายในเว้นไว้ก่อนได้ (นัดสังเกตการสอนอย่างเดียว) — ภาคเรียนมาจากช่อง "ภาคเรียน" บนหน้าเว็บ
+        kind = 'obs' if b.get('kind') == 'obs' else 'full'
+        date = '' if kind == 'obs' else str(b.get('date') or '')
+        if date and not DATE_RE.fullmatch(date):
+            return None, 'วันที่นิเทศภายในไม่ถูกต้อง'
+        if date:
+            term = term_for_date(con, date, settings)
+            if not term:
+                return None, ('ยังไม่มีตารางสอนของภาคเรียนที่วันนี้อยู่ — สร้าง/นำเข้าตารางสอนภาคเรียนนั้นก่อน '
+                              '(เมนู วิชาการ → ตารางสอน) แล้วค่อยสร้างนัดนิเทศ เพราะคาบสอนดึงจากตารางสอน')
+            code = clean(b.get('code'), 20)
+            if not code:
+                return None, 'เลือกคาบสอนที่จะนิเทศภายใน (หรือลบวันที่ออก ถ้ายังไม่กำหนดวันนิเทศภายใน)'
+        else:
+            term = con.execute('SELECT * FROM tt_terms WHERE name=?', (clean(b.get('term'), 10),)).fetchone() \
+                or term_for_date(con, datetime.date.today().isoformat(), settings)
+            if not term:
+                return None, 'เลือกภาคเรียนก่อน'
+            code = ''
         com = (b.get('committee') or [])[:3]
         com += [{}] * (3 - len(com))
         # ที่นั่งว่างได้: เพื่อนคู่นิเทศเข้าสังเกตก่อน กรรมการอีก 2 คนกำหนดทีหลังได้ (ต้องครบ 3 คนก่อนวันนิเทศภายในจึงแปลผล)
@@ -611,9 +625,11 @@ def init(app, get_db, login_required, current_user, get_settings):
         pre_date = str(b.get('pre_date') or '')
         if pre_date and not DATE_RE.fullmatch(pre_date):
             return None, 'วันที่สังเกตก่อนนิเทศไม่ถูกต้อง'
-        f = dict(term=term['name'], teacher_id=tid, teacher_name=tname, area=clean(b.get('area'), 60) or area_of(con, code),
-                 date=date, period=clean(b.get('period'), 10), code=code, title=clean(b.get('title'), 120),
-                 class_label=clean(b.get('class_label'), 60), peer_seat=peer, pre_date=pre_date,
+        if kind == 'obs':                            # สังเกตเพิ่มเติม: มีแค่ผู้สังเกต 1 คน
+            people = [people[peer - 1] if i == peer - 1 else (None, '', '') for i in range(3)]
+        f = dict(kind=kind, term=term['name'], teacher_id=tid, teacher_name=tname, area=clean(b.get('area'), 60) or area_of(con, code),
+                 date=date, period=clean(b.get('period'), 10) if date else '', code=code,
+                 title=clean(b.get('title'), 120) if date else '', class_label=clean(b.get('class_label'), 60) if date else '', peer_seat=peer, pre_date=pre_date,
                  pre_period=clean(b.get('pre_period'), 10), pre_lesson=clean(b.get('pre_lesson'), 160))
         return (f, people), None
 
@@ -645,13 +661,23 @@ def init(app, get_db, login_required, current_user, get_settings):
             if err:
                 return bad(err)
             f, people = got
-            if con.execute('SELECT 1 FROM sv_visits WHERE term=? AND teacher_id=?', (f['term'], f['teacher_id'])).fetchone():
-                return bad(f"{f['teacher_name']} มีนัดนิเทศในภาคเรียน {f['term']} แล้ว (นิเทศคนละ 1 ครั้ง)")
+            if f['kind'] == 'full' and con.execute("SELECT 1 FROM sv_visits WHERE term=? AND teacher_id=? AND kind='full'",
+                                                   (f['term'], f['teacher_id'])).fetchone():
+                return bad(f"{f['teacher_name']} มีนัดนิเทศในภาคเรียน {f['term']} แล้ว (นิเทศคนละ 1 ครั้ง) — "
+                           'ถ้าต้องการให้อีกคนเข้าสังเกตเพิ่ม ติ๊ก "นัดสังเกตการสอนเพิ่มเติม"')
+            if f['kind'] == 'obs':
+                pname = people[f['peer_seat'] - 1][1]
+                for o in con.execute("SELECT e.evaluator_name FROM sv_visits v JOIN sv_evals e ON e.visit_id=v.id AND e.round='pre' "
+                                     "WHERE v.term=? AND v.teacher_id=?", (f['term'], f['teacher_id'])):
+                    if bare_name(o['evaluator_name']) == bare_name(pname):
+                        return bad(f"{pname} เป็นผู้สังเกต {f['teacher_name']} อยู่แล้วในภาคเรียนนี้")
             cur = con.execute(
                 f"INSERT INTO sv_visits ({', '.join(f)}, form, pre_form, created_by) VALUES ({', '.join('?' * len(f))}, ?, ?, ?)",
                 list(f.values()) + [DEFAULT_FORM, DEFAULT_PRE_FORM, u['id']])
             sync_evals(con, cur.lastrowid, people, f['peer_seat'])
-        return jsonify(success=True, id=cur.lastrowid, message='สร้างนัดนิเทศแล้ว')
+        return jsonify(success=True, id=cur.lastrowid,
+                       message='สร้างนัดนิเทศแล้ว' if f['date'] else 'สร้างนัดสังเกตการสอนเพิ่มเติมแล้ว' if f['kind'] == 'obs'
+                       else 'สร้างนัดสังเกตการสอนแล้ว — ใส่วันนิเทศภายในทีหลังด้วย "แก้นัด"')
 
     @app.put('/api/sv/visits/<int:vid>')
     @login_required
@@ -666,8 +692,8 @@ def init(app, get_db, login_required, current_user, get_settings):
             if err:
                 return bad(err)
             f, people = got
-            if con.execute('SELECT 1 FROM sv_visits WHERE term=? AND teacher_id=? AND id<>?',
-                           (f['term'], f['teacher_id'], vid)).fetchone():
+            if f['kind'] == 'full' and con.execute("SELECT 1 FROM sv_visits WHERE term=? AND teacher_id=? AND id<>? AND kind='full'",
+                                                   (f['term'], f['teacher_id'], vid)).fetchone():
                 return bad(f"{f['teacher_name']} มีนัดนิเทศในภาคเรียน {f['term']} แล้ว")
             con.execute(f"UPDATE sv_visits SET {', '.join(k + '=?' for k in f)} WHERE id=?", list(f.values()) + [vid])
             sync_evals(con, vid, people, f['peer_seat'])
@@ -956,6 +982,22 @@ def init(app, get_db, login_required, current_user, get_settings):
                 return bad('ไม่พบนัดนิเทศ', 404)
             return jsonify(links=links_of(con, v, renew=seat), message='ออกลิงก์ใหม่แล้ว ลิงก์เดิมใช้ไม่ได้แล้ว')
 
+    @app.get('/api/sv/links')
+    @login_required
+    def sv_links_term():
+        """ลิงก์ของทุกนัดในภาคเรียน (ออกให้อัตโนมัติถ้ายังไม่มี) — หน้าสรุปลิงก์รายคู่"""
+        if not can_manage(current_user()):
+            return bad('เฉพาะฝ่ายวิชาการหรือแอดมิน', 403)
+        term = request.args.get('term', '')
+        out = []
+        with get_db() as con:
+            for v in con.execute('SELECT * FROM sv_visits WHERE term=? ORDER BY id', (term,)).fetchall():
+                _, evals = load(con, v['id'])
+                d = visit_brief(v, evals)
+                d['links'] = links_of(con, v)
+                out.append(d)
+        return jsonify(visits=out)
+
     # ── สรุปทั้งโรงเรียน (ฝ่ายวิชาการ / ผู้บริหาร) ─────────────
     @app.get('/api/sv/summary')
     @login_required
@@ -964,13 +1006,16 @@ def init(app, get_db, login_required, current_user, get_settings):
             return bad('เฉพาะฝ่ายวิชาการหรือแอดมิน', 403)
         term = request.args.get('term', '')
         with get_db() as con:
+            # ผู้บริหาร (ชื่อขึ้นต้นด้วย รอง/ผอ.) ไม่อยู่ในการนิเทศ จึงไม่นับเป็นครูที่ต้องมีนัด
             teachers = [dict(r) for r in con.execute(
-                'SELECT id, name FROM tt_teachers WHERE COALESCE(active,1)=1 ORDER BY sort_order, id')]
+                'SELECT id, name FROM tt_teachers WHERE COALESCE(active,1)=1 ORDER BY sort_order, id')
+                if not re.match(r'(รอง|ผอ)', r['name'])]
             rows, item_sum, item_n, seen = [], {}, {}, set()
             obs_form, obs_sum, obs_n, obs_means = FORMS[DEFAULT_PRE_FORM], {}, {}, []
             for v in con.execute('SELECT * FROM sv_visits WHERE term=? ORDER BY date, id', (term,)).fetchall():
                 evals = con.execute('SELECT * FROM sv_evals WHERE visit_id=?', (v['id'],)).fetchall()
-                seen.add(v['teacher_id'])
+                if v['kind'] == 'full':
+                    seen.add(v['teacher_id'])
                 d = visit_brief(v, evals)
                 res = result_of(v, evals)
                 if res:
@@ -1004,6 +1049,7 @@ def init(app, get_db, login_required, current_user, get_settings):
             tt = con.execute('SELECT config FROM tt_terms WHERE name=?', (term,)).fetchone()
             signers = jl(tt['config'], {}).get('signers', []) if tt else []      # หัวหน้ากลุ่มบริหารงานวิชาการ ฯลฯ
             done = [r for r in rows if 'percent' in r]
+            count_full = len([r for r in rows if r['kind'] == 'full'])
             areas = {}
             for r in done:
                 areas.setdefault(r['area'] or 'ไม่ระบุ', []).append(r['percent'])
@@ -1011,7 +1057,7 @@ def init(app, get_db, login_required, current_user, get_settings):
             visits=rows, items=items,
             areas=[dict(area=a, n=len(v), percent=r2(sum(v) / len(v))) for a, v in sorted(areas.items())],
             not_scheduled=[t['name'] for t in teachers if t['id'] not in seen],
-            count=dict(teachers=len(teachers), scheduled=len(rows), done=len(done), observed=len(obs_means)),
+            count=dict(teachers=len(teachers), scheduled=count_full, done=len(done), observed=len(obs_means)),
             observe=dict(parts=obs_parts, mean=obs_mean, form=DEFAULT_PRE_FORM,
                          level=level_of(obs_mean, obs_form['mean_levels']) if obs_mean is not None else ''),
             form=DEFAULT_FORM, signers=signers,
