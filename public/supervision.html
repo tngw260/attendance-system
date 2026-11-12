@@ -363,6 +363,7 @@ function renderVisit() {
   }
   // สะท้อนคิด + รับทราบ
   if (v.result && (v.is_teacher || v.can_manage || Object.keys(v.reflection).length || v.agreed)) h += reflectView(v, f);
+  if (v.history && v.history.length) h += historyView(v);
   if (v.can_manage) h += manageView(v);
   $('detailView').innerHTML = h;
   for (const e of v.evals.filter(e => e.mine && e.status !== 'submitted')) refreshBar(e);
@@ -546,6 +547,16 @@ function reflectView(v, f) {
       <button class="btn btn-outline-primary" onclick="saveReflect(false)"><i class="bi bi-check-lg me-1"></i>บันทึก</button>
       ${v.ack_at ? '' : '<button class="btn btn-success" onclick="saveReflect(true)"><i class="bi bi-hand-thumbs-up me-1"></i>บันทึกและรับทราบผล</button>'}</div>`;
   return h + '</div></div>';
+}
+function historyView(v) {
+  return `<div class="sec"><h2><i class="bi bi-clock-history me-1"></i>ประวัติการนิเทศของ ${esc(v.teacher_name)} <span class="fw-normal text-muted small">ภาคเรียนอื่น</span></h2><div class="body">
+    <div class="table-responsive"><table class="table table-sm res mb-0">
+      <thead><tr><th>ภาคเรียน</th><th>วันที่</th><th>วิชา</th><th class="n">สังเกตชั้นเรียน</th><th class="n">ผลนิเทศ</th><th>สถานะ</th></tr></thead>
+      <tbody>${v.history.map(x => `<tr><td>${esc(x.term)}</td><td>${thDate(x.date)}</td><td>${esc(x.code)} ${esc(x.title)} · ${esc(x.class_label)}</td>
+        <td class="n">${x.obs_mean != null ? num(x.obs_mean) + ' ' + lvBadge(x.obs_level) : '–'}</td>
+        <td class="n">${x.percent != null ? num(x.percent) + '% ' + lvBadge(x.level) : '–'}</td>
+        <td><span class="badge st st-${x.status}">${esc(x.status_th)}</span></td></tr>`).join('')}</tbody>
+    </table></div></div></div>`;
 }
 function manageView(v) {
   const sub = v.evals.filter(e => e.status === 'submitted');

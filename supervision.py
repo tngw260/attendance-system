@@ -553,6 +553,23 @@ def init(app, get_db, login_required, current_user, get_settings):
             pre_seen = pre_e is not None and pre_e['status'] == 'submitted' and \
                 (mgr or pre_e in mine or is_teacher or all_done)
             d.update(pre_result=observe_result(form_of(v, 'pre'), jl(pre_e['scores'], {})) if pre_seen else None)
+            # ประวัติการนิเทศของครูคนนี้ในภาคเรียนอื่น (ผลที่แปลแล้ว) — ฝ่ายวิชาการและเจ้าตัวเห็น
+            hist = []
+            if (mgr or is_teacher) and v['teacher_id']:
+                for h in con.execute('SELECT * FROM sv_visits WHERE teacher_id=? AND id<>? ORDER BY date DESC',
+                                     (v['teacher_id'], vid)).fetchall():
+                    hev = con.execute('SELECT * FROM sv_evals WHERE visit_id=?', (h['id'],)).fetchall()
+                    row = dict(term=h['term'], date=h['date'], code=h['code'], title=h['title'],
+                               class_label=h['class_label'], **progress(h, hev))
+                    res = result_of(h, hev)
+                    if res:
+                        row.update(percent=res['percent'], level=res['level'])
+                    hp = next((e for e in hev if e['round'] == 'pre' and e['status'] == 'submitted'), None)
+                    if hp and form_of(h, 'pre').get('kind') == 'observe':
+                        ob = observe_result(form_of(h, 'pre'), jl(hp['scores'], {}))
+                        row.update(obs_mean=ob['mean'], obs_level=ob['level'])
+                    hist.append(row)
+            d.update(history=hist)
             d.update(form=v['form'], pre_form=v['pre_form'], plan_no=v['plan_no'], unit=v['unit'], topic=v['topic'], focus=v['focus'],
                      reflection=jl(v['reflection'], {}), agreed=v['agreed'], ack_at=v['ack_at'],
                      is_teacher=is_teacher, can_manage=mgr, evals=out,
@@ -569,7 +586,8 @@ def init(app, get_db, login_required, current_user, get_settings):
             return None, 'เลือกวันที่นิเทศ'
         term = term_for_date(con, date, settings)
         if not term:
-            return None, 'วันที่เลือกอยู่นอกภาคเรียนในตารางสอน'
+            return None, ('ยังไม่มีตารางสอนของภาคเรียนที่วันนี้อยู่ — สร้าง/นำเข้าตารางสอนภาคเรียนนั้นก่อน '
+                          '(เมนู วิชาการ → ตารางสอน) แล้วค่อยสร้างนัดนิเทศ เพราะคาบสอนดึงจากตารางสอน')
         code = clean(b.get('code'), 20)
         if not code:
             return None, 'เลือกคาบสอนที่จะนิเทศ'
