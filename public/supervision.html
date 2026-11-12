@@ -870,42 +870,87 @@ async function deleteVisit() {
 }
 
 // ── สรุปทั้งโรงเรียน ───────────────────────────────────
+// สรุปผลแยก 2 ปุ่ม: สังเกตการสอน / นิเทศภายใน
+let SUM_PART = 'obs';
+function setSumPart(p) { SUM_PART = p; loadSummary(); }
 async function loadSummary() {
   const box = $('listView');
   let s;
   try { s = await apiFetch('/api/sv/summary?term=' + encodeURIComponent(term())); }
   catch (e) { box.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; return; }
-  const c = s.count;
-  box.innerHTML = `
-    <div class="sec"><h2>ภาพรวมการนิเทศ ภาคเรียนที่ ${esc(term())}
-      <span class="float-end d-flex gap-2 no-print">
-        <a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" href="/sv-print.html?doc=obs&blank=1"><i class="bi bi-file-earmark me-1"></i>แบบสังเกตเปล่า</a>
-        <a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="/sv-print.html?doc=summary&term=${encodeURIComponent(term())}"><i class="bi bi-printer me-1"></i>พิมพ์สรุปรวม</a></span></h2><div class="body">
-      <div class="row g-3 text-center">
+  const c = s.count, of = META.forms[s.observe.form];
+  const full = s.visits.filter(v => v.kind !== 'obs');
+  const observed = s.visits.filter(v => v.obs_mean != null);
+  const tabs = `<div class="stage-tabs no-print" role="tablist">
+      <button type="button" role="tab" aria-selected="${SUM_PART === 'obs'}" class="${SUM_PART === 'obs' ? 'on' : ''}" onclick="setSumPart('obs')">
+        <i class="bi bi-eye"></i><span><b>สรุปสังเกตการสอน</b><small>รอบที่ 1 · เพื่อนคู่นิเทศ · แบบสังเกตชั้นเรียน PEER CARE</small>
+        <span class="${observed.length ? 'ok' : 'text-muted'}">ส่งผลแล้ว ${observed.length}/${s.visits.length} นัด</span></span></button>
+      <button type="button" role="tab" aria-selected="${SUM_PART === 'main'}" class="${SUM_PART === 'main' ? 'on' : ''}" onclick="setSumPart('main')">
+        <i class="bi bi-clipboard2-check"></i><span><b>สรุปนิเทศภายใน</b><small>รอบที่ 2 · กรรมการ 3 คน · ${esc(META.forms[s.form].name)}</small>
+        <span class="${c.done ? 'ok' : 'text-muted'}">แปลผลแล้ว ${c.done}/${full.length} คน</span></span></button>
+    </div>`;
+  let h = tabs;
+  if (SUM_PART === 'obs') {
+    const num = x => x == null ? '–' : Number(x).toFixed(2);   // ค่าเฉลี่ยเต็ม 5 แสดงทศนิยม 2 ตำแหน่งเหมือนแบบฟอร์ม
+    const waiting = s.visits.filter(v => v.obs_mean == null);
+    h += `<div class="sec"><h2><i class="bi bi-eye me-1"></i>สรุปผลการสังเกตการสอน · ภาคเรียนที่ ${esc(term())}
+        <span class="float-end d-flex gap-2 no-print">
+          <a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" href="/sv-print.html?doc=obs&blank=1"><i class="bi bi-file-earmark me-1"></i>แบบสังเกตเปล่า</a>
+          <a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="/sv-print.html?doc=summary&part=obs&term=${encodeURIComponent(term())}"><i class="bi bi-printer me-1"></i>พิมพ์สรุปสังเกตการสอน</a></span></h2>
+      <div class="body"><div class="row g-3 text-center">
+        <div class="col-6 col-md-3"><div class="big">${s.visits.length}</div><div class="text-muted">นัดสังเกตการสอน</div></div>
+        <div class="col-6 col-md-3"><div class="big">${observed.length}</div><div class="text-muted">ส่งผลแล้ว</div></div>
+        <div class="col-6 col-md-3"><div class="big">${waiting.length}</div><div class="text-muted">รอสังเกต</div></div>
+        <div class="col-6 col-md-3"><div class="big">${s.observe.mean == null ? '–' : num(s.observe.mean)}</div><div class="text-muted">เฉลี่ยทั้งโรงเรียน (เต็ม 5) ${s.observe.level ? lvBadge(s.observe.level) : ''}</div></div>
+      </div></div></div>
+      <div class="sec"><h2>ผลรายครู</h2><div class="body"><div class="table-responsive"><table class="table table-sm table-hover res mb-0">
+        <thead><tr><th>ครูผู้รับการสังเกต</th><th>ผู้สังเกต (เพื่อนคู่นิเทศ)</th><th>วัน/คาบที่สังเกต</th>
+          ${of.parts.map(p => `<th class="n" title="${esc(p.title)}">${esc(p.title.split(' ')[0])}</th>`).join('')}<th class="n">รวมเฉลี่ย</th><th>ระดับ</th></tr></thead>
+        <tbody>${s.visits.map(v => `<tr role="button" onclick="STAGE[${v.id}]='obs';openVisit(${v.id})"><td>${esc(v.teacher_name)}${v.kind === 'obs' ? ' <span class="badge text-bg-info">เพิ่มเติม</span>' : ''}</td>
+          <td>${esc(v.observer || '–')}</td><td>${v.pre_date ? thDate(v.pre_date) + (v.pre_period ? ' คาบ ' + esc(v.pre_period) : '') : '<span class="text-muted">ยังไม่เลือก</span>'}</td>
+          ${of.parts.map(p => { const x = (v.obs_parts || []).find(y => y.id === p.id); return `<td class="n">${x && x.mean != null ? num(x.mean) : '–'}</td>`; }).join('')}
+          <td class="n fw-semibold">${v.obs_mean != null ? num(v.obs_mean) : '–'}</td><td>${v.obs_level ? lvBadge(v.obs_level) : '<span class="badge text-bg-light border">รอสังเกต</span>'}</td></tr>`).join('')
+          || `<tr><td colspan="${5 + of.parts.length}" class="text-center text-muted">ยังไม่มีนัด</td></tr>`}</tbody>
+      </table></div></div></div>
+      <div class="sec"><h2>ค่าเฉลี่ยรายด้านทั้งโรงเรียน</h2><div class="body"><div class="table-responsive"><table class="table table-sm res mb-0">
+        <thead><tr><th>ด้าน</th><th class="n">ค่าเฉลี่ย</th><th>ระดับ</th></tr></thead>
+        <tbody>${s.observe.parts.map(p => `<tr><td>${esc(p.title)}</td><td class="n">${num(p.mean)}</td><td>${p.level ? lvBadge(p.level) : '–'}</td></tr>`).join('')}
+          <tr class="fw-bold"><td>รวมเฉลี่ยทุกด้าน</td><td class="n">${num(s.observe.mean)}</td><td>${s.observe.level ? lvBadge(s.observe.level) : '–'}</td></tr></tbody>
+      </table></div>
+      ${waiting.length ? `<div class="mt-3"><span class="text-muted">รอสังเกต (${waiting.length}):</span> ${waiting.map(v => `${esc(v.teacher_name)} <span class="text-muted">← ${esc(v.observer || '–')}</span>`).join(' · ')}</div>` : ''}
+      </div></div>`;
+  } else {
+    h += `<div class="sec"><h2><i class="bi bi-clipboard2-check me-1"></i>สรุปผลการนิเทศภายใน · ภาคเรียนที่ ${esc(term())}
+        <span class="float-end d-flex gap-2 no-print">
+          <a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="/sv-print.html?doc=summary&part=main&term=${encodeURIComponent(term())}"><i class="bi bi-printer me-1"></i>พิมพ์สรุปนิเทศภายใน</a></span></h2>
+      <div class="body"><div class="row g-3 text-center">
         <div class="col-6 col-md-3"><div class="big">${c.teachers}</div><div class="text-muted">ครูทั้งหมด</div></div>
-        <div class="col-6 col-md-3"><div class="big">${c.observed}</div><div class="text-muted">เพื่อนคู่นิเทศสังเกตแล้ว ${s.observe.mean != null ? `<div>เฉลี่ย ${num(s.observe.mean)} ${lvBadge(s.observe.level)}</div>` : ''}</div></div>
-        <div class="col-6 col-md-3"><div class="big">${c.done}</div><div class="text-muted">ประเมินครบแล้ว</div></div>
+        <div class="col-6 col-md-3"><div class="big">${full.filter(v => v.date).length}</div><div class="text-muted">กำหนดวันนิเทศภายในแล้ว</div></div>
+        <div class="col-6 col-md-3"><div class="big">${c.done}</div><div class="text-muted">ประเมินครบ 3 คนแล้ว</div></div>
         <div class="col-6 col-md-3"><div class="big">${s.percent == null ? '–' : num(s.percent) + '%'}</div><div class="text-muted">เฉลี่ยทั้งโรงเรียน ${s.level ? lvBadge(s.level) : ''}</div></div>
       </div>
-      ${s.not_scheduled.length ? `<div class="mt-3"><span class="text-muted">ยังไม่มีนัดนิเทศ (${s.not_scheduled.length} คน):</span> ${s.not_scheduled.map(esc).join(' · ')}</div>` : ''}
-    </div></div>
-    <div class="sec"><h2>ผลรายครู</h2><div class="body"><div class="table-responsive"><table class="table table-sm table-hover res mb-0">
-      <thead><tr><th>ครู</th><th>กลุ่มสาระ</th><th>วันที่</th><th>สถานะ</th><th class="n">คะแนน</th><th class="n">ร้อยละ</th><th>ระดับ</th></tr></thead>
-      <tbody>${s.visits.map(v => `<tr role="button" onclick="openVisit(${v.id})"><td>${esc(v.teacher_name)}</td><td>${esc(v.area || '–')}</td><td>${thDate(v.date)}</td>
-        <td><span class="badge st st-${v.status}">${esc(v.status_th)}</span></td>
-        <td class="n">${v.total != null ? `${num(v.total)}/${v.full}` : '–'}</td><td class="n">${v.percent != null ? num(v.percent) : '–'}</td>
-        <td>${v.level ? lvBadge(v.level) : '–'}</td></tr>`).join('') || '<tr><td colspan="7" class="text-center text-muted">ยังไม่มีนัดนิเทศ</td></tr>'}</tbody>
-    </table></div></div></div>
-    <div class="row g-3">
-      <div class="col-lg-7"><div class="sec"><h2>ค่าเฉลี่ยรายข้อทั้งโรงเรียน</h2><div class="body"><div class="table-responsive"><table class="table table-sm res mb-0">
-        <thead><tr><th>รายการประเมิน</th><th class="n">เฉลี่ย</th><th>แปลผล</th></tr></thead>
-        <tbody>${s.items.map(it => `<tr><td>${esc(it.title)}</td><td class="n">${num(it.mean)}</td><td>${it.level ? lvBadge(it.level) : '–'}</td></tr>`).join('')}</tbody>
-      </table></div></div></div></div>
-      <div class="col-lg-5"><div class="sec"><h2>รายกลุ่มสาระ</h2><div class="body"><div class="table-responsive"><table class="table table-sm res mb-0">
-        <thead><tr><th>กลุ่มสาระ</th><th class="n">ครู</th><th class="n">ร้อยละเฉลี่ย</th></tr></thead>
-        <tbody>${s.areas.map(a => `<tr><td>${esc(a.area)}</td><td class="n">${a.n}</td><td class="n">${num(a.percent)}</td></tr>`).join('') || '<tr><td colspan="3" class="text-center text-muted">ยังไม่มีผล</td></tr>'}</tbody>
-      </table></div></div></div></div>
-    </div>`;
+      ${s.not_scheduled.length ? `<div class="mt-3"><span class="text-muted">ยังไม่มีนัด (${s.not_scheduled.length} คน):</span> ${s.not_scheduled.map(esc).join(' · ')}</div>` : ''}
+      </div></div>
+      <div class="sec"><h2>ผลรายครู</h2><div class="body"><div class="table-responsive"><table class="table table-sm table-hover res mb-0">
+        <thead><tr><th>ครู</th><th>กลุ่มสาระ</th><th>วันนิเทศภายใน</th><th>กรรมการส่งแล้ว</th><th class="n">คะแนน</th><th class="n">ร้อยละ</th><th>ระดับ</th></tr></thead>
+        <tbody>${full.map(v => `<tr role="button" onclick="STAGE[${v.id}]='main';openVisit(${v.id})"><td>${esc(v.teacher_name)}</td><td>${esc(v.area || '–')}</td>
+          <td>${v.date ? thDate(v.date) + ' คาบ ' + esc(v.period) : '<span class="text-muted">ยังไม่กำหนด</span>'}</td>
+          <td>${v.main_done}/3</td>
+          <td class="n">${v.total != null ? `${num(v.total)}/${v.full}` : '–'}</td><td class="n">${v.percent != null ? num(v.percent) : '–'}</td>
+          <td>${v.level ? lvBadge(v.level) : '–'}</td></tr>`).join('') || '<tr><td colspan="7" class="text-center text-muted">ยังไม่มีนัดนิเทศ</td></tr>'}</tbody>
+      </table></div></div></div>
+      <div class="row g-3">
+        <div class="col-lg-7"><div class="sec"><h2>ค่าเฉลี่ยรายข้อทั้งโรงเรียน</h2><div class="body"><div class="table-responsive"><table class="table table-sm res mb-0">
+          <thead><tr><th>รายการประเมิน</th><th class="n">เฉลี่ย</th><th>แปลผล</th></tr></thead>
+          <tbody>${s.items.map(it => `<tr><td>${esc(it.title)}</td><td class="n">${num(it.mean)}</td><td>${it.level ? lvBadge(it.level) : '–'}</td></tr>`).join('')}</tbody>
+        </table></div></div></div></div>
+        <div class="col-lg-5"><div class="sec"><h2>รายกลุ่มสาระ</h2><div class="body"><div class="table-responsive"><table class="table table-sm res mb-0">
+          <thead><tr><th>กลุ่มสาระ</th><th class="n">ครู</th><th class="n">ร้อยละเฉลี่ย</th></tr></thead>
+          <tbody>${s.areas.map(a => `<tr><td>${esc(a.area)}</td><td class="n">${a.n}</td><td class="n">${num(a.percent)}</td></tr>`).join('') || '<tr><td colspan="3" class="text-center text-muted">ยังไม่มีผล</td></tr>'}</tbody>
+        </table></div></div></div></div>
+      </div>`;
+  }
+  box.innerHTML = h;
 }
 </script>
 </body>

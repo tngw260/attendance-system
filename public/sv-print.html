@@ -58,6 +58,12 @@
     .paper .stat { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; margin: 2mm 0 3mm; }
     .paper .stat div { border: .75pt solid #000; text-align: center; padding: 1.5mm; line-height: 1.15; }
     .paper .stat b { display: block; font-size: 20pt; }
+    /* ใบสรุป: ให้พอดี A4 หน้าเดียวเท่าที่ทำได้ — โลโก้เล็กลง ช่องสถิติ 2 บรรทัด ผู้ลงนาม 3 คนแถวเดียว */
+    .paper.sumdoc .logo { height: 20mm; margin-bottom: 1mm; }
+    .paper.sumdoc .stat div { padding: 1mm; }
+    .paper.sumdoc .stat b { display: inline; font-size: 18pt; margin-right: 1.5mm; }
+    .paper.sumdoc table.g.sum td, .paper.sumdoc table.g.sum th { line-height: 1.1; }
+    .paper .sign.three { grid-template-columns: repeat(3, 1fr); gap: 3mm; font-size: 15pt; margin-top: 5mm; }
 
     @media print {
       html { color-scheme: light !important; }
@@ -177,57 +183,80 @@ async function renderObs() {
   $('doc').innerHTML = h;
 }
 
-// ── สรุปผลการนิเทศทั้งโรงเรียน ─────────────────────────────
+// ── สรุปผล (แยก ?part=obs สังเกตการสอน / ?part=main นิเทศภายใน) ─────────────
 async function renderSummary() {
-  const term = Q.get('term') || '';
+  const term = Q.get('term') || '', part = Q.get('part') === 'main' ? 'main' : 'obs';
   const [meta, s] = await Promise.all([apiFetch('/api/sv/meta'), apiFetch('/api/sv/summary?term=' + encodeURIComponent(term))]);
   const [sem, yr] = termParts(term), c = s.count, of = meta.forms[s.observe.form], mf = meta.forms[s.form];
-  document.title = `สรุปผลการนิเทศการสอน ${term}`;
   const lv = t => esc(t || '');
-  const signers = [...(s.signers || [])];
-  const dir = THEME.director_name ? { name: THEME.director_name, title: (THEME.director_title || 'ผู้อำนวยการโรงเรียน') + (String(THEME.director_title || '').includes('โรงเรียน') ? '' : esc(THEME.school_name || '').replace(/^โรงเรียน/, '')) } : null;
-  let h = `<div class="paper">${header(['สรุปผลการนิเทศการสอน',
-      `ตามระบบการนิเทศภายในสถานศึกษา ${esc(of.subtitle ? 'PEER CARE Model' : '')}`,
-      `ภาคเรียนที่ ${TH(sem)} ปีการศึกษา ${TH(yr)}`, esc(THEME.school_name || 'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม')])}
-    <div class="stat">
-      <div>ครูทั้งหมด<b>${TH(c.teachers)}</b>คน</div>
-      <div>เพื่อนคู่นิเทศสังเกตแล้ว<b>${TH(c.observed)}</b>คน</div>
-      <div>นิเทศครบแล้ว<b>${TH(c.done)}</b>คน</div>
-      <div>ยังไม่มีนัด<b>${TH(s.not_scheduled.length)}</b>คน</div>
-    </div>
-    <p class="b">๑. ผลรายบุคคล</p>
-    <table class="g sum"><colgroup><col style="width:9mm"><col style="width:46mm"><col><col style="width:21mm"><col style="width:16mm"><col style="width:16mm"><col style="width:16mm"><col style="width:17mm"></colgroup>
-      <thead><tr><th rowspan="2">ที่</th><th rowspan="2">ชื่อ-นามสกุล</th><th rowspan="2">กลุ่มสาระการเรียนรู้</th><th rowspan="2">วันที่นิเทศ</th>
-        <th colspan="2">สังเกตชั้นเรียน (เต็ม ๕)</th><th colspan="2">นิเทศการสอน</th></tr>
-        <tr><th>ค่าเฉลี่ย</th><th>ระดับ</th><th>ร้อยละ</th><th>ระดับ</th></tr></thead>
-      <tbody>${s.visits.map((v, i) => `<tr><td class="c">${TH(i + 1)}</td><td>${esc(v.teacher_name)}</td><td>${esc(v.area || '-')}</td>
-          <td class="c">${v.date ? (() => { const [y, m, d] = v.date.split('-').map(Number); return TH(`${d} `) + MON[m - 1] + TH(` ${(y + 543) % 100}`); })() : (v.kind === 'obs' ? 'สังเกตเพิ่ม' : 'ยังไม่กำหนด')}</td>
-          <td class="c">${v.obs_mean != null ? N2(v.obs_mean) : '-'}</td><td class="c">${lv(v.obs_level) || '-'}</td>
-          <td class="c">${v.percent != null ? N2(v.percent) : '-'}</td><td class="c">${lv(v.level) || (v.status === 'scheduled' ? 'รอนิเทศ' : '-')}</td></tr>`).join('')
-        || '<tr><td colspan="8" class="c">ยังไม่มีนัดนิเทศ</td></tr>'}
-        <tr class="b"><td colspan="4" class="c b">เฉลี่ยทั้งโรงเรียน</td><td class="c b">${s.observe.mean != null ? N2(s.observe.mean) : '-'}</td><td class="c">${lv(s.observe.level) || '-'}</td>
-          <td class="c b">${s.percent != null ? N2(s.percent) : '-'}</td><td class="c">${lv(s.level) || '-'}</td></tr></tbody></table>
-    ${s.not_scheduled.length ? `<p class="muted" style="font-size:14pt;margin-top:1mm">ยังไม่มีนัดนิเทศ: ${s.not_scheduled.map(esc).join(', ')}</p>` : ''}
-    <p class="b" style="margin-top:3mm">๒. ผลการสังเกตชั้นเรียนรายด้าน (เพื่อนคู่นิเทศ ${TH(c.observed)} คน)</p>
-    <table class="g sum"><colgroup><col><col style="width:28mm"><col style="width:40mm"></colgroup>
-      <thead><tr><th>ด้าน</th><th>ค่าเฉลี่ย</th><th>ระดับ</th></tr></thead>
-      <tbody>${s.observe.parts.map(p => `<tr><td>${esc(p.title)}</td><td class="c">${p.mean != null ? N2(p.mean) : '-'}</td><td class="c">${lv(p.level) || '-'}</td></tr>`).join('')}
-        <tr><td class="c b">รวมเฉลี่ยทุกด้าน</td><td class="c b">${s.observe.mean != null ? N2(s.observe.mean) : '-'}</td><td class="c">${lv(s.observe.level) || '-'}</td></tr></tbody></table>
-    <p class="b" style="margin-top:3mm">๓. ผลการนิเทศการสอนรายข้อ (กรรมการ ๓ คน · ${TH(c.done)} คนที่ประเมินครบ · คะแนนเต็มข้อละ ${TH(Math.max(...mf.scale.map(x => x[0])))})</p>
-    <table class="g sum"><colgroup><col style="width:9mm"><col><col style="width:28mm"><col style="width:40mm"></colgroup>
-      <thead><tr><th>ที่</th><th>รายการประเมิน</th><th>ค่าเฉลี่ย</th><th>ระดับ</th></tr></thead>
-      <tbody>${s.items.map((it, i) => `<tr><td class="c">${TH(i + 1)}</td><td>${esc(it.title)}</td><td class="c">${it.mean != null ? N2(it.mean) : '-'}</td><td class="c">${lv(it.level) || '-'}</td></tr>`).join('')}</tbody></table>
-    ${s.areas.length ? `<p class="b" style="margin-top:3mm">๔. ร้อยละเฉลี่ยผลการนิเทศรายกลุ่มสาระการเรียนรู้</p>
-    <table class="g sum"><colgroup><col><col style="width:28mm"><col style="width:40mm"></colgroup>
-      <thead><tr><th>กลุ่มสาระการเรียนรู้</th><th>จำนวนครู</th><th>ร้อยละเฉลี่ย</th></tr></thead>
-      <tbody>${s.areas.map(a => `<tr><td>${esc(a.area)}</td><td class="c">${TH(a.n)}</td><td class="c">${N2(a.percent)}</td></tr>`).join('')}</tbody></table>` : ''}
-    <div class="sign">
-      <div class="s">ลงชื่อ.......................................................ผู้รายงาน<br>(.......................................................)<br>ผู้รับผิดชอบงานนิเทศภายใน</div>
-      ${signers.slice(0, 1).map(x => `<div class="s">ลงชื่อ.......................................................<br>(${esc(x.name)})<br>${esc(x.title)}</div>`).join('')
-        || '<div class="s">ลงชื่อ.......................................................<br>(.......................................................)<br>หัวหน้ากลุ่มบริหารงานวิชาการ</div>'}
-      <div class="s" style="grid-column:1/-1">ลงชื่อ.......................................................<br>(${dir ? esc(dir.name) : '.......................................................'})<br>${dir ? esc(THEME.director_title || 'ผู้อำนวยการโรงเรียน') : 'ผู้อำนวยการโรงเรียน'}</div>
-    </div>
-  </div>`;
+  const dshort = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-').map(Number); return TH(`${d} `) + MON[m - 1] + TH(` ${(y + 543) % 100}`); };
+  const school = esc(THEME.school_name || 'โรงเรียนตะกั่วทุ่งงานทวีวิทยาคม');
+  const signers = s.signers || [];
+  const dots = '....................................';
+  const sign = `<div class="sign three">
+      <div class="s">ลงชื่อ${dots}<br>(${dots})<br>ผู้รับผิดชอบงานนิเทศภายใน<br>ผู้รายงาน</div>
+      ${signers.slice(0, 1).map(x => `<div class="s">ลงชื่อ${dots}<br>(${esc(x.name)})<br>${esc(x.title)}</div>`).join('')
+        || `<div class="s">ลงชื่อ${dots}<br>(${dots})<br>หัวหน้ากลุ่มบริหารงานวิชาการ</div>`}
+      <div class="s">ลงชื่อ${dots}<br>(${THEME.director_name ? esc(THEME.director_name) : dots})<br>${esc(THEME.director_title || 'ผู้อำนวยการโรงเรียน')}</div>
+    </div>`;
+  let h;
+  if (part === 'obs') {
+    document.title = `สรุปผลการสังเกตการสอน ${term}`;
+    const done = s.visits.filter(v => v.obs_mean != null);
+    h = `<div class="paper sumdoc">${header(['สรุปผลการสังเกตการสอน (CLASSROOM OBSERVATION)', 'ตามระบบการนิเทศภายในสถานศึกษา PEER CARE Model',
+        `ภาคเรียนที่ ${TH(sem)} ปีการศึกษา ${TH(yr)}`, school])}
+      <div class="stat">
+        <div>นัดสังเกตการสอน<br><b>${TH(s.visits.length)}</b>นัด</div>
+        <div>ส่งผลแล้ว<br><b>${TH(done.length)}</b>นัด</div>
+        <div>รอสังเกต<br><b>${TH(s.visits.length - done.length)}</b>นัด</div>
+        <div>เฉลี่ยทั้งโรงเรียน<br><b>${s.observe.mean != null ? N2(s.observe.mean) : '-'}</b>${lv(s.observe.level) || '(เต็ม ๕)'}</div>
+      </div>
+      <p class="b">๑. ผลการสังเกตชั้นเรียนรายบุคคล (คะแนนเต็ม ๕)</p>
+      <table class="g sum"><colgroup><col style="width:8mm"><col style="width:38mm"><col style="width:36mm"><col style="width:20mm">${of.parts.map(() => '<col style="width:11mm">').join('')}<col style="width:14mm"><col></colgroup>
+        <thead><tr><th>ที่</th><th>ครูผู้รับการสังเกต</th><th>ผู้สังเกต<br>(เพื่อนคู่นิเทศ)</th><th>วันที่สังเกต</th>
+          ${of.parts.map(p => `<th>ด้าน ${esc(p.title.split(' ')[0].replace('.', ''))}</th>`).join('')}<th>เฉลี่ย</th><th>ระดับ</th></tr></thead>
+        <tbody>${s.visits.map((v, i) => `<tr><td class="c">${TH(i + 1)}</td><td>${esc(v.teacher_name)}${v.kind === 'obs' ? ' (เพิ่มเติม)' : ''}</td><td>${esc(v.observer || '-')}</td>
+            <td class="c">${v.pre_date ? dshort(v.pre_date) : '-'}</td>
+            ${of.parts.map(p => { const x = (v.obs_parts || []).find(y => y.id === p.id); return `<td class="c">${x && x.mean != null ? N2(x.mean) : '-'}</td>`; }).join('')}
+            <td class="c b">${v.obs_mean != null ? N2(v.obs_mean) : '-'}</td><td class="c">${lv(v.obs_level) || 'รอสังเกต'}</td></tr>`).join('')
+          || `<tr><td colspan="${6 + of.parts.length}" class="c">ยังไม่มีนัด</td></tr>`}
+          <tr><td colspan="4" class="c b">เฉลี่ยทั้งโรงเรียน</td>${s.observe.parts.map(p => `<td class="c b">${p.mean != null ? N2(p.mean) : '-'}</td>`).join('')}
+            <td class="c b">${s.observe.mean != null ? N2(s.observe.mean) : '-'}</td><td class="c">${lv(s.observe.level) || '-'}</td></tr></tbody></table>
+      <p class="b" style="margin-top:3mm">๒. ผลการสังเกตชั้นเรียนรายด้าน</p>
+      <table class="g sum"><colgroup><col><col style="width:28mm"><col style="width:40mm"></colgroup>
+        <thead><tr><th>ด้าน</th><th>ค่าเฉลี่ย</th><th>ระดับ</th></tr></thead>
+        <tbody>${s.observe.parts.map(p => `<tr><td>${esc(p.title)}</td><td class="c">${p.mean != null ? N2(p.mean) : '-'}</td><td class="c">${lv(p.level) || '-'}</td></tr>`).join('')}
+          <tr><td class="c b">รวมเฉลี่ยทุกด้าน</td><td class="c b">${s.observe.mean != null ? N2(s.observe.mean) : '-'}</td><td class="c">${lv(s.observe.level) || '-'}</td></tr></tbody></table>
+      <p class="muted" style="font-size:14pt;margin-top:1mm">เกณฑ์: ${of.mean_levels.map(([lo, n], i) => `${N2(i === of.mean_levels.length - 1 ? 1 : lo)}–${N2(i ? of.mean_levels[i - 1][0] - 0.01 : 5)} ${esc(n)}`).join(' · ')}</p>
+      ${sign}</div>`;
+  } else {
+    document.title = `สรุปผลการนิเทศภายใน ${term}`;
+    const full = s.visits.filter(v => v.kind !== 'obs');
+    h = `<div class="paper sumdoc">${header(['สรุปผลการนิเทศภายใน', `ภาคเรียนที่ ${TH(sem)} ปีการศึกษา ${TH(yr)}`, school])}
+      <div class="stat">
+        <div>ครูทั้งหมด<br><b>${TH(c.teachers)}</b>คน</div>
+        <div>กำหนดวันนิเทศแล้ว<br><b>${TH(full.filter(v => v.date).length)}</b>คน</div>
+        <div>ประเมินครบแล้ว<br><b>${TH(c.done)}</b>คน</div>
+        <div>ร้อยละเฉลี่ย<br><b>${s.percent != null ? N2(s.percent) : '-'}</b>${lv(s.level) || '-'}</div>
+      </div>
+      <p class="b">๑. ผลการนิเทศภายในรายบุคคล (กรรมการ ๓ คน)</p>
+      <table class="g sum"><colgroup><col style="width:9mm"><col style="width:46mm"><col><col style="width:22mm"><col style="width:18mm"><col style="width:20mm"></colgroup>
+        <thead><tr><th>ที่</th><th>ชื่อ-นามสกุล</th><th>กลุ่มสาระการเรียนรู้</th><th>วันที่นิเทศ</th><th>ร้อยละ</th><th>ระดับ</th></tr></thead>
+        <tbody>${full.map((v, i) => `<tr><td class="c">${TH(i + 1)}</td><td>${esc(v.teacher_name)}</td><td>${esc(v.area || '-')}</td>
+            <td class="c">${v.date ? dshort(v.date) : 'ยังไม่กำหนด'}</td><td class="c">${v.percent != null ? N2(v.percent) : '-'}</td>
+            <td class="c">${lv(v.level) || (v.date ? 'รอผล' : '-')}</td></tr>`).join('') || '<tr><td colspan="6" class="c">ยังไม่มีนัด</td></tr>'}
+          <tr><td colspan="4" class="c b">เฉลี่ยทั้งโรงเรียน</td><td class="c b">${s.percent != null ? N2(s.percent) : '-'}</td><td class="c">${lv(s.level) || '-'}</td></tr></tbody></table>
+      ${s.not_scheduled.length ? `<p class="muted" style="font-size:14pt;margin-top:1mm">ยังไม่มีนัด: ${s.not_scheduled.map(esc).join(', ')}</p>` : ''}
+      <p class="b" style="margin-top:3mm">๒. ผลการนิเทศภายในรายข้อ (${TH(c.done)} คนที่ประเมินครบ · คะแนนเต็มข้อละ ${TH(Math.max(...mf.scale.map(x => x[0])))})</p>
+      <table class="g sum"><colgroup><col style="width:9mm"><col><col style="width:28mm"><col style="width:40mm"></colgroup>
+        <thead><tr><th>ที่</th><th>รายการประเมิน</th><th>ค่าเฉลี่ย</th><th>ระดับ</th></tr></thead>
+        <tbody>${s.items.map((it, i) => `<tr><td class="c">${TH(i + 1)}</td><td>${esc(it.title)}</td><td class="c">${it.mean != null ? N2(it.mean) : '-'}</td><td class="c">${lv(it.level) || '-'}</td></tr>`).join('')}</tbody></table>
+      ${s.areas.length ? `<p class="b" style="margin-top:3mm">๓. ร้อยละเฉลี่ยรายกลุ่มสาระการเรียนรู้</p>
+      <table class="g sum"><colgroup><col><col style="width:28mm"><col style="width:40mm"></colgroup>
+        <thead><tr><th>กลุ่มสาระการเรียนรู้</th><th>จำนวนครู</th><th>ร้อยละเฉลี่ย</th></tr></thead>
+        <tbody>${s.areas.map(a => `<tr><td>${esc(a.area)}</td><td class="c">${TH(a.n)}</td><td class="c">${N2(a.percent)}</td></tr>`).join('')}</tbody></table>` : ''}
+      ${sign}</div>`;
+  }
   $('doc').innerHTML = h;
 }
 </script>

@@ -1047,10 +1047,14 @@ def init(app, get_db, login_required, current_user, get_settings):
                         item_n[it['id']] = item_n.get(it['id'], 0) + 1
                 # ผลการสังเกตการสอนของเพื่อนคู่นิเทศ (แบบสังเกตชั้นเรียน)
                 pre = next((e for e in evals if e['round'] == 'pre' and e['status'] == 'submitted'), None)
+                pre_any = next((e for e in evals if e['round'] == 'pre'), None)
+                d['observer'] = pre_any['evaluator_name'] if pre_any else ''
                 if pre and v['pre_form'] == DEFAULT_PRE_FORM:
                     ob = observe_result(obs_form, jl(pre['scores'], {}))
                     if ob['mean'] is not None:
-                        d.update(obs_mean=ob['mean'], obs_level=ob['level'], observer=pre['evaluator_name'])
+                        d.update(obs_mean=ob['mean'], obs_level=ob['level'], observer=pre['evaluator_name'],
+                                 obs_parts=[dict(id=x['id'], mean=x['mean'], level=x['level']) for x in ob['parts']],
+                                 obs_at=pre['submitted_at'])
                         obs_means.append(ob['mean'])
                         for prt in ob['parts']:
                             obs_sum[prt['id']] = obs_sum.get(prt['id'], 0) + prt['mean']
