@@ -78,11 +78,20 @@
                 </div>
                 <div class="mb-3">
                   <label class="form-label fw-600">ประเภท</label>
-                  <select name="type" class="form-select">
+                  <select name="type" class="form-select" onchange="document.getElementById('mkWrap').hidden = this.value !== 'makeup'">
                     <option value="holiday">วันหยุด</option>
                     <option value="event">กิจกรรม</option>
                     <option value="exam">สอบ</option>
+                    <option value="makeup">สอนชดเชย (เสาร์/อาทิตย์ที่มาเรียน)</option>
                   </select>
+                </div>
+                <div class="mb-3" id="mkWrap" hidden>
+                  <label class="form-label fw-600">ใช้ตารางสอนของวัน</label>
+                  <select name="weekday" class="form-select">
+                    <option value="1">จันทร์</option><option value="2">อังคาร</option><option value="3">พุธ</option>
+                    <option value="4">พฤหัสบดี</option><option value="5">ศุกร์</option>
+                  </select>
+                  <div class="form-text">ระบบสอนแทน ตารางวันนี้ หน้าแรก และหน้า ผอ. จะใช้คาบเรียนของวันที่เลือก</div>
                 </div>
                 <button type="submit" class="btn btn-primary w-100">
                   <i class="bi bi-plus-circle me-2"></i>เพิ่ม
@@ -261,15 +270,16 @@ async function loadHolidays() {
       document.getElementById('holidayList').innerHTML = '<div class="text-center text-muted py-4">ยังไม่มีวันหยุดในปีนี้</div>';
       return;
     }
-    const typeBadge = { holiday: 'bg-danger', event: 'bg-info', exam: 'bg-warning text-dark' };
-    const typeName = { holiday: 'วันหยุด', event: 'กิจกรรม', exam: 'สอบ' };
+    const typeBadge = { holiday: 'bg-danger', event: 'bg-info', exam: 'bg-warning text-dark', makeup: 'bg-success' };
+    const typeName = { holiday: 'วันหยุด', event: 'กิจกรรม', exam: 'สอบ', makeup: 'สอนชดเชย' };
+    const WD = ['', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์'];
     let html = '<div class="card"><div class="table-responsive"><table class="table table-hover mb-0">';
     html += '<thead class="table-light"><tr><th>วันที่</th><th>ชื่อ</th><th>ประเภท</th><th></th></tr></thead><tbody>';
     hs.forEach(h => {
       html += `<tr>
         <td>${formatThaiDateShort(h.date)}</td>
         <td class="fw-500">${h.name}</td>
-        <td><span class="badge ${typeBadge[h.type]||'bg-secondary'}">${typeName[h.type]||h.type}</span></td>
+        <td><span class="badge ${typeBadge[h.type]||'bg-secondary'}">${typeName[h.type]||h.type}</span>${h.type === 'makeup' && h.weekday ? `<div class="small text-muted">ใช้ตารางวัน${WD[h.weekday]}</div>` : ''}</td>
         <td><button class="btn btn-sm btn-link text-danger p-0" onclick="delHoliday('${h.date}', '${h.name.replace(/'/g, "\\'")}')"><i class="bi bi-trash"></i></button></td>
       </tr>`;
     });
@@ -286,10 +296,11 @@ document.getElementById('addHoliday').addEventListener('submit', async (e) => {
   try {
     const res = await apiFetch('/api/holidays', {
       method: 'POST',
-      body: JSON.stringify({ date: fd.get('date'), name: fd.get('name'), type: fd.get('type') })
+      body: JSON.stringify({ date: fd.get('date'), name: fd.get('name'), type: fd.get('type'), weekday: fd.get('weekday') })
     });
     showToast(res.message);
     e.target.reset();
+    document.getElementById('mkWrap').hidden = true;
     loadHolidays();
   } catch (err) { showToast(err.message, 'danger'); }
 });

@@ -163,9 +163,23 @@ def term_for_date(con, date, settings):
     return None
 
 
-def next_school_day(date):
+def tt_day(con, date):
+    """วันของตารางสอนที่ใช้ในวันที่นี้ 1=จันทร์ … 5=ศุกร์ (6–7 = เสาร์-อาทิตย์ ไม่มีเรียน)
+    วันสอนชดเชย (holidays.type='makeup') ใช้ตารางของวันที่ตั้งไว้ใน holidays.weekday เช่น เสาร์ 28 พ.ย. 69 ใช้ตารางวันจันทร์"""
+    r = con.execute("SELECT weekday FROM holidays WHERE date=? AND type='makeup'", (date,)).fetchone()
+    return r['weekday'] if r and r['weekday'] else datetime.date.fromisoformat(date).isoweekday()
+
+
+def makeup_days(con):
+    """วันสอนชดเชยทั้งหมด [{date, weekday, name}] — ส่งให้หน้าเว็บใช้คู่กับ ttDayOf() ใน tt-subs.js"""
+    return [dict(r) for r in con.execute(
+        "SELECT date, weekday, name FROM holidays WHERE type='makeup' AND weekday BETWEEN 1 AND 5 ORDER BY date")]
+
+
+def next_school_day(date, con=None):
+    """วันเรียนถัดไป (ข้ามเสาร์-อาทิตย์ · ถ้าส่ง con มา วันสอนชดเชยนับเป็นวันเรียน)"""
     d = datetime.date.fromisoformat(date) + datetime.timedelta(days=1)
-    while d.isoweekday() > 5:
+    while (tt_day(con, d.isoformat()) if con is not None else d.isoweekday()) > 5:
         d += datetime.timedelta(days=1)
     return d.isoformat()
 
@@ -181,7 +195,8 @@ def day_summary(con, date, settings):
     term = term_for_date(con, date, settings)
     out = dict(date=date, term=dict(id=term['id'], name=term['name']) if term else None,
                holiday=dict(hol) if hol else None, absences=absences, needs=[])
-    if not term or datetime.date.fromisoformat(date).isoweekday() > 5 or (hol and hol['type'] == 'holiday') or not absences:
+    wd = tt_day(con, date)
+    if not term or wd > 5 or (hol and hol['type'] == 'holiday') or not absences:
         return out
     cfg = jl(term['config'], {})
     times = {p['no']: p for p in cfg.get('periods', [])}
@@ -196,7 +211,7 @@ def day_summary(con, date, settings):
 
     for l in con.execute("""SELECT l.*, s.period FROM tt_lessons l JOIN tt_slots s ON s.lesson_id=l.id
                             WHERE l.term_id=? AND s.day=? ORDER BY s.period, l.id""",
-                         (term['id'], datetime.date.fromisoformat(date).isoweekday())).fetchall():
+                         (term['id'], wd)).fetchall():
         tids, classes, p = jl(l['teacher_ids'], []), jl(l['classes'], []), l['period']
         gone = [t for t in tids if away(t, p)]
         if not gone or not classes or len(gone) < len(tids):
@@ -263,7 +278,7 @@ def term_payload(con, term_id):
         'SELECT * FROM tt_teachers ORDER BY sort_order, id').fetchall() if t['id'] in used or t['active']]
     subjects = {s['code']: dict(s) for s in con.execute('SELECT * FROM tt_subjects').fetchall()}
     return dict(term=dict(term, config=jl(term['config'], {})), lessons=lessons,
-                teachers=teachers, subjects=subjects)
+                teachers=teachers, subjects=subjects, makeup=makeup_days(con))
 
 
 def infer_options(slots, lunch_after=4):
@@ -1772,7 +1787,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
             subs = [dict(r) for r in con.execute("""SELECT * FROM tt_subs WHERE date BETWEEN ? AND ?
                                                      OR (kind='swap' AND swap_date BETWEEN ? AND ?) ORDER BY date, period""", (f, t, f, t))]
             holidays = [dict(r) for r in con.execute(
-                'SELECT date, name, type FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date', (f, t))]
+                'SELECT date, name, type, weekday FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date', (f, t))]
             # ชื่อครูทุกคน — ครูที่ย้ายออกแล้วไม่อยู่ในตารางเทอมนี้ แต่ยังมีบันทึกไม่มา/สอนแทนเก่า
             names = {r['id']: r['name'] for r in con.execute('SELECT id, name FROM tt_teachers')}
         return jsonify(absences=absences, subs=subs, holidays=holidays, teacher_names=names)
@@ -1786,9 +1801,9 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
         d = request.args.get('date', '')
         if not DATE_RE.match(d):
             d = datetime.date.today().isoformat()
-        nxt = next_school_day(d)
         s = get_settings()
         with get_db() as con:
+            nxt = next_school_day(d, con)
             me = con.execute('SELECT id FROM tt_teachers WHERE user_id=?', (u['id'],)).fetchone()
             mine, swap_offers = [], []
             if me:
@@ -1953,7 +1968,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
     def teacher_busy(con, tid, d, p, skip_id=None):
         """ครู tid ไม่ว่างวันที่ d คาบ p → เหตุผล หรือ None (มีสอน / ไม่มา / สอนแทนห้องอื่น / สอนคืนจากการแลกคาบ)"""
         term = term_for_date(con, d, get_settings())
-        wd = datetime.date.fromisoformat(d).isoweekday()
+        wd = tt_day(con, d)
         if term:
             for r in con.execute("""SELECT l.code, l.title, l.teacher_ids FROM tt_lessons l JOIN tt_slots s ON s.lesson_id=l.id
                                     WHERE l.term_id=? AND s.day=? AND s.period=?""", (term['id'], wd, p)):
@@ -2091,7 +2106,7 @@ def init(app, get_db, login_required, admin_required, current_user, get_settings
                 return jsonify(success=False, message=f'ครู{first}ไม่ว่างคาบนี้ ({why})'), 409
             # คาบที่จะสอนคืน: คาบสอนของครูคู่แลก ในภาคเรียนที่เผยแพร่ ไม่ใช่วันหยุด และฉันว่าง
             term2 = term_for_date(con, sd, s_)
-            wd2 = datetime.date.fromisoformat(sd).isoweekday()
+            wd2 = tt_day(con, sd)
             hol = con.execute("SELECT 1 FROM holidays WHERE date=? AND type='holiday'", (sd,)).fetchone()
             if not term2 or not published(con, term2['id']) or wd2 > 5 or hol:
                 return jsonify(success=False, message='วันที่สอนคืนไม่มีการเรียนการสอน'), 400

@@ -348,7 +348,8 @@ def init_db():
                 date       TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
                 type       TEXT DEFAULT 'holiday'
-                              CHECK (type IN ('holiday','event','exam')),
+                              CHECK (type IN ('holiday','event','exam','makeup')),
+                weekday    INTEGER,                 -- วันสอนชดเชย: ใช้ตารางสอนของวันไหน 1=จันทร์ … 5=ศุกร์
                 created_at TEXT DEFAULT (datetime('now','localtime'))
             );
 
@@ -463,6 +464,24 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_att_student ON attendance(student_id);
                 """)
                 print("  [Migrate] อัพเดทตาราง attendance รองรับสถานะ 'activity'")
+
+        # Migrate: holidays - วันสอนชดเชย (type 'makeup' + weekday = ใช้ตารางสอนของวันไหน) — สร้างตารางใหม่เพราะ CHECK เดิม
+        hsql = (con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='holidays'").fetchone() or [''])[0] or ''
+        if "'makeup'" not in hsql:
+            con.executescript("""
+                CREATE TABLE holidays_new (
+                    date       TEXT PRIMARY KEY,
+                    name       TEXT NOT NULL,
+                    type       TEXT DEFAULT 'holiday'
+                                  CHECK (type IN ('holiday','event','exam','makeup')),
+                    weekday    INTEGER,
+                    created_at TEXT DEFAULT (datetime('now','localtime'))
+                );
+                INSERT INTO holidays_new (date, name, type, created_at) SELECT date, name, type, created_at FROM holidays;
+                DROP TABLE holidays;
+                ALTER TABLE holidays_new RENAME TO holidays;
+            """)
+            print("  [Migrate] อัพเดทตาราง holidays รองรับวันสอนชดเชย")
 
         # Migrate: behavior_logs.source - allow 'makeup' + 'uniform'
         try:
@@ -3028,17 +3047,32 @@ def api_holidays_create():
     b = request.get_json() or {}
     date = (b.get('date') or '').strip()
     name = (b.get('name') or '').strip()
-    htype = b.get('type', 'holiday')
+    htype = b.get('type') or 'holiday'
+    if htype not in ('holiday', 'event', 'exam', 'makeup'):
+        return jsonify(success=False, message='ประเภทไม่ถูกต้อง'), 400
+    weekday = None
+    if htype == 'makeup':                          # วันสอนชดเชย: ต้องบอกว่าใช้ตารางสอนของวันไหน
+        try:
+            weekday = int(b.get('weekday'))
+        except (TypeError, ValueError):
+            weekday = 0
+        if not 1 <= weekday <= 5:
+            return jsonify(success=False, message='เลือกว่าวันสอนชดเชยใช้ตารางสอนของวันไหน (จันทร์–ศุกร์)'), 400
+        name = name or 'สอนชดเชย'
+    try:
+        datetime.date.fromisoformat(date)
+    except ValueError:
+        date = ''
     if not date or not name:
         return jsonify(success=False, message='กรอกวันที่และชื่อ'), 400
     try:
         with get_db() as con:
-            con.execute('INSERT INTO holidays (date, name, type) VALUES (?,?,?)',
-                        (date, name, htype))
-            audit_log(con, 'create_holiday', 'holiday', None, {'date': date, 'name': name})
+            con.execute('INSERT INTO holidays (date, name, type, weekday) VALUES (?,?,?,?)',
+                        (date, name, htype, weekday))
+            audit_log(con, 'create_holiday', 'holiday', None, {'date': date, 'name': name, 'type': htype, 'weekday': weekday})
     except sqlite3.IntegrityError:
-        return jsonify(success=False, message='มีวันหยุดนี้อยู่แล้ว'), 400
-    return jsonify(success=True, message='เพิ่มวันหยุดสำเร็จ')
+        return jsonify(success=False, message='วันที่นี้มีในปฏิทินแล้ว — ลบของเดิมก่อน'), 400
+    return jsonify(success=True, message='เพิ่มวันสอนชดเชยแล้ว' if htype == 'makeup' else 'เพิ่มวันหยุดสำเร็จ')
 
 @app.delete('/api/holidays/<date>')
 @admin_required

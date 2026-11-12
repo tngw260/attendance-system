@@ -24,7 +24,7 @@ import json
 import re
 import secrets
 
-from timetable import bare_name, jl, term_for_date
+from timetable import bare_name, jl, term_for_date, tt_day
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sv_visits (
@@ -403,13 +403,14 @@ def init(app, get_db, login_required, current_user, get_settings):
         except (TypeError, ValueError):
             return None, []
         term = term_for_date(con, date, settings)
-        if not term or d.isoweekday() > 5:
+        wd = tt_day(con, date)                       # วันสอนชดเชย (เสาร์) ใช้ตารางวันที่ตั้งไว้
+        if not term or wd > 5:
             return term, []
         times = {p['no']: p for p in jl(term['config'], {}).get('periods', [])}
         slots = {}
         for r in con.execute("""SELECT l.id, l.code, l.title, l.kind, l.classes, l.track, l.teacher_ids, s.period
                                 FROM tt_lessons l JOIN tt_slots s ON s.lesson_id=l.id
-                                WHERE l.term_id=? AND s.day=? ORDER BY s.period""", (term['id'], d.isoweekday())):
+                                WHERE l.term_id=? AND s.day=? ORDER BY s.period""", (term['id'], wd)):
             if teacher_id in jl(r['teacher_ids'], []) and r['kind'] == 'subject' and r['code']:
                 slots.setdefault(r['id'], dict(r=r, periods=[]))['periods'].append(r['period'])
         out = []

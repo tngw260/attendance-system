@@ -24,7 +24,7 @@ import zipfile
 from xml.sax.saxutils import escape
 
 from classlist import DEFAULT_ADVISORS, THAI_MONTHS
-from timetable import DATE_RE, OPEN_END, day_summary, jl
+from timetable import DATE_RE, OPEN_END, day_summary, jl, tt_day
 
 GARUDA = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'public', 'img', 'garuda.png')
 MONTH_ABBR = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
@@ -146,8 +146,8 @@ def build_memo(con, a, day, settings, pre, names, subjects):
     items = []
     d = iso(f)
     while d <= iso(t):
-        if d.isoweekday() <= 5:
-            ds = d.isoformat()
+        ds = d.isoformat()
+        if tt_day(con, ds) <= 5:                     # วันสอนชดเชย (เสาร์) ใช้ตารางวันที่ตั้งไว้
             subs = {(r['period'], r['lesson_id']): r for r in con.execute('SELECT * FROM tt_subs WHERE date=?', (ds,))}
             for n in day_summary(con, ds, settings)['needs']:
                 if tid in n['absent_ids'] and (not ps or n['period'] in ps):

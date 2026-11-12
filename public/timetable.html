@@ -542,12 +542,13 @@ function teacherCounts(tid) {
 /* ===== มือถือ: รายวัน ===== */
 function mobileHTML(mode, key) {
   const P = periodsFor(mode), now = new Date();
-  const today = now.getDay();                     // 1=จันทร์
+  const mk = makeupOn(todayLocal());                // วันสอนชดเชย (เสาร์) → ไฮไลต์วันที่ใช้ตาราง
+  const today = mk ? mk.weekday : now.getDay();     // 1=จันทร์
   const hhmm = `${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`;
   let html = '<div class="tt-mobile">';
   DAYS.forEach((dn, di) => {
     const d = di + 1;
-    html += `<div class="day${d === today ? ' today' : ''}"><h6>${dn}${d === today ? ' <span class="badge bg-primary">วันนี้</span>' : ''}</h6>`;
+    html += `<div class="day${d === today ? ' today' : ''}"><h6>${dn}${d === today ? ` <span class="badge bg-primary">วันนี้${mk ? ' (สอนชดเชย)' : ''}</span>` : ''}</h6>`;
     P.forEach(x => {
       const ls = cellLessons(mode, key, d, x.no);
       const cur = d === today && hhmm >= x.start && hhmm < x.end;
@@ -653,6 +654,6 @@ async function printDoc(all) {
 </script>
 <script src="/js/tt-editor.js?v=35"></script>
 <script src="/js/tt-solver.js?v=15"></script>
-<script src="/js/tt-subs.js?v=14"></script>
+<script src="/js/tt-subs.js?v=15"></script>
 </body>
 </html>

@@ -29,7 +29,11 @@ const addDays = (s, n) => { const d = dateOf(s); d.setDate(d.getDate() + n); ret
 const wdOf = s => dateOf(s).getDay();                       // 1 = จันทร์ … 5 = ศุกร์
 const todayLocal = () => isoOf(new Date());                  // todayISO() ใน common.js เป็นเวลา UTC (ก่อน 7 โมงได้เมื่อวาน)
 const shortDate = s => { const d = dateOf(s); return `${d.getDate()} ${MON_ABBR[d.getMonth()]} ${String(d.getFullYear() + 543).slice(2)}`; };
-const nextSchoolDay = (s, step) => { let d = s; do { d = addDays(d, step); } while (wdOf(d) === 0 || wdOf(d) === 6); return d; };
+// วันสอนชดเชย (ตั้งที่หน้าแอดมิน → วันหยุด ประเภท "สอนชดเชย") เช่น เสาร์ 28 พ.ย. 69 ใช้ตารางวันจันทร์ — T.makeup จาก /api/tt/terms/:id
+const makeupOn = s => (T?.makeup || []).find(m => m.date === s);
+const ttDayOf = s => makeupOn(s)?.weekday || wdOf(s);        // วันของตารางสอนที่ใช้ 1 = จันทร์ … 5 = ศุกร์ (0/6 = ไม่มีเรียน)
+const DAY_NAMES = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+const nextSchoolDay = (s, step) => { let d = s; do { d = addDays(d, step); } while (ttDayOf(d) === 0 || ttDayOf(d) === 6); return d; };
 
 // อยู่ในช่วงภาคเรียนของตารางที่เปิดอยู่ไหม (ช่วงวันที่จากหน้าตั้งค่า · ไม่มีข้อมูล = ถือว่าอยู่)
 const inTerm = date => !T.term.start_date || (T.term.start_date <= date && date <= T.term.end_date);
@@ -68,7 +72,7 @@ const backsOn = (date, subs = SUB.data?.subs) => (subs || []).filter(s => isSwap
 const swapLabel = s => `${shortDate(s.swap_date)} คาบ ${s.swap_period} ${s.swap_class_label || ''} ${s.swap_subject || ''}`.replace(/\s+/g, ' ').trim();
 
 function needsOn(date) {
-  const wd = wdOf(date);
+  const wd = ttDayOf(date);
   if (wd < 1 || wd > DAYS.length || holidayOn(date)?.type === 'holiday' || !inTerm(date)) return [];
   const out = [];
   periodsOf().forEach(({ no: p }) => {
@@ -98,7 +102,7 @@ function subCounts(date) {                                    // คาบที
 
 // assigned: Map key → sub_id ของวันนั้น (รวมที่กำลังจัดอัตโนมัติ)
 function candidatesFor(n, date, assigned, counts) {
-  const wd = wdOf(date), p = n.p, area = n.l.kind === 'subject' ? (n.l.code || '')[0] : '';
+  const wd = ttDayOf(date), p = n.p, area = n.l.kind === 'subject' ? (n.l.code || '')[0] : '';
   const busySub = new Set([...assigned].filter(([k, sid]) => sid && +k.split('-')[0] === p && k !== n.key).map(([, sid]) => sid));
   const busyBack = new Set(backsOn(date).filter(s => s.swap_period === p).map(s => s.absent_id));
   return T.teachers.filter(t => t.active !== 0 && IDX.byTeacher[t.id]).map(t => {
@@ -292,7 +296,7 @@ function swapSlots(bid) {
   const me = SWAP.a, R = SWAP.data, out = [];
   const absent = (d, p) => R.absences.some(a => a.teacher_id === me && a.date_from <= d && d <= a.date_to && (!a.periods.length || a.periods.includes(p)));
   for (let d = SWAP.from; d <= SWAP.to; d = addDays(d, 1)) {
-    const wd = wdOf(d);
+    const wd = ttDayOf(d);
     if (wd < 1 || wd > 5 || !inTerm(d) || R.holidays.some(h => h.date === d && h.type === 'holiday')) continue;
     periodsOf().forEach(({ no: p }) => {
       if (d === SUB.date && p === SWAP.n.p) return;
@@ -333,9 +337,30 @@ async function answerSwap(key, accept) {
   if (accept) { await loadSubs(); renderSubsBody(); }        // ให้กล่องคาบสอนคืนอัปเดต
 }
 
+/* ── วันสอนชดเชย: แอดมินตั้งจากวันเสาร์/อาทิตย์ในหน้านี้ได้เลย (ลบ/ดูทั้งหมดที่ แอดมิน → วันหยุด) ── */
+function openMakeupModal() {
+  showModal(`ตั้งวันสอนชดเชย · ${formatThaiDateFull(SUB.date)}`,
+    `<div class="mb-2"><label class="form-label small fw-semibold mb-1">ใช้ตารางสอนของวัน</label>
+       <select id="mkDay" class="form-select form-select-sm">${[1, 2, 3, 4, 5].map(d => `<option value="${d}">${DAY_NAMES[d]}</option>`).join('')}</select></div>
+     <div class="mb-1"><label class="form-label small fw-semibold mb-1">ชื่อ (ไม่ใส่ก็ได้)</label>
+       <input id="mkName" class="form-control form-control-sm" value="สอนชดเชย" maxlength="80"></div>
+     <div class="small text-muted">วันนั้นจะมีคาบเรียนตามตารางวันที่เลือก — ครูไม่มาต้องจัดครูแทน · ตารางวันนี้/หน้าแรก/หน้า ผอ. ใช้ตามนี้ด้วย</div>`,
+    `<button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+     <button class="btn btn-warning btn-sm" onclick="saveMakeup()"><i class="bi bi-check-lg"></i> บันทึก</button>`);
+}
+async function saveMakeup() {
+  const weekday = +el('mkDay').value, name = el('mkName').value.trim() || 'สอนชดเชย';
+  try {
+    await apiFetch('/api/holidays', { method: 'POST', body: JSON.stringify({ date: SUB.date, name, type: 'makeup', weekday }) });
+    (T.makeup = T.makeup || []).push({ date: SUB.date, weekday, name });
+    edModal?.hide();
+    await loadSubs(); renderSubsBody();
+  } catch (e) { alert(e.message); }
+}
+
 /* ── หน้าจอ ── */
 async function renderSubs() {
-  if (!SUB.date) { SUB.date = todayLocal(); if (wdOf(SUB.date) === 0 || wdOf(SUB.date) === 6) SUB.date = nextSchoolDay(SUB.date, 1); }
+  if (!SUB.date) { SUB.date = todayLocal(); if (ttDayOf(SUB.date) === 0 || ttDayOf(SUB.date) === 6) SUB.date = nextSchoolDay(SUB.date, 1); }
   el('content').innerHTML = `<div class="container sub-screen"><div id="subBody"><div class="text-center text-muted py-5"><div class="spinner-border"></div></div></div></div>`;
   try { await loadSubs(); } catch (e) { el('subBody').innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; return; }
   renderSubsBody();
@@ -353,7 +378,7 @@ async function gotoDate(d) {
 function renderSubsBody() {
   const box = el('subBody');
   if (!box) return;
-  const date = SUB.date, admin = !!T.can_subs, hol = holidayOn(date), wd = wdOf(date);
+  const date = SUB.date, admin = !!T.can_subs, mk = makeupOn(date), hol = mk ? null : holidayOn(date), wd = ttDayOf(date);
   const needs = needsOn(date), saved = savedOn(date), counts = subCounts(date);
   const savedBy = new Map(saved.map(s => [`${s.period}-${s.lesson_id}`, s]));
   const assigned = new Map(saved.map(s => [`${s.period}-${s.lesson_id}`, s.sub_id]));
@@ -375,7 +400,8 @@ function renderSubsBody() {
     <div class="fw-bold fs-6">${formatThaiDateFull(date)}</div>
     <span class="badge text-bg-light border">ตารางภาคเรียน ${esc(T.term.name)}${T.term.published ? '' : ' (ร่าง)'}</span>
     ${hol ? `<span class="badge ${hol.type === 'holiday' ? 'bg-danger' : 'bg-info'}">${hol.type === 'holiday' ? 'วันหยุด' : hol.type === 'exam' ? 'สอบ' : 'กิจกรรม'}: ${esc(hol.name)}</span>` : ''}
-    ${wd === 0 || wd === 6 ? '<span class="badge bg-secondary">วันเสาร์-อาทิตย์</span>' : ''}
+    ${mk ? `<span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat"></i> ${esc(mk.name || 'สอนชดเชย')} · ใช้ตารางสอนวัน${DAY_NAMES[mk.weekday]}</span>` : ''}
+    ${wd === 0 || wd === 6 ? `<span class="badge bg-secondary">วันเสาร์-อาทิตย์</span>${T.is_admin ? ` <button class="btn btn-sm btn-outline-warning py-0" onclick="openMakeupModal()" title="วันเสาร์/อาทิตย์ที่โรงเรียนนัดสอนชดเชย"><i class="bi bi-arrow-repeat"></i> ตั้งเป็นวันสอนชดเชย</button>` : ''}` : ''}
     ${!inTerm(date) ? `<span class="badge bg-secondary">ปิดภาคเรียน (ภาคเรียน ${esc(T.term.name)} ${shortDate(T.term.start_date)} – ${shortDate(T.term.end_date)})</span>` : ''}
     <span class="ms-auto d-flex gap-1">
       ${admin ? `<button class="btn btn-sm btn-outline-secondary" onclick="openNoSubModal()" title="ครูที่ให้ใครฝากคาบไม่ได้ เช่น มีงานนอก"><i class="bi bi-person-slash"></i> ไม่รับสอนแทน</button>` : ''}
@@ -613,7 +639,8 @@ async function deleteAbsence(id) {
 function lineText() {
   const date = SUB.date, d = dateOf(date);
   const saved = new Map(savedOn(date).map(s => [`${s.period}-${s.lesson_id}`, s]));
-  const out = [`🧡วัน${THAI_DAYS[d.getDay()]} ที่ ${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`];
+  const mk = makeupOn(date);
+  const out = [`🧡วัน${THAI_DAYS[d.getDay()]} ที่ ${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}${mk ? ` (สอนชดเชย ใช้ตารางวัน${DAY_NAMES[mk.weekday]})` : ''}`];
   const needs = needsOn(date).filter(n => !n.skip), abs = absencesOn(date);
   const order = [...new Set(abs.map(a => a.teacher_id))];                 // เรียงตามบันทึกครูไม่มา
   needs.forEach(n => { if (!order.includes(n.absent)) order.push(n.absent); });
