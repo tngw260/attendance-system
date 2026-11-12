@@ -102,6 +102,21 @@ function subCounts(date) {                                    // คาบที
   return { total, day };
 }
 
+// ฝากรวมสาย: ครูที่กำลังสอนสาย/กลุ่มอื่นของห้องเดียวกันในคาบนั้น (ห้องแยกสายเรียนพร้อมกัน เช่น ม.4/1 SMTP · FAP · SPP)
+// รับนักเรียนสายที่ครูไม่มาไปรวมกลุ่มได้ — ครูตัดสินใจ 12 พ.ย. 69: อยู่ท้ายรายการต่อจากครูว่างทุกคน · จัดอัตโนมัติใช้เมื่อไม่มีครูว่างเท่านั้น
+// · ครูกดรับเองไม่ได้ (ผู้จัดสอนแทนจัดให้) · นับเป็นคาบสอนแทน 1 คาบเหมือนปกติ
+function mergeWith(tid, l, wd, p) {                     // → คาบของครู tid ที่สอนห้องเดียวกับ l อยู่ หรือ null
+  const own = (IDX.byTeacher[tid] || {})[`${wd}-${p}`] || [];
+  return own.length && l.classes.length && own.every(o => o.id !== l.id && o.classes.some(c => l.classes.includes(c))) ? own : null;
+}
+const mergeLabel = own => 'รวมกับ ' + own.map(o => [lessonName(o), o.track].filter(Boolean).join(' ')).join(', ');
+// การจัดที่บันทึกแล้วเป็นการฝากรวมสายไหม (ใช้ในตาราง ข้อความ LINE สถิติ)
+const isMergeSub = (s, date) => {
+  if (!s?.sub_id || isSwap(s)) return null;
+  const l = T.lessons.find(x => x.id === s.lesson_id);
+  return l ? mergeWith(s.sub_id, l, ttDayOf(date || s.date), s.period) : null;
+};
+
 // assigned: Map key → sub_id ของวันนั้น (รวมที่กำลังจัดอัตโนมัติ)
 function candidatesFor(n, date, assigned, counts) {
   const wd = ttDayOf(date), p = n.p, area = n.l.kind === 'subject' ? (n.l.code || '')[0] : '';
@@ -109,10 +124,16 @@ function candidatesFor(n, date, assigned, counts) {
   const busyBack = new Set(backsOn(date).filter(s => s.swap_period === p).map(s => s.absent_id));
   return T.teachers.filter(t => t.active !== 0 && IDX.byTeacher[t.id]).map(t => {
     const why = [], own = IDX.byTeacher[t.id][`${wd}-${p}`] || [];
-    let ok = true, score = 0;
+    let ok = true, score = 0, merge = false;
+    const busy = own.length ? 'มีสอน ' + lessonName(own[0]) : '';
     if (n.gone.includes(t.id) || absentAt(t.id, date, p)) { ok = false; why.push('ไม่มา'); }
     else if (noSub(t.id)) { ok = false; why.push(`ไม่รับสอนแทน (${noSub(t.id)})`); }
-    else if (own.length) { ok = false; why.push('มีสอน ' + lessonName(own[0])); }
+    else if (own.length) {
+      ok = false;
+      const m = mergeWith(t.id, n.l, wd, p);
+      merge = !!m && !busySub.has(t.id) && !busyBack.has(t.id);       // ฝากรวมสายได้ (ยังไม่ได้รับห้องอื่นในคาบนี้)
+      why.push(merge ? '🔀 ฝากรวมสาย · ' + mergeLabel(m) : busy);
+    }
     else if (busySub.has(t.id)) { ok = false; why.push('สอนแทนห้องอื่นแล้ว'); }
     else if (busyBack.has(t.id)) { ok = false; why.push('สอนคืนจากการแลกคาบ'); }
     else if (isUnavailable(t.id, wd, p)) { ok = false; why.push(`ไม่ว่าง (${unavReason(t.id)})`); }
@@ -125,8 +146,8 @@ function candidatesFor(n, date, assigned, counts) {
     if ([p - 1, p + 1].some(q => Math.min(p, q) !== lunchAfter() && assigned.get(`${q}-${n.l.id}`) === t.id)) { score += 12; why.push('ต่อคาบคู่'); }
     const mx = (t.constraints || {}).max_per_day;
     if (mx && dayLoad >= mx) { score -= 40; why.push(`ครบวันละ ${mx} คาบแล้ว`); }
-    return { t, ok, score, why, total, dayLoad };
-  }).sort((a, b) => (b.ok - a.ok) || (b.score - a.score) || (a.t.sort_order - b.t.sort_order) || (a.t.id - b.t.id));
+    return { t, ok, merge, busy, score, why, total, dayLoad };
+  }).sort((a, b) => (b.ok - a.ok) || (b.merge - a.merge) || (b.score - a.score) || (a.t.sort_order - b.t.sort_order) || (a.t.id - b.t.id));
 }
 
 const itemOf = (n, sid, note) => ({ period: n.p, lesson_id: n.l.id, absent_id: n.absent, sub_id: sid || null,
@@ -178,20 +199,29 @@ async function autoAssign() {
     const g = groups[groups.length - 1], last = g && g[g.length - 1];
     if (last && last.l.id === n.l.id && n.p === last.p + 1 && last.p !== lunchAfter()) g.push(n); else groups.push([n]);
   });
-  const pickFor = g => {                                                   // ครูที่ว่างทุกคาบในช่วง เรียงคะแนนรวม
+  const pickFor = (g, merge) => {                                          // ครูที่ว่างทุกคาบในช่วง เรียงคะแนนรวม (merge = ยอมฝากรวมสาย)
     const lists = g.map(n => candidatesFor(n, date, assigned, counts));
-    return lists[0].filter(c => c.ok && lists.every(L => L.find(x => x.t.id === c.t.id)?.ok))
+    const fit = c => c && (c.ok || (merge && c.merge));
+    return lists[0].filter(c => fit(c) && lists.every(L => fit(L.find(x => x.t.id === c.t.id))))
       .map(c => ({ id: c.t.id, score: lists.reduce((s, L) => s + L.find(x => x.t.id === c.t.id).score, 0) }))
       .sort((a, b) => b.score - a.score);
   };
-  const items = [], stuck = [];
-  while (groups.length) {
-    groups.sort((a, b) => pickFor(a).length - pickFor(b).length || a[0].p - b[0].p);   // ช่วงที่มีตัวเลือกน้อยก่อน
-    const g = groups.shift(), best = pickFor(g)[0];
-    if (!best) {
-      if (g.length > 1) groups.push(...g.map(n => [n]));                   // ไม่มีใครว่างทั้งช่วง → แยกจัดทีละคาบ
-      else stuck.push(g[0]);
-      continue;
+  const items = [], stuck = [], later = [];
+  let merged = 0;
+  while (groups.length || later.length) {
+    let g, best;
+    if (groups.length) {
+      groups.sort((a, b) => pickFor(a).length - pickFor(b).length || a[0].p - b[0].p);   // ช่วงที่มีตัวเลือกน้อยก่อน
+      g = groups.shift(); best = pickFor(g)[0];
+      if (!best) {
+        if (g.length > 1) groups.push(...g.map(n => [n]));                 // ไม่มีใครว่างทั้งช่วง → แยกจัดทีละคาบ
+        else later.push(g);                                                // ไม่มีครูว่างเลย → รอฝากรวมสายหลังจัดคาบอื่นครบ
+        continue;
+      }
+    } else {                                                               // รอบสุดท้าย: ฝากรวมสาย (ห้องเดียวกัน) เฉพาะคาบที่ไม่มีครูว่างจริง ๆ
+      g = later.shift(); best = pickFor(g, true)[0];
+      if (!best) { stuck.push(g[0]); continue; }
+      merged += g.length;
     }
     g.forEach(n => {
       assigned.set(n.key, best.id);
@@ -201,7 +231,7 @@ async function autoAssign() {
     });
   }
   if (items.length && await saveSubs({ date, items }))
-    toastEd(`จัดแล้ว ${items.length} คาบ` + (stuck.length ? ` · ไม่มีครูว่าง ${stuck.length} คาบ (เลือก "ไม่มีครูแทน" หรือสลับเอง)` : ''));
+    toastEd(`จัดแล้ว ${items.length} คาบ` + (merged ? ` (ฝากรวมสาย ${merged} คาบ เพราะไม่มีครูว่าง)` : '') + (stuck.length ? ` · ไม่มีครูว่าง ${stuck.length} คาบ (เลือก "ไม่มีครูแทน" หรือสลับเอง)` : ''));
   else if (stuck.length) alert(`ไม่มีครูว่างเลย ${stuck.length} คาบ — เลือก "ไม่มีครูแทน (มอบงาน)" หรือขอให้ครูสลับคาบ`);
 }
 
@@ -434,13 +464,14 @@ function renderSubsBody() {
     const s = savedBy.get(n.key), time = P[n.p] ? `${P[n.p].start}-${P[n.p].end}` : '';
     let pick;
     const bk = !s && backBy.get(n.key);
+    const mg = s && !notFinal(s) ? isMergeSub(s, date) : null;               // จัดแบบฝากรวมสาย (ห้องเดียวกัน)
     const swapInfo = isSwap(s) ? `<div class="small text-primary">🔁 แลกคาบ — ${esc(tShort(s.absent_id))}สอนคืน ${esc(swapLabel(s))}</div>` : '';
     if (n.skip) pick = `<span class="text-muted small">ไม่ต้องจัด (${esc(n.skip)})</span>`;
     else if (bk) pick = `<b>${esc(tShort(bk.absent_id))}</b> <span class="badge ${isPending(bk) ? 'text-bg-warning' : 'text-bg-success'}">${isPending(bk) ? 'รออนุมัติ' : 'สอนคืน'}</span>
         <div class="small text-primary">🔁 แลกคาบกับ${esc(tShort(bk.sub_id))} (${esc(shortDate(bk.date))} คาบ ${bk.period})</div>`;
     else if (admin) {
       const cands = candidatesFor(n, date, assigned, counts);
-      const opt = c => `<option value="${c.t.id}" ${s?.sub_id === c.t.id ? 'selected' : ''} ${c.ok || s?.sub_id === c.t.id ? '' : 'disabled'}>` +
+      const opt = c => `<option value="${c.t.id}" ${s?.sub_id === c.t.id ? 'selected' : ''} ${c.ok || c.merge || s?.sub_id === c.t.id ? '' : 'disabled'}>` +
         `${esc(tShort(c.t.id))} · แทนแล้ว ${c.total}${c.why.length ? ' · ' + esc(c.why.join(' · ')) : ''}</option>`;
       pick = (isOffer(s) ? `<div class="sub-req mb-1"><span class="badge text-bg-info">รอ${esc(tShort(s.sub_id))}ยืนยัน</span> ${esc(tShort(s.absent_id))}ขอแลกคาบ${swapInfo}</div>`
         : isPending(s) ? `<div class="sub-req mb-1"><span class="badge text-bg-warning">รออนุมัติ</span> <b>${esc(tShort(s.sub_id))}</b> ${isSwap(s) ? 'แลกคาบ' : 'ขอรับสอนแทน'}${swapInfo}
@@ -450,7 +481,9 @@ function renderSubsBody() {
           <option value="" ${s ? '' : 'selected'}>— ยังไม่จัด —</option>
           <option value="none" ${s && !s.sub_id ? 'selected' : ''}>✗ ไม่มีครูแทน (มอบงาน/รวมห้อง)</option>
           <optgroup label="ว่าง — เรียงตามความเหมาะสม">${cands.filter(c => c.ok).map(opt).join('')}</optgroup>
-          <optgroup label="ไม่ว่าง">${cands.filter(c => !c.ok).map(opt).join('')}</optgroup></select>
+          ${cands.some(c => c.merge) ? `<optgroup label="ฝากรวมสาย — สอนห้องเดียวกันอยู่ (ใช้เมื่อไม่มีครูว่าง)">${cands.filter(c => c.merge).map(opt).join('')}</optgroup>` : ''}
+          <optgroup label="ไม่ว่าง">${cands.filter(c => !c.ok && !c.merge).map(opt).join('')}</optgroup></select>
+        ${mg ? `<div class="small text-primary mt-1">🔀 ฝากรวมสาย · ${esc(mergeLabel(mg))}</div>` : ''}
         ${!s ? `<button class="btn btn-sm btn-link p-0 mt-1 text-decoration-none" onclick="openSwapModal('${n.key}')">🔁 แลกคาบ</button>` : ''}
         ${s && !notFinal(s) ? (isSwap(s) ? swapInfo : '') + `<input class="form-control form-control-sm mt-1" placeholder="หมายเหตุ เช่น ให้ทำใบงาน หน้า 12" value="${esc(s.note)}" onchange="setSubNote('${n.key}', this.value)">` : ''}`;
     } else if (!s) {                                             // ยังไม่มีใครรับ → ครูที่ว่างกดรับได้
@@ -460,7 +493,7 @@ function renderSubsBody() {
       pick = `<span class="text-danger small">ยังไม่มีครูแทน</span>` +
         (free ? `<div><button class="btn btn-sm btn-primary mt-1 text-nowrap" onclick="volunteer('${n.key}')">🙋 รับสอนแทน</button></div>`
           : ownPeriod ? `<div><button class="btn btn-sm btn-outline-primary mt-1 text-nowrap" onclick="openSwapModal('${n.key}')">🔁 แลกคาบ</button></div>`
-          : me && me.why.length ? `<div class="small text-muted">${esc(me.why[0])}</div>` : '');
+          : me && me.why.length ? `<div class="small text-muted">${esc(me.merge ? me.busy : me.why[0])}</div>` : '');
     } else if (isOffer(s)) pick = s.sub_id === T.me
         ? `<div class="sub-req"><b>🔁 ${esc(tShort(s.absent_id))}ขอแลกคาบกับคุณ</b><div class="small">คุณสอนคาบนี้ · ${esc(tShort(s.absent_id))}สอนคืน ${esc(swapLabel(s))}</div>
             <div class="mt-1"><button class="btn btn-sm btn-success py-0" onclick="answerSwap('${n.key}', true)"><i class="bi bi-check-lg"></i> ยืนยัน</button>
@@ -470,6 +503,7 @@ function renderSubsBody() {
     else if (isPending(s)) pick = `<span class="badge text-bg-warning">รออนุมัติ</span> <b>${esc(tShort(s.sub_id))}</b>${swapInfo}` +
         (s.sub_id === T.me || (isSwap(s) && s.absent_id === T.me) ? `<div><button class="btn btn-sm btn-link p-0 text-danger" onclick="withdrawSub('${n.key}')">${isSwap(s) && s.absent_id === T.me ? 'ยกเลิกคำขอแลก' : 'ยกเลิกการรับ'}</button></div>` : '');
     else pick = (s.sub_id ? `<b>${esc(tShort(s.sub_id))}</b> <span class="badge text-bg-success">อนุมัติแล้ว</span>` : 'ไม่มีครูแทน') + swapInfo +
+        (mg ? `<div class="small text-primary">🔀 ฝากรวมสาย · ${esc(mergeLabel(mg))}</div>` : '') +
         (s.note ? `<div class="small text-muted">${esc(s.note)}</div>` : '');
     const mine = !admin && s?.sub_id && s.sub_id === T.me;
     return `<tr class="${n.skip ? 'table-light text-muted' : ''}${mine ? ' table-warning' : ''}">
@@ -496,7 +530,7 @@ function renderSubsBody() {
     ${needs.length ? `<div class="table-responsive"><table class="table table-sm align-middle mb-1 sub-table">
       <thead class="table-light"><tr><th class="text-center">คาบ</th><th>ชั้น</th><th>วิชา</th><th class="d-none d-md-table-cell">ครูที่ไม่มา</th><th>สอนแทนโดย</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-      ${admin ? '<div class="small text-muted">รายชื่อเรียง: สอนแทนมาน้อยก่อน (นับตั้งแต่ ' + shortDate(SUB.from) + ') · สาระเดียวกัน · สอนห้องนี้อยู่ · วันนั้นมีคาบน้อย · ครูกดรับเองได้ (รออนุมัติ)</div>'
+      ${admin ? '<div class="small text-muted">รายชื่อเรียง: สอนแทนมาน้อยก่อน (นับตั้งแต่ ' + shortDate(SUB.from) + ') · สาระเดียวกัน · สอนห้องนี้อยู่ · วันนั้นมีคาบน้อย · ครูกดรับเองได้ (รออนุมัติ) · ไม่มีครูว่าง → 🔀 ฝากรวมสาย (ครูที่สอนสายอื่นของห้องเดียวกัน) อยู่ท้ายรายการ</div>'
         : canPick && noSub(T.me) ? `<div class="small text-muted">คุณอยู่ในรายชื่อไม่รับสอนแทน (${esc(noSub(T.me))}) — ยังฝากสอนคาบของตัวเองได้ตามปกติ</div>`
         : canPick ? '<div class="small text-muted">คาบที่คุณว่างจะมีปุ่ม 🙋 รับสอนแทน — คนแรกที่กดได้คาบนั้น แล้วรอผู้จัดสอนแทนอนุมัติ</div>' : ''}`
       : `<div class="text-center text-muted py-4">${hol?.type === 'holiday' || wd === 0 || wd === 6 || !inTerm(date) ? 'ไม่มีการเรียนการสอน' : abs.length ? 'ครูที่ไม่มาไม่มีคาบสอนวันนี้' : 'ไม่มีครูไม่มา — ไม่ต้องจัดครูแทน'}</div>`}
@@ -520,12 +554,14 @@ function statsHTML(counts) {
   T.teachers.filter(t => t.active !== 0 && noSub(t.id)).forEach(t => (off[noSub(t.id)] = off[noSub(t.id)] || []).push(tShort(t.id)));
   if (!list.length && !Object.keys(off).length) return '';
   const max = Math.max(1, ...list.map(t => counts.total[t.id] || 0));
+  const mergeN = {};                                    // คาบที่นับรวมแต่เป็นการฝากรวมสาย (นับ 1 คาบเหมือนสอนแทนปกติ)
+  (SUB.data?.subs || []).forEach(s => { if (s.date >= SUB.from && !notFinal(s) && isMergeSub(s)) mergeN[s.sub_id] = (mergeN[s.sub_id] || 0) + 1; });
   return `<div class="card mb-2"><div class="card-body py-2">
     <div class="fw-bold mb-1"><i class="bi bi-bar-chart me-1"></i>จำนวนคาบสอนแทน <span class="small text-muted fw-normal">ตั้งแต่ ${shortDate(SUB.from)}</span></div>
     ${list.map(t => { const n = counts.total[t.id] || 0; return `<div class="d-flex align-items-center small mb-1${t.id === T.me ? ' fw-bold' : ''}">
       <div style="width:110px" class="text-truncate">${esc(tShort(t.id))}</div>
       <div class="flex-fill me-2"><div class="progress" style="height:8px"><div class="progress-bar" style="width:${n / max * 100}%"></div></div></div>
-      <div style="width:28px" class="text-end">${n}</div></div>`; }).join('')}
+      <div style="width:28px" class="text-end">${n}</div></div>${mergeN[t.id] ? `<div class="small text-primary text-end mb-1" style="margin-top:-4px">🔀 ในนี้ฝากรวมสาย ${mergeN[t.id]} คาบ</div>` : ''}`; }).join('')}
     ${Object.entries(off).map(([why, names]) => `<div class="small text-muted border-top pt-1 mt-1"><i class="bi bi-person-slash me-1"></i>ไม่รับสอนแทน (${esc(why)}): ${names.map(esc).join(' · ')}</div>`).join('')}
   </div></div>`;
 }
@@ -656,7 +692,7 @@ function lineText() {
       const s = saved.get(n.key), cls = classLabel({ ...n.l, track: '' });
       const bk = !s && backsOn(date).find(b => `${b.swap_period}-${b.swap_lesson_id}` === n.key);
       const who = bk ? tShort(bk.absent_id) + ' (สอนคืน แลกคาบ)' : !s ? '❗ยังไม่จัด'
-        : s.sub_id ? tShort(s.sub_id) + (isSwap(s) ? ' (แลกคาบ)' : '') + (isOffer(s) ? ' (รอยืนยัน)' : isPending(s) ? ' (รออนุมัติ)' : '') : `ไม่มีครูแทน${s.note ? ` (${s.note})` : ''}`;
+        : s.sub_id ? tShort(s.sub_id) + (isSwap(s) ? ' (แลกคาบ)' : isMergeSub(s, date) ? ' (ฝากรวมสาย)' : '') + (isOffer(s) ? ' (รอยืนยัน)' : isPending(s) ? ' (รออนุมัติ)' : '') : `ไม่มีครูแทน${s.note ? ` (${s.note})` : ''}`;
       const last = rows[rows.length - 1];
       if (last && last.cls === cls && last.who === who && last.p2 === n.p - 1) { last.p2 = n.p; return; }
       rows.push({ p1: n.p, p2: n.p, cls, who });
