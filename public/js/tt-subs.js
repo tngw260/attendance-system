@@ -30,7 +30,9 @@ const wdOf = s => dateOf(s).getDay();                       // 1 = จันท�
 const todayLocal = () => isoOf(new Date());                  // todayISO() ใน common.js เป็นเวลา UTC (ก่อน 7 โมงได้เมื่อวาน)
 const shortDate = s => { const d = dateOf(s); return `${d.getDate()} ${MON_ABBR[d.getMonth()]} ${String(d.getFullYear() + 543).slice(2)}`; };
 // วันสอนชดเชย (ตั้งที่หน้าแอดมิน → วันหยุด ประเภท "สอนชดเชย") เช่น เสาร์ 28 พ.ย. 69 ใช้ตารางวันจันทร์ — T.makeup จาก /api/tt/terms/:id
-const makeupOn = s => (T?.makeup || []).find(m => m.date === s);
+// อ่านทั้ง T.makeup (โหลดตอนเปิดตาราง) และ SUB.data.holidays (โหลดใหม่ทุกครั้งที่ดึงข้อมูลสอนแทน) — เพิ่มวันชดเชยระหว่างเปิดหน้าค้างไว้ก็ไม่หลุด
+const makeupOn = s => (T?.makeup || []).find(m => m.date === s)
+  || (SUB.data?.holidays || []).find(h => h.date === s && h.type === 'makeup' && h.weekday);
 const ttDayOf = s => makeupOn(s)?.weekday || wdOf(s);        // วันของตารางสอนที่ใช้ 1 = จันทร์ … 5 = ศุกร์ (0/6 = ไม่มีเรียน)
 const DAY_NAMES = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
 const nextSchoolDay = (s, step) => { let d = s; do { d = addDays(d, step); } while (ttDayOf(d) === 0 || ttDayOf(d) === 6); return d; };
