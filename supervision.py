@@ -611,8 +611,6 @@ def init(app, get_db, login_required, current_user, get_settings):
         pre_date = str(b.get('pre_date') or '')
         if pre_date and not DATE_RE.fullmatch(pre_date):
             return None, 'วันที่สังเกตก่อนนิเทศไม่ถูกต้อง'
-        if pre_date and pre_date > date:
-            return None, 'วันที่เพื่อนคู่นิเทศสังเกต ต้องไม่เกินวันนิเทศจริง'
         f = dict(term=term['name'], teacher_id=tid, teacher_name=tname, area=clean(b.get('area'), 60) or area_of(con, code),
                  date=date, period=clean(b.get('period'), 10), code=code, title=clean(b.get('title'), 120),
                  class_label=clean(b.get('class_label'), 60), peer_seat=peer, pre_date=pre_date,
@@ -692,7 +690,7 @@ def init(app, get_db, login_required, current_user, get_settings):
         v, evals = load(con, vid)
         if not v:
             return None, None, bad('ไม่พบนัดนิเทศ', 404)
-        e = next((x for x in evals if x['round'] == rnd and x['seat'] == seat), None)
+        e = next((x for x in evals if x['round'] == rnd and (seat is None or x['seat'] == seat)), None)
         if not e:
             return None, None, bad('ไม่พบแบบประเมินนี้', 404)
         if not same(acting(con, u, as_raw), e['evaluator_id'], e['evaluator_name']):
@@ -733,6 +731,8 @@ def init(app, get_db, login_required, current_user, get_settings):
                 return err
             if e['status'] == 'submitted':
                 return bad('ส่งผลไปแล้ว')
+            if rnd == 'pre' and not v['pre_date']:
+                return bad('เลือกวันที่และคาบที่เข้าสังเกตการสอนก่อนส่ง (ด้านบนของแบบสังเกต)')
             items = form_items(form_of(v, rnd))
             scores = jl(e['scores'], {})
             missing = [it['title'] for it in items if it['id'] not in scores]
@@ -756,6 +756,27 @@ def init(app, get_db, login_required, current_user, get_settings):
             if rnd == 'main':
                 con.execute('UPDATE sv_visits SET ack_at=NULL WHERE id=?', (vid,))
         return jsonify(success=True, message='เปิดคืนแบบประเมินแล้ว')
+
+    # ── เพื่อนคู่นิเทศ: เลือกวัน/คาบที่เข้าสังเกตเอง (คาบไหนก็ได้ กรอกย้อนหลังได้) ──
+    @app.put('/api/sv/visits/<int:vid>/observed')
+    @login_required
+    def sv_observed(vid):
+        b = request.get_json() or {}
+        with get_db() as con:
+            v, e, err = my_eval(con, vid, 'pre', None, b.get('as'))
+            if err and not can_manage(current_user()):
+                return err
+            v, _ = load(con, vid)
+            if not v:
+                return bad('ไม่พบนัดนิเทศ', 404)
+            if e is not None and e['status'] == 'submitted' and not can_manage(current_user()):
+                return bad('ส่งผลการสังเกตแล้ว แก้ไขไม่ได้ — ให้ฝ่ายวิชาการเปิดคืนก่อน')
+            date = str(b.get('date') or '')
+            if date and not DATE_RE.fullmatch(date):
+                return bad('วันที่ไม่ถูกต้อง')
+            con.execute('UPDATE sv_visits SET pre_date=?, pre_period=?, pre_lesson=? WHERE id=?',
+                        (date, clean(b.get('period'), 10) if date else '', clean(b.get('lesson'), 160) if date else '', vid))
+        return jsonify(success=True, message='บันทึกวันและคาบที่เข้าสังเกตแล้ว')
 
     # ── ผู้รับการนิเทศ: ข้อมูลก่อนสอน / สะท้อนคิด / รับทราบ ──
     def my_visit(con, vid, as_raw):
@@ -865,6 +886,20 @@ def init(app, get_db, login_required, current_user, get_settings):
     @app.post('/api/svl/<token>/eval/<rnd>/<int:seat>/submit')
     def sv_link_eval_submit(token, rnd, seat):
         return via_link(token, sv_eval_submit, rnd, seat)
+
+    @app.put('/api/svl/<token>/observed')
+    def sv_link_observed(token):
+        return via_link(token, sv_observed)
+
+    @app.get('/api/svl/<token>/slots')
+    def sv_link_slots(token):
+        """คาบสอนของครูผู้รับการนิเทศในวันที่เลือก (ให้เพื่อนคู่นิเทศเลือกคาบที่เข้าสังเกต)"""
+        with get_db() as con:
+            v, who, info, err = link_open(con, token)
+            if err:
+                return bad(err, 404)
+            term, lessons = day_lessons(con, v['teacher_id'], request.args.get('date', ''), get_settings())
+        return jsonify(term=term['name'] if term else '', lessons=lessons)
 
     @app.put('/api/svl/<token>/pre')
     def sv_link_pre(token):

@@ -162,7 +162,7 @@
             <div id="vmCom"></div>
             <datalist id="people"></datalist>
           </div>
-          <div class="col-12"><hr class="my-1"><div class="fw-semibold">เพื่อนคู่นิเทศสังเกตการสอนก่อน <span class="text-muted fw-normal">(กรอกทีหลังได้)</span></div></div>
+          <div class="col-12"><hr class="my-1"><div class="fw-semibold">เพื่อนคู่นิเทศสังเกตการสอนก่อน <span class="text-muted fw-normal">(ไม่ต้องกรอก — เพื่อนคู่นิเทศเลือกวันและคาบที่เข้าสังเกตเองในแบบสังเกต)</span></div></div>
           <div class="col-sm-5">
             <label class="form-label" for="vmPreDate">วันที่สังเกต</label>
             <input type="date" id="vmPreDate" class="form-control" onchange="vmLoadSlots('pre')">
@@ -367,6 +367,7 @@ function renderVisit() {
   if (v.can_manage) h += manageView(v);
   $('detailView').innerHTML = h;
   for (const e of v.evals.filter(e => e.mine && e.status !== 'submitted')) refreshBar(e);
+  if ($('obsDate')) obsLoad(true);
 }
 
 // ── ฟอร์มให้คะแนน ─────────────────────────────────────
@@ -378,6 +379,7 @@ function evalForm(v, f, e) {
   let h = `<div class="sec" id="ev-${e.round}-${e.seat}"><h2><i class="bi bi-pencil-square me-1"></i>แบบให้คะแนน — ${roundTh(e)}
       <span class="fw-normal text-muted small">ผู้ประเมิน ${esc(e.evaluator_name)}</span></h2><div class="body">
       ${f.subtitle ? `<div class="small text-muted mb-1">${esc(f.name)} ${esc(f.subtitle)}</div>` : ''}
+      ${e.round === 'pre' ? observedBox(v) : ''}
       <div class="legend">${asc(f).map(n => `<span class="${tone(f, n)}"><i>${n}</i>${esc(scaleName(f, n))}</span>`).join('')}</div>`;
   for (const p of f.parts) {
     h += `<div class="part-h">${esc(p.title)}</div>`;
@@ -410,6 +412,35 @@ function evalForm(v, f, e) {
     </div></div></div>`;
   return h;
 }
+// เพื่อนคู่นิเทศเลือกวัน/คาบที่เข้าสังเกตเอง (คาบไหนก็ได้ กรอกย้อนหลังได้)
+let OBS_SLOTS = [];
+function observedBox(v) {
+  return `<div class="mb-3 p-2 border rounded">
+    <div class="fw-semibold mb-1"><i class="bi bi-calendar-check me-1"></i>วันและคาบที่เข้าสังเกตการสอน <span class="text-danger">*</span>
+      <span class="fw-normal text-muted small">เลือกคาบไหนก็ได้ของครู${esc(v.teacher_name)} · กรอกย้อนหลังได้</span></div>
+    <div class="row g-2"><div class="col-sm-5"><input type="date" class="form-control" id="obsDate" value="${esc(v.pre_date)}" onchange="obsLoad()" aria-label="วันที่เข้าสังเกต"></div>
+      <div class="col-sm-7"><select class="form-select" id="obsSlot" onchange="obsSave()" aria-label="คาบที่เข้าสังเกต"><option value="">— เลือกวันที่ก่อน —</option></select></div></div>
+    <div class="small text-muted mt-1" id="obsMsg">${v.pre_date ? 'บันทึกไว้: ' + thDate(v.pre_date) + (v.pre_period ? ' คาบ ' + esc(v.pre_period) : '') : 'ยังไม่ได้เลือก'}</div></div>`;
+}
+async function obsLoad(keep) {
+  const d = $('obsDate').value, sel = $('obsSlot');
+  if (!d) { sel.innerHTML = '<option value="">— เลือกวันที่ก่อน —</option>'; return; }
+  try { OBS_SLOTS = (await apiFetch(LINK ? `/api/svl/${LINK}/slots?date=${d}` : `/api/sv/slots?teacher_id=${CUR.teacher_id}&date=${d}`)).lessons; }
+  catch { OBS_SLOTS = []; }
+  sel.innerHTML = OBS_SLOTS.length ? '<option value="">— เลือกคาบที่เข้าสังเกต —</option>' + OBS_SLOTS.map((l, i) =>
+      `<option value="${i}">คาบ ${esc(l.period)}${l.time ? ` (${esc(l.time)})` : ''} · ${esc(l.code)} ${esc(l.title)} · ${esc(l.class_label)}</option>`).join('')
+    : '<option value="">ครูไม่มีคาบสอนในวันนี้ — เลือกวันอื่น</option>';
+  if (keep) { const i = OBS_SLOTS.findIndex(l => l.period === CUR.pre_period); if (i >= 0) sel.value = i; }
+}
+async function obsSave() {
+  const l = OBS_SLOTS[$('obsSlot').value]; if (!l) return;
+  const body = { as: who(), date: $('obsDate').value, period: l.period, lesson: `${l.code} ${l.title} · ${l.class_label}` };
+  try {
+    await apiFetch(`${base()}/observed`, { method: 'PUT', body: JSON.stringify(body) });
+    Object.assign(CUR, { pre_date: body.date, pre_period: body.period, pre_lesson: body.lesson });
+    $('obsMsg').innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>บันทึกแล้ว: ${thDate(body.date)} คาบ ${esc(body.period)} · ${esc(body.lesson)}</span>`;
+  } catch (e) { $('obsMsg').innerHTML = `<span class="text-danger">${esc(e.message)}</span>`; }
+}
 function toggleComment(k, id) { $(`cb-${k}-${id}`).hidden = true; const t = $(`c-${k}-${id}`); t.hidden = false; t.focus(); }
 const scaleName = (f, n) => (f.scale.find(s => s[0] === n) || [])[1] || '';
 function setScore(k, id, n) {
@@ -441,6 +472,7 @@ async function saveDraft(k) {
   } catch (e) { const el = $(`sv-${k}`); if (el) el.innerHTML = `<span class="text-danger">บันทึกไม่สำเร็จ: ${esc(e.message)}</span>`; return false; }
 }
 async function submitEval(k) {
+  if (DRAFT[k].e.round === 'pre' && !CUR.pre_date) { showToast('เลือกวันที่และคาบที่เข้าสังเกตก่อนส่ง', 'warning'); $('obsDate').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
   const all = items(formFor(CUR, DRAFT[k].e.round)), miss = all.filter(it => DRAFT[k].scores[it.id] == null);
   if (miss.length) { showToast(`ยังให้คะแนนไม่ครบ ${miss.length} ข้อ`, 'warning'); $(`it-${k}-${miss[0].id}`).scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
   if (!confirm('ส่งผลการประเมิน?\nส่งแล้วแก้ไขไม่ได้ (ต้องให้ฝ่ายวิชาการเปิดคืน)')) return;
@@ -592,7 +624,7 @@ const linkUrl = l => `${location.origin}/sv/${l.token}`;
 function linkText(l) {
   const v = CUR, d = x => x ? thDate(x) : '';
   let job = l.seat === 0 ? `รับการนิเทศ ${d(v.date)} คาบ ${v.period} (${v.code} ${v.title} ${v.class_label})\nก่อนวันสอนกรอก "ข้อมูลก่อนสอน" ในลิงก์ · หลังกรรมการส่งครบ ดูผล เขียนสะท้อนคิด และกดรับทราบ`
-    : l.peer ? `เพื่อนคู่นิเทศของ ${v.teacher_name}\n1) สังเกตการสอน${v.pre_date ? ' ' + d(v.pre_date) + (v.pre_period ? ' คาบ ' + v.pre_period : '') : ''} กรอกแบบบันทึกการสังเกตชั้นเรียน แล้วกดส่ง\n2) วันนิเทศจริง ${d(v.date)} คาบ ${v.period} ให้คะแนนร่วมกับกรรมการอีก 2 คน`
+    : l.peer ? `เพื่อนคู่นิเทศของ ${v.teacher_name}\n1) เข้าสังเกตการสอนคาบไหนก็ได้ แล้วกรอกแบบบันทึกการสังเกตชั้นเรียนในลิงก์ (เลือกวันและคาบที่เข้าสังเกตเอง กรอกย้อนหลังได้) แล้วกดส่ง\n2) วันนิเทศจริง ${d(v.date)} คาบ ${v.period} ให้คะแนนร่วมกับกรรมการอีก 2 คน`
     : `กรรมการนิเทศ ${v.teacher_name}\nวันนิเทศ ${d(v.date)} คาบ ${v.period} (${v.code} ${v.title} ${v.class_label})`;
   return `📋 นิเทศการสอน ภาคเรียนที่ ${v.term}\nเรียน ${l.name}\nหน้าที่: ${l.role}\n${job}\n\nกดลิงก์เพื่อกรอก (ไม่ต้องล็อกอิน):\n${linkUrl(l)}\n\n* ลิงก์นี้สำหรับ ${l.name} เท่านั้น กรุณาอย่าส่งต่อ`;
 }
