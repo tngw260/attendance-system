@@ -35,6 +35,18 @@
     .item .d { color: var(--bs-secondary-color); font-size: .9rem; margin: .15rem 0 .65rem 2.5rem; }
     .item .below { margin-left: 2.5rem; }
     /* ปุ่มให้คะแนน 0–4: สีไล่จากแดง (0) ถึงเขียว (4) */
+    .stage-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin: 0 0 1rem; }
+    .stage-tabs button { display: flex; gap: .7rem; align-items: center; text-align: left; padding: .8rem 1rem; border-radius: .9rem;
+      border: 2px solid var(--bs-border-color); background: var(--bs-body-bg); color: var(--bs-body-color); }
+    .stage-tabs button > i { font-size: 1.8rem; color: var(--bs-secondary-color); }
+    .stage-tabs button b { display: block; font-size: 1.15rem; }
+    .stage-tabs button small { display: block; color: var(--bs-secondary-color); font-size: .8rem; line-height: 1.3; }
+    .stage-tabs button .ok { color: var(--bs-success); font-size: .85rem; font-weight: 600; }
+    .stage-tabs button .wait { color: #b07d00; font-size: .85rem; font-weight: 600; }
+    .stage-tabs button:hover { border-color: var(--bs-primary); }
+    .stage-tabs button.on { border-color: var(--bs-primary); background: color-mix(in srgb, var(--bs-primary) 10%, var(--bs-body-bg)); box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+    .stage-tabs button.on > i { color: var(--bs-primary); }
+    @media (max-width: 575px) { .stage-tabs { grid-template-columns: 1fr; } }
     .s0 { --c: #c62828; } .s1 { --c: #d9620a; } .s2 { --c: #b07d00; } .s3 { --c: #2e8b78; } .s4 { --c: #1d7a41; }
     .scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: .45rem; max-width: 27rem; margin-left: 2.5rem; }
     .scale input { position: absolute; opacity: 0; pointer-events: none; }
@@ -279,6 +291,8 @@ function card(v) {
     </div>
     <div class="text-end">
       <span class="badge st st-${v.status}">${esc(v.status_th)}</span>
+      <div class="small mt-1 text-nowrap"><span class="${v.pre_done ? 'text-success' : 'text-muted'}"><i class="bi bi-eye"></i> ${v.pre_done ? 'สังเกตแล้ว' : 'ยังไม่สังเกต'}</span>
+        · <span class="${v.main_done === 3 ? 'text-success' : 'text-muted'}"><i class="bi bi-clipboard2-check"></i> นิเทศ ${v.main_done}/3</span></div>
       ${v.percent != null ? `<div class="small mt-1">${num(v.percent)}% · ${esc(v.level)}</div>` : ''}
       ${(TAB === 'mine' ? v.todo : []).map(t => `<div class="mt-1"><span class="badge todo">${esc(t)}</span></div>`).join('')}
     </div>
@@ -301,72 +315,107 @@ async function openVisit(id) {
   window.scrollTo(0, 0);
 }
 
+// หน้านัดแยกเป็น 2 ปุ่ม: สังเกตการสอน (รอบที่ 1 เพื่อนคู่นิเทศ) / นิเทศจริง (รอบที่ 2 กรรมการ 3 คน)
+const STAGE = {};
+function setStage(st) { STAGE[CUR.id] = st; renderVisit(); window.scrollTo(0, 0); }
+function stageOf(v) {
+  if (STAGE[v.id]) return STAGE[v.id];
+  const pre = v.evals.find(e => e.round === 'pre');
+  const preOpen = pre && pre.status !== 'submitted';
+  // เพื่อนคู่นิเทศ/ผู้รับการนิเทศ/ฝ่ายวิชาการ ที่รอบสังเกตยังไม่เสร็จ → เปิดหน้าสังเกตก่อน · นอกนั้นเปิดนิเทศจริง
+  return preOpen && (pre.mine || v.is_teacher || v.can_manage) ? 'obs' : 'main';
+}
+
 function renderVisit() {
-  const v = CUR, f = form(v);
+  const v = CUR, f = form(v), st = stageOf(v);
   const canPre = v.is_teacher || v.can_manage;
+  const preE = v.evals.find(e => e.round === 'pre');
+  const peer = v.committee.find(c => c.peer);
   let h = LINK && v.link ? `<div class="alert alert-primary no-print"><i class="bi bi-person-badge me-1"></i>คุณคือ <b>${esc(v.link.name)}</b> · หน้าที่: <b>${esc(v.link.role)}</b>
-      ${v.link.peer ? '<div class="small mt-1">รอบที่ 1 สังเกตการสอนคนเดียว: กรอกแบบบันทึกการสังเกตชั้นเรียนแล้วกดส่ง<br>รอบที่ 2 วันนิเทศจริง: ให้คะแนนร่วมกับกรรมการอีก 2 คน ใช้ลิงก์เดียวกันนี้</div>' : ''}
+      ${v.link.peer ? '<div class="small mt-1">รอบที่ 1 สังเกตการสอนคนเดียว (ปุ่ม "สังเกตการสอน") · รอบที่ 2 วันนิเทศจริงร่วมกับกรรมการอีก 2 คน (ปุ่ม "นิเทศจริง") ใช้ลิงก์เดียวกันนี้</div>' : ''}
       <div class="small text-muted mt-1">ลิงก์นี้ใช้เฉพาะคุณ อย่าส่งต่อให้ผู้อื่น</div></div>` : '';
   h += `<div class="d-flex flex-wrap gap-2 mb-3 no-print">
       ${LINK ? '' : '<button class="btn btn-outline-secondary" onclick="backToList()"><i class="bi bi-arrow-left me-1"></i>กลับ</button>'}
       ${v.can_manage ? `<button class="btn btn-outline-primary" onclick="openVisitModal(${v.id})"><i class="bi bi-pencil me-1"></i>แก้นัด</button>` : ''}
-      ${v.result ? '<button class="btn btn-outline-primary ms-auto" onclick="window.print()"><i class="bi bi-printer me-1"></i>พิมพ์ผล</button>' : ''}
+      ${st === 'main' && v.result ? '<button class="btn btn-outline-primary ms-auto" onclick="window.print()"><i class="bi bi-printer me-1"></i>พิมพ์ผล</button>' : ''}
     </div>
-    <div class="sec"><h2>${esc(f.name)} · ภาคเรียนที่ ${esc(v.term)} <span class="badge st st-${v.status} ms-1">${esc(v.status_th)}</span></h2>
-      <div class="body">
+    <div class="sec"><h2>นิเทศการสอน ${esc(v.teacher_name)} · ภาคเรียนที่ ${esc(v.term)} <span class="badge st st-${v.status} ms-1">${esc(v.status_th)}</span></h2>
+      <div class="body"><div class="row g-2">
+        <div class="col-md-6"><span class="text-muted">ผู้รับการนิเทศ</span> <b>${esc(v.teacher_name)}</b></div>
+        <div class="col-md-6"><span class="text-muted">กลุ่มสาระการเรียนรู้</span> ${esc(v.area || '–')}</div>
+      </div></div></div>`;
+
+  // ── 2 ปุ่ม ──
+  const obsState = !preE ? '<span class="text-muted">ยังไม่กำหนดเพื่อนคู่นิเทศ</span>'
+    : preE.status === 'submitted' ? '<span class="ok"><i class="bi bi-check-circle-fill"></i> ส่งผลแล้ว</span>' : '<span class="wait">ยังไม่ส่ง</span>';
+  const mainState = v.result ? '<span class="ok"><i class="bi bi-check-circle-fill"></i> แปลผลแล้ว</span>'
+    : `<span class="${v.main_done ? 'wait' : 'text-muted'}">ส่งแล้ว ${v.main_done}/3</span>`;
+  h += `<div class="stage-tabs no-print" role="tablist">
+      <button type="button" role="tab" aria-selected="${st === 'obs'}" class="${st === 'obs' ? 'on' : ''}" onclick="setStage('obs')">
+        <i class="bi bi-eye"></i><span><b>สังเกตการสอน</b><small>รอบที่ 1 · เพื่อนคู่นิเทศ ${esc(peer ? peer.name : '–')}</small>${obsState}</span></button>
+      <button type="button" role="tab" aria-selected="${st === 'main'}" class="${st === 'main' ? 'on' : ''}" onclick="setStage('main')">
+        <i class="bi bi-clipboard2-check"></i><span><b>นิเทศจริง</b><small>รอบที่ 2 · ${thDate(v.date)} คาบ ${esc(v.period)} · กรรมการ 3 คน</small>${mainState}</span></button>
+    </div>`;
+
+  if (st === 'obs') {
+    // ── รอบที่ 1 สังเกตการสอน ──
+    h += `<div class="sec"><h2><i class="bi bi-eye me-1"></i>สังเกตการสอน <span class="fw-normal text-muted small">รอบที่ 1 · เพื่อนคู่นิเทศเข้าคนเดียว · เลือกคาบไหนก็ได้</span>
+        <a class="btn btn-sm btn-outline-secondary float-end no-print" target="_blank" rel="noopener" href="/sv-print.html?doc=obs&blank=1"><i class="bi bi-file-earmark me-1"></i>แบบเปล่า</a></h2><div class="body">
+        <div><span class="text-muted">เพื่อนคู่นิเทศ</span> <b>${esc(peer ? peer.name : 'ยังไม่ได้กำหนด')}</b></div>
+        <div><span class="text-muted">วันและคาบที่เข้าสังเกต</span> ${v.pre_date ? `${thDate(v.pre_date)}${v.pre_period ? ' · คาบที่ ' + esc(v.pre_period) : ''} ${esc(v.pre_lesson)}` : '<span class="text-muted">เพื่อนคู่นิเทศเลือกเองตอนกรอกแบบสังเกต</span>'}</div>
+      </div></div>`;
+    const mine = v.evals.find(e => e.round === 'pre' && e.mine && e.status !== 'submitted');
+    if (mine) h += evalForm(v, formFor(v, 'pre'), mine);
+    const pre = v.evals.find(e => e.round === 'pre' && e.status === 'submitted' && e.scores);
+    if (pre) h += preView(formFor(v, 'pre'), pre, v.pre_result);
+    else if (!mine) h += preE && preE.status === 'submitted'
+      ? '<div class="alert alert-info">เพื่อนคู่นิเทศส่งผลการสังเกตแล้ว — ผลเปิดให้ผู้รับการนิเทศเห็นทันที และกรรมการอีก 2 คนเห็นเมื่อนิเทศจริงครบ</div>'
+      : `<div class="alert alert-light border">รอ${preE ? ' ' + esc(preE.evaluator_name) : 'เพื่อนคู่นิเทศ'} เข้าสังเกตการสอนและส่งผล</div>`;
+  } else {
+    // ── รอบที่ 2 นิเทศจริง ──
+    h += `<div class="sec"><h2><i class="bi bi-clipboard2-check me-1"></i>นิเทศจริง <span class="fw-normal text-muted small">รอบที่ 2 · ${esc(f.name)}</span></h2><div class="body">
         <div class="row g-2">
-          <div class="col-md-6"><span class="text-muted">ผู้รับการนิเทศ</span> <b>${esc(v.teacher_name)}</b></div>
-          <div class="col-md-6"><span class="text-muted">กลุ่มสาระการเรียนรู้</span> ${esc(v.area || '–')}</div>
-          <div class="col-md-6"><span class="text-muted">วันที่สอน</span> ${thDate(v.date)} · คาบที่ ${esc(v.period)}</div>
+          <div class="col-md-6"><span class="text-muted">วันที่นิเทศ</span> ${thDate(v.date)} · คาบที่ ${esc(v.period)}</div>
           <div class="col-md-6"><span class="text-muted">วิชา</span> ${esc(v.code)} ${esc(v.title)} · ${esc(v.class_label)}</div>
         </div>
-        <div class="mt-2"><span class="text-muted">กรรมการนิเทศ</span>
+        <div class="mt-2"><span class="text-muted">กรรมการนิเทศ 3 คน</span>
           ${[1, 2, 3].map(n => v.committee.find(c => c.seat === n) || { seat: n, unset: true }).map(c => c.unset
             ? `<div class="text-muted">${c.seat}. ยังไม่ได้กำหนด${v.can_manage ? ' — กด "แก้นัด" เพื่อเพิ่มก่อนวันนิเทศจริง' : ''}</div>`
             : `<div>${c.seat}. ${esc(c.name)}${c.position ? ` <span class="text-muted">(${esc(c.position)})</span>` : ''}
             ${c.peer ? '<span class="badge text-bg-light border">เพื่อนคู่นิเทศ</span>' : ''}
             ${c.submitted ? '<i class="bi bi-check-circle-fill text-success" title="ส่งผลแล้ว"></i>' : '<span class="text-muted small">ยังไม่ส่ง</span>'}</div>`).join('')}
+        </div></div></div>`;
+    // ข้อมูลก่อนสอน
+    h += `<div class="sec"><h2>ข้อมูลก่อนสอน <span class="fw-normal text-muted small">ผู้รับการนิเทศกรอก</span></h2><div class="body">`;
+    if (canPre) {
+      h += `<div class="row g-2">
+          <div class="col-sm-3"><label class="form-label small mb-1" for="plan_no">แผนการเรียนรู้ที่</label><input id="plan_no" class="form-control" value="${esc(v.plan_no)}"></div>
+          <div class="col-sm-9"><label class="form-label small mb-1" for="unit">หน่วยการเรียนรู้</label><input id="unit" class="form-control" value="${esc(v.unit)}"></div>
+          <div class="col-12"><label class="form-label small mb-1" for="topic">เรื่อง</label><input id="topic" class="form-control" value="${esc(v.topic)}"></div>
+          <div class="col-12"><label class="form-label small mb-1" for="focus">เป้าหมายการสอนในคาบ / ประเด็นที่อยากให้กรรมการสังเกตเป็นพิเศษ</label>
+            <textarea id="focus" class="form-control" rows="2">${esc(v.focus)}</textarea></div>
         </div>
-        ${v.pre_date ? `<div class="mt-2"><span class="text-muted">เพื่อนคู่นิเทศสังเกตก่อน</span> ${thDate(v.pre_date)}${v.pre_period ? ' · คาบที่ ' + esc(v.pre_period) : ''} ${esc(v.pre_lesson)}</div>` : ''}
-      </div></div>`;
-
-  // ข้อมูลก่อนสอน
-  h += `<div class="sec"><h2>ข้อมูลก่อนสอน <span class="fw-normal text-muted small">ผู้รับการนิเทศกรอก</span></h2><div class="body">`;
-  if (canPre) {
-    h += `<div class="row g-2">
-        <div class="col-sm-3"><label class="form-label small mb-1" for="plan_no">แผนการเรียนรู้ที่</label><input id="plan_no" class="form-control" value="${esc(v.plan_no)}"></div>
-        <div class="col-sm-9"><label class="form-label small mb-1" for="unit">หน่วยการเรียนรู้</label><input id="unit" class="form-control" value="${esc(v.unit)}"></div>
-        <div class="col-12"><label class="form-label small mb-1" for="topic">เรื่อง</label><input id="topic" class="form-control" value="${esc(v.topic)}"></div>
-        <div class="col-12"><label class="form-label small mb-1" for="focus">เป้าหมายการสอนในคาบ / ประเด็นที่อยากให้กรรมการสังเกตเป็นพิเศษ</label>
-          <textarea id="focus" class="form-control" rows="2">${esc(v.focus)}</textarea></div>
-      </div>
-      <button class="btn btn-primary mt-3 no-print" onclick="savePre()"><i class="bi bi-check-lg me-1"></i>บันทึกข้อมูลก่อนสอน</button>`;
-  } else {
-    h += (v.unit || v.topic || v.focus)
-      ? `<div>แผนที่ ${esc(v.plan_no || '–')} · หน่วย ${esc(v.unit || '–')} · เรื่อง ${esc(v.topic || '–')}</div>
-         ${v.focus ? `<div class="mt-1"><span class="text-muted">ประเด็นที่อยากให้สังเกต:</span> <span class="pre-wrap">${esc(v.focus)}</span></div>` : ''}`
-      : '<span class="text-muted">ผู้รับการนิเทศยังไม่ได้กรอก</span>';
+        <button class="btn btn-primary mt-3 no-print" onclick="savePre()"><i class="bi bi-check-lg me-1"></i>บันทึกข้อมูลก่อนสอน</button>`;
+    } else {
+      h += (v.unit || v.topic || v.focus)
+        ? `<div>แผนที่ ${esc(v.plan_no || '–')} · หน่วย ${esc(v.unit || '–')} · เรื่อง ${esc(v.topic || '–')}</div>
+           ${v.focus ? `<div class="mt-1"><span class="text-muted">ประเด็นที่อยากให้สังเกต:</span> <span class="pre-wrap">${esc(v.focus)}</span></div>` : ''}`
+        : '<span class="text-muted">ผู้รับการนิเทศยังไม่ได้กรอก</span>';
+    }
+    h += '</div></div>';
+    for (const e of v.evals.filter(e => e.round === 'main' && e.mine && e.status !== 'submitted')) h += evalForm(v, formFor(v, 'main'), e);
+    if (v.result) h += resultView(v, f);
+    else {
+      const waiting = v.evals.filter(e => e.round === 'main' && e.mine && e.status === 'submitted').length;
+      if (waiting) h += `<div class="alert alert-info">คุณส่งผลแล้ว — รอกรรมการท่านอื่นส่งให้ครบ (${v.main_done}/3) แล้วระบบจะแปลผลให้</div>`;
+      else if (v.is_teacher) h += `<div class="alert alert-info">กรรมการส่งผลแล้ว ${v.main_done}/3 คน — เมื่อครบ ระบบจะแสดงผลและคำแปลผลที่นี่</div>`;
+    }
+    if (v.result && (v.is_teacher || v.can_manage || Object.keys(v.reflection).length || v.agreed)) h += reflectView(v, f);
   }
-  h += '</div></div>';
-
-  // แบบประเมินของฉันที่ยังไม่ส่ง → ฟอร์มให้คะแนน
-  for (const e of v.evals.filter(e => e.mine && e.status !== 'submitted')) h += evalForm(v, formFor(v, e.round), e);
-  // ผลรอบสังเกตก่อน (ที่ส่งแล้วและมองเห็นได้)
-  const pre = v.evals.find(e => e.round === 'pre' && e.status === 'submitted' && e.scores);
-  if (pre) h += preView(formFor(v, 'pre'), pre, v.pre_result);
-  // ผลรวม
-  if (v.result) h += resultView(v, f);
-  else {
-    const waiting = v.evals.filter(e => e.round === 'main' && e.mine && e.status === 'submitted').length;
-    if (waiting) h += `<div class="alert alert-info">คุณส่งผลแล้ว — รอกรรมการท่านอื่นส่งให้ครบ (${v.main_done}/${v.main_total}) แล้วระบบจะแปลผลให้</div>`;
-    else if (v.is_teacher) h += `<div class="alert alert-info">กรรมการส่งผลแล้ว ${v.main_done}/${v.main_total} คน — เมื่อครบ ระบบจะแสดงผลและคำแปลผลที่นี่</div>`;
-  }
-  // สะท้อนคิด + รับทราบ
-  if (v.result && (v.is_teacher || v.can_manage || Object.keys(v.reflection).length || v.agreed)) h += reflectView(v, f);
   if (v.history && v.history.length) h += historyView(v);
   if (v.can_manage) h += manageView(v);
   $('detailView').innerHTML = h;
-  for (const e of v.evals.filter(e => e.mine && e.status !== 'submitted')) refreshBar(e);
+  for (const e of v.evals.filter(e => e.mine && e.status !== 'submitted' && (e.round === 'pre') === (st === 'obs'))) refreshBar(e);
   if ($('obsDate')) obsLoad(true);
 }
 
