@@ -35,6 +35,14 @@
     .item .d { color: var(--bs-secondary-color); font-size: .9rem; margin: .15rem 0 .65rem 2.5rem; }
     .item .below { margin-left: 2.5rem; }
     /* ปุ่มให้คะแนน 0–4: สีไล่จากแดง (0) ถึงเขียว (4) */
+    .lk-person { padding: .7rem 0; border-top: 1px solid var(--bs-border-color); }
+    .lk-person:first-child { border-top: 0; }
+    .lk-head { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; justify-content: space-between; margin-bottom: .35rem; }
+    .lk-head b { font-size: 1.1rem; }
+    .lk-job { display: flex; gap: .6rem; align-items: center; padding: .35rem .5rem; margin: .25rem 0; border-radius: .6rem; background: var(--bs-tertiary-bg); }
+    .lk-job .ico { font-size: 1.3rem; }
+    .lk-job .t { flex: 1; min-width: 0; } .lk-job .t small { display: block; color: var(--bs-secondary-color); }
+    @media (max-width: 575px) { .lk-job { flex-wrap: wrap; } .lk-job .t { flex-basis: calc(100% - 2.5rem); } .lk-head .btn { width: 100%; } }
     .stage-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin: 0 0 1rem; }
     .stage-tabs button { display: flex; gap: .7rem; align-items: center; text-align: left; padding: .8rem 1rem; border-radius: .9rem;
       border: 2px solid var(--bs-border-color); background: var(--bs-body-bg); color: var(--bs-body-color); }
@@ -684,16 +692,21 @@ async function loadAllLinks() {
   try { d = await apiFetch('/api/sv/links?term=' + encodeURIComponent(term())); }
   catch (e) { box.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`; return; }
   const bare = n => String(n || '').replace(/^(นาย|นางสาว|นาง|ครู)\s*/, '').trim();
-  // งานของแต่ละคน: [{kind, text, url, visit}]
+  const first = n => bare(n).split(/\s+/)[0];
+  // งานของแต่ละคน: {visit, order, icon, short, hint, url}
   const jobs = {}, add = (name, j) => (jobs[bare(name)] = jobs[bare(name)] || { name, list: [] }).list.push(j);
   const pairs = new Map();
   for (const v of d.visits) {
     const peer = v.committee.find(c => c.peer);
     for (const l of v.links) {
       const url = `${location.origin}/sv/${l.token}`;
-      if (l.seat === 0) add(l.name, { order: 2, icon: '📋', title: v.kind === 'obs' ? `รับการสังเกตการสอนเพิ่มเติม (ผู้สังเกต: ${peer ? peer.name : '-'})` : `ผู้รับการนิเทศ — ดูผลการสังเกต/ผลนิเทศของตัวเอง กรอกข้อมูลก่อนสอน`, url });
-      else if (l.peer) add(l.name, { order: 1, icon: '👁', title: `สังเกตการสอนครู${v.teacher_name} (เพื่อนคู่นิเทศ) — เข้าคาบไหนก็ได้ เลือกวัน/คาบเองในลิงก์ กรอกย้อนหลังได้${v.kind === 'obs' ? '' : ' และร่วมนิเทศภายในในลิงก์เดียวกัน'}`, url });
-      else add(l.name, { order: 3, icon: '🧑‍🏫', title: `กรรมการนิเทศภายในของครู${v.teacher_name}${v.date ? ' ' + thDate(v.date) + ' คาบ ' + v.period : ''}`, url });
+      if (l.seat === 0) add(l.name, v.kind === 'obs'
+        ? { visit: v.id, order: 2, icon: '📋', short: 'ดูผลการสังเกตเพิ่มเติมของตัวเอง', hint: `ผู้สังเกต: ครู${first(peer && peer.name)}`, url }
+        : { visit: v.id, order: 2, icon: '📋', short: 'งานของตัวเอง (ผู้รับการนิเทศ)', hint: `ดูผลการสังเกตจากครู${first(peer && peer.name)} · กรอกข้อมูลก่อนสอน · ดูผลนิเทศภายใน`, url });
+      else if (l.peer) add(l.name, { visit: v.id, order: 1, icon: '👁', short: `เข้าสังเกตการสอนครู${first(v.teacher_name)}`,
+        hint: 'เข้าคาบไหนก็ได้ · เลือกวันและคาบเองในลิงก์ · กรอกย้อนหลังได้' + (v.kind === 'obs' ? '' : ' · วันนิเทศภายในใช้ลิงก์นี้ให้คะแนนด้วย'), url });
+      else add(l.name, { visit: v.id, order: 3, icon: '🧑‍🏫', short: `กรรมการนิเทศภายในครู${first(v.teacher_name)}`,
+        hint: v.date ? `${thDate(v.date)} คาบ ${v.period}` : 'วันนิเทศภายในจะแจ้งภายหลัง', url });
     }
     if (peer) {
       const key = [bare(v.teacher_name), bare(peer.name)].sort().join('|');
@@ -702,34 +715,39 @@ async function loadAllLinks() {
     }
   }
   PEOPLE_MSG = {};
+  const sorted = list => list.slice().sort((a, b) => a.order - b.order);
   const msg = p => `📋 นิเทศการสอน ภาคเรียนที่ ${term()}\nเรียน ครู${bare(p.name)}\n\n` +
-    p.list.sort((a, b) => a.order - b.order).map((j, i) => `${i + 1}) ${j.icon} ${j.title}\n${j.url}`).join('\n\n') +
-    `\n\n* ลิงก์สำหรับครู${bare(p.name)} เท่านั้น กดแล้วกรอกได้เลย ไม่ต้องล็อกอิน`;
-  const person = (name, pairKey) => {
-    const p = jobs[bare(name)]; if (!p) return '';
+    sorted(p.list).map((j, i) => `${i + 1}) ${j.icon} ${j.short}\n${j.hint}\n${j.url}`).join('\n\n') +
+    `\n\n* กดลิงก์แล้วกรอกได้เลย ไม่ต้องล็อกอิน · ลิงก์สำหรับครู${first(p.name)} เท่านั้น`;
+  const person = (name, pr, given) => {
+    const all = given || jobs[bare(name)]; if (!all) return '';
+    // ในการ์ดคู่: เฉพาะงานสังเกต/ผู้รับการนิเทศของนัดในคู่นั้น (ครูที่อยู่ 2 คู่จะไม่เห็นงานซ้ำ)
+    const p = pr ? { name: all.name, list: all.list.filter(j => j.order !== 3 && pr.visits.some(v => v.id === j.visit)) } : all;
+    if (!p.list.length) return '';
     const id = 'm' + Object.keys(PEOPLE_MSG).length; PEOPLE_MSG[id] = msg(p);
-    return `<div class="py-2 border-top">
-      <div class="d-flex flex-wrap align-items-center gap-2"><b class="flex-grow-1">ครู${esc(bare(name))}</b>
-        <button class="btn btn-sm btn-success" onclick="copyMsg('${id}')"><i class="bi bi-chat-dots me-1"></i>คัดลอกรวมทุกงาน</button></div>
-      ${p.list.sort((a, b) => a.order - b.order).map(j => { const jid = 'm' + Object.keys(PEOPLE_MSG).length;
-          PEOPLE_MSG[jid] = `📋 นิเทศการสอน ภาคเรียนที่ ${term()}\nเรียน ครู${bare(p.name)}\n${j.icon} ${j.title}\n${j.url}\n\n* ลิงก์สำหรับครู${bare(p.name)} เท่านั้น ไม่ต้องล็อกอิน`;
-          return `<div class="small mt-2 d-flex gap-2 align-items-start"><div class="flex-grow-1">${j.icon} ${esc(j.title)}<div class="text-muted text-break">${esc(j.url)}</div></div>
-            <button class="btn btn-sm btn-outline-success text-nowrap" onclick="copyMsg('${jid}')" title="คัดลอกเฉพาะงานนี้"><i class="bi bi-clipboard me-1"></i>แยก</button></div>`; }).join('')}</div>`;
+    return `<div class="lk-person">
+      <div class="lk-head"><b>ครู${esc(bare(p.name))}</b>
+        <button class="btn btn-success" onclick="copyMsg('${id}')"><i class="bi bi-chat-dots me-1"></i>คัดลอกข้อความส่งไลน์${p.list.length > 1 ? ` (รวม ${p.list.length} งาน)` : ''}</button></div>
+      ${sorted(p.list).map(j => {
+        const jid = 'm' + Object.keys(PEOPLE_MSG).length;
+        PEOPLE_MSG[jid] = `📋 นิเทศการสอน ภาคเรียนที่ ${term()}\nเรียน ครู${bare(p.name)}\n${j.icon} ${j.short}\n${j.hint}\n${j.url}\n\n* กดลิงก์แล้วกรอกได้เลย ไม่ต้องล็อกอิน`;
+        return `<div class="lk-job"><span class="ico">${j.icon}</span><div class="t"><div>${esc(j.short)}</div><small>${esc(j.hint)}</small></div>
+          <a class="btn btn-sm btn-outline-secondary" href="${esc(j.url)}" target="_blank" rel="noopener" title="${esc(j.url)}">เปิดดู</a>
+          <button class="btn btn-sm btn-outline-success" onclick="copyMsg('${jid}')" title="คัดลอกเฉพาะงานนี้">คัดลอกงานนี้</button></div>`; }).join('')}
+    </div>`;
   };
-  let n = 0, html = `<div class="sec"><h2><i class="bi bi-link-45deg me-1"></i>ลิงก์ส่งไลน์รายคู่ · ภาคเรียนที่ ${esc(term())}
-      <span class="fw-normal text-muted small">${d.visits.length} นัด · แต่ละคนได้ข้อความเดียวรวมทุกงานของตัวเอง</span></h2>
-    <div class="body small text-muted">กดคัดลอกแล้ววางในไลน์ส่วนตัวของครูคนนั้น · ลิงก์ของใครของมัน ไม่ต้องล็อกอิน · ถ้าลิงก์หลุดไปถึงคนอื่น เปิดนัดนั้นแล้วกด <i class="bi bi-arrow-repeat"></i> ออกลิงก์ใหม่</div></div>`;
+  const chip = v => `<span class="badge rounded-pill ${v.pre_done ? 'text-bg-success' : 'text-bg-light border'}">ครู${esc(first(v.teacher_name))}: ${v.pre_done ? 'ถูกสังเกตแล้ว' : 'รอสังเกต'}</span>`;
+  let n = 0, html = `<div class="alert alert-info"><i class="bi bi-info-circle me-1"></i><b>วิธีใช้:</b> กดปุ่มเขียว <b>"คัดลอกข้อความส่งไลน์"</b> ของครูแต่ละคน แล้ววางในไลน์ส่วนตัวของครูคนนั้น
+      — ข้อความมีลิงก์ครบทุกงานของครูคนนั้นแล้ว · ลิงก์ของใครของมัน ไม่ต้องล็อกอิน · ลิงก์หลุดไปถึงคนอื่น: เปิดนัดนั้นแล้วกด <i class="bi bi-arrow-repeat"></i> ออกลิงก์ใหม่</div>`;
   for (const [key, pr] of pairs) {
     n++;
     const [a, b] = pr.names.map(bare);                 // ลำดับตามที่สร้างนัด (ตรงกับรายชื่อคู่ของโรงเรียน)
-    html += `<div class="sec"><h2>คู่ที่ ${n}: ครู${esc(a)} ↔ ครู${esc(b)}
-        <span class="fw-normal text-muted small">${pr.visits.map(v => `${esc(bare(v.teacher_name))} ${v.pre_done ? '✓ ถูกสังเกตแล้ว' : 'รอสังเกต'}`).join(' · ')}</span></h2>
-      <div class="body pt-0">${person(a)}${person(b)}</div></div>`;
+    html += `<div class="sec"><h2>คู่ที่ ${n} · ครู${esc(first(a))} ↔ ครู${esc(first(b))} <span class="ms-1">${pr.visits.map(chip).join(' ')}</span></h2>
+      <div class="body py-1">${person(a, pr)}${person(b, pr)}</div></div>`;
   }
-  // คนที่มีงาน (เช่น กรรมการนิเทศภายใน) แต่ไม่อยู่ในคู่ใด
-  const inPairs = new Set([...pairs.keys()].flatMap(k => k.split('|')));
-  const others = Object.keys(jobs).filter(k => !inPairs.has(k));
-  if (others.length) html += `<div class="sec"><h2>กรรมการนิเทศภายใน (นอกคู่)</h2><div class="body pt-0">${others.map(k => person(jobs[k].name)).join('')}</div></div>`;
+  // กรรมการนิเทศภายในอีก 2 คนของแต่ละนัด (ไม่อยู่ในการ์ดคู่) รวมไว้ท้ายหน้า รายคน
+  const rest = Object.values(jobs).map(p => ({ name: p.name, list: p.list.filter(j => j.order === 3) })).filter(p => p.list.length);
+  if (rest.length) html += `<div class="sec"><h2>🧑‍🏫 กรรมการนิเทศภายใน</h2><div class="body py-1">${rest.map(p => person(p.name, null, p)).join('')}</div></div>`;
   if (!d.visits.length) html += '<div class="text-center text-muted py-5">ยังไม่มีนัดในภาคเรียนนี้</div>';
   box.innerHTML = html;
 }

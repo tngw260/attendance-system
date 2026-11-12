@@ -304,6 +304,15 @@ def init(app, get_db, login_required, current_user, get_settings):
         if 'kind' not in cols:
             con.execute("ALTER TABLE sv_visits ADD COLUMN kind TEXT NOT NULL DEFAULT 'full'")
 
+    def fill_areas():
+        """นัดที่ยังไม่มีกลุ่มสาระ (สร้างตอนยังไม่กำหนดวันนิเทศภายใน) → ใส่กลุ่มสาระหลักของครูจากตารางสอน"""
+        with get_db() as con:
+            for v in con.execute("SELECT v.id, v.teacher_id, t.id term_id FROM sv_visits v JOIN tt_terms t ON t.name=v.term "
+                                 "WHERE COALESCE(v.area,'')='' AND v.teacher_id IS NOT NULL").fetchall():
+                a = teacher_area(con, v['teacher_id'], v['term_id'])
+                if a:
+                    con.execute('UPDATE sv_visits SET area=? WHERE id=?', (a, v['id']))
+
     def bad(msg, code=400):
         return jsonify(success=False, message=msg), code
 
@@ -371,6 +380,17 @@ def init(app, get_db, login_required, current_user, get_settings):
     def area_of(con, code):
         r = con.execute('SELECT area FROM tt_subjects WHERE code=?', (re.sub(r'\s+', '', code or ''),)).fetchone()
         return (r['area'] or '') if r else ''
+
+    def teacher_area(con, tid, term_id):
+        """กลุ่มสาระหลักของครู = กลุ่มสาระที่สอนมากที่สุดในตารางสอนภาคเรียนนั้น"""
+        count = {}
+        for r in con.execute('SELECT l.code, l.teacher_ids, COUNT(s.id) n FROM tt_lessons l JOIN tt_slots s ON s.lesson_id=l.id '
+                             "WHERE l.term_id=? AND l.kind='subject' AND l.code<>'' GROUP BY l.id", (term_id,)):
+            if tid in jl(r['teacher_ids'], []):
+                a = area_of(con, r['code'])
+                if a:
+                    count[a] = count.get(a, 0) + r['n']
+        return max(count, key=count.get) if count else ''
 
     def subject_title(con, code):
         r = con.execute('SELECT name FROM tt_subjects WHERE code=?', (code,)).fetchone()
@@ -561,8 +581,8 @@ def init(app, get_db, login_required, current_user, get_settings):
             # ประวัติการนิเทศของครูคนนี้ในภาคเรียนอื่น (ผลที่แปลแล้ว) — ฝ่ายวิชาการและเจ้าตัวเห็น
             hist = []
             if (mgr or is_teacher) and v['teacher_id']:
-                for h in con.execute('SELECT * FROM sv_visits WHERE teacher_id=? AND id<>? ORDER BY date DESC',
-                                     (v['teacher_id'], vid)).fetchall():
+                for h in con.execute('SELECT * FROM sv_visits WHERE teacher_id=? AND term<>? ORDER BY date DESC',
+                                     (v['teacher_id'], v['term'])).fetchall():
                     hev = con.execute('SELECT * FROM sv_evals WHERE visit_id=?', (h['id'],)).fetchall()
                     row = dict(term=h['term'], date=h['date'], code=h['code'], title=h['title'],
                                class_label=h['class_label'], **progress(h, hev))
@@ -627,7 +647,8 @@ def init(app, get_db, login_required, current_user, get_settings):
             return None, 'วันที่สังเกตก่อนนิเทศไม่ถูกต้อง'
         if kind == 'obs':                            # สังเกตเพิ่มเติม: มีแค่ผู้สังเกต 1 คน
             people = [people[peer - 1] if i == peer - 1 else (None, '', '') for i in range(3)]
-        f = dict(kind=kind, term=term['name'], teacher_id=tid, teacher_name=tname, area=clean(b.get('area'), 60) or area_of(con, code),
+        f = dict(kind=kind, term=term['name'], teacher_id=tid, teacher_name=tname,
+                 area=clean(b.get('area'), 60) or (area_of(con, code) if code else teacher_area(con, tid, term['id'])),
                  date=date, period=clean(b.get('period'), 10) if date else '', code=code,
                  title=clean(b.get('title'), 120) if date else '', class_label=clean(b.get('class_label'), 60) if date else '', peer_seat=peer, pre_date=pre_date,
                  pre_period=clean(b.get('pre_period'), 10), pre_lesson=clean(b.get('pre_lesson'), 160))
@@ -1063,3 +1084,5 @@ def init(app, get_db, login_required, current_user, get_settings):
             form=DEFAULT_FORM, signers=signers,
             percent=r2(sum(r['percent'] for r in done) / len(done)) if done else None,
             level=level_of(r2(sum(r['percent'] for r in done) / len(done)), form['pct_levels']) if done else '')
+
+    fill_areas()
