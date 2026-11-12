@@ -170,7 +170,7 @@
           </div>
           <div class="col-12">
             <label class="form-label mb-1">กรรมการนิเทศ 3 คน</label>
-            <div class="small text-muted mb-2">เลือกจากรายชื่อหรือพิมพ์ชื่อเอง · ติ๊กคนที่เป็นเพื่อนคู่นิเทศ (มาสังเกตการสอนก่อนวันนิเทศจริง) · ใส่แค่เพื่อนคู่นิเทศก่อนได้ อีก 2 คนเพิ่มทีหลังด้วย "แก้นัด"</div>
+            <div class="small text-muted mb-2">เลือกจากรายชื่อหรือพิมพ์ชื่อเอง · ติ๊กคนที่เป็นเพื่อนคู่นิเทศ (มาสังเกตการสอนก่อนวันนิเทศภายใน) · ใส่แค่เพื่อนคู่นิเทศก่อนได้ อีก 2 คนเพิ่มทีหลังด้วย "แก้นัด"</div>
             <div id="vmCom"></div>
             <datalist id="people"></datalist>
           </div>
@@ -212,7 +212,7 @@ const thDate = d => d ? formatThaiDateShort(d) : '';
 const term = () => $('term').value;
 const who = () => $('who').value;
 const form = v => META.forms[(v && v.form) || META.default_form];
-// แบบที่ใช้กับรอบนั้น: เพื่อนคู่นิเทศสังเกตก่อน = pre_form · วันนิเทศจริง = form
+// แบบที่ใช้กับรอบนั้น: เพื่อนคู่นิเทศสังเกตก่อน = pre_form · วันนิเทศภายใน = form
 const formFor = (v, round) => round === 'pre' ? (META.forms[v.pre_form] || META.forms[META.default_pre_form]) : form(v);
 const lim = f => { const ns = f.scale.map(x => x[0]); return [Math.min(...ns), Math.max(...ns)]; };
 const asc = f => { const [lo, hi] = lim(f); return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i); };
@@ -220,7 +220,7 @@ const asc = f => { const [lo, hi] = lim(f); return Array.from({ length: hi - lo 
 const tone = (f, n) => { const [lo, hi] = lim(f); return 's' + Math.round((n - lo) * 4 / (hi - lo)); };
 const items = f => f.parts.flatMap(p => p.items);
 const num = x => x == null ? '–' : Number(x).toLocaleString('th-TH', { maximumFractionDigits: 2 });
-const roundTh = e => e.round === 'pre' ? 'สังเกตการสอน (เพื่อนคู่นิเทศ)' : 'นิเทศจริง';
+const roundTh = e => e.round === 'pre' ? 'สังเกตการสอน (เพื่อนคู่นิเทศ)' : 'นิเทศภายใน';
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (LINK) return startLink();
@@ -315,14 +315,14 @@ async function openVisit(id) {
   window.scrollTo(0, 0);
 }
 
-// หน้านัดแยกเป็น 2 ปุ่ม: สังเกตการสอน (รอบที่ 1 เพื่อนคู่นิเทศ) / นิเทศจริง (รอบที่ 2 กรรมการ 3 คน)
+// หน้านัดแยกเป็น 2 ปุ่ม: สังเกตการสอน (รอบที่ 1 เพื่อนคู่นิเทศ) / นิเทศภายใน (รอบที่ 2 กรรมการ 3 คน)
 const STAGE = {};
 function setStage(st) { STAGE[CUR.id] = st; renderVisit(); window.scrollTo(0, 0); }
 function stageOf(v) {
   if (STAGE[v.id]) return STAGE[v.id];
   const pre = v.evals.find(e => e.round === 'pre');
   const preOpen = pre && pre.status !== 'submitted';
-  // เพื่อนคู่นิเทศ/ผู้รับการนิเทศ/ฝ่ายวิชาการ ที่รอบสังเกตยังไม่เสร็จ → เปิดหน้าสังเกตก่อน · นอกนั้นเปิดนิเทศจริง
+  // เพื่อนคู่นิเทศ/ผู้รับการนิเทศ/ฝ่ายวิชาการ ที่รอบสังเกตยังไม่เสร็จ → เปิดหน้าสังเกตก่อน · นอกนั้นเปิดนิเทศภายใน
   return preOpen && (pre.mine || v.is_teacher || v.can_manage) ? 'obs' : 'main';
 }
 
@@ -332,7 +332,7 @@ function renderVisit() {
   const preE = v.evals.find(e => e.round === 'pre');
   const peer = v.committee.find(c => c.peer);
   let h = LINK && v.link ? `<div class="alert alert-primary no-print"><i class="bi bi-person-badge me-1"></i>คุณคือ <b>${esc(v.link.name)}</b> · หน้าที่: <b>${esc(v.link.role)}</b>
-      ${v.link.peer ? '<div class="small mt-1">รอบที่ 1 สังเกตการสอนคนเดียว (ปุ่ม "สังเกตการสอน") · รอบที่ 2 วันนิเทศจริงร่วมกับกรรมการอีก 2 คน (ปุ่ม "นิเทศจริง") ใช้ลิงก์เดียวกันนี้</div>' : ''}
+      ${v.link.peer ? '<div class="small mt-1">รอบที่ 1 สังเกตการสอนคนเดียว (ปุ่ม "สังเกตการสอน") · รอบที่ 2 วันนิเทศภายในร่วมกับกรรมการอีก 2 คน (ปุ่ม "นิเทศภายใน") ใช้ลิงก์เดียวกันนี้</div>' : ''}
       <div class="small text-muted mt-1">ลิงก์นี้ใช้เฉพาะคุณ อย่าส่งต่อให้ผู้อื่น</div></div>` : '';
   h += `<div class="d-flex flex-wrap gap-2 mb-3 no-print">
       ${LINK ? '' : '<button class="btn btn-outline-secondary" onclick="backToList()"><i class="bi bi-arrow-left me-1"></i>กลับ</button>'}
@@ -354,7 +354,7 @@ function renderVisit() {
       <button type="button" role="tab" aria-selected="${st === 'obs'}" class="${st === 'obs' ? 'on' : ''}" onclick="setStage('obs')">
         <i class="bi bi-eye"></i><span><b>สังเกตการสอน</b><small>รอบที่ 1 · เพื่อนคู่นิเทศ ${esc(peer ? peer.name : '–')}</small>${obsState}</span></button>
       <button type="button" role="tab" aria-selected="${st === 'main'}" class="${st === 'main' ? 'on' : ''}" onclick="setStage('main')">
-        <i class="bi bi-clipboard2-check"></i><span><b>นิเทศจริง</b><small>รอบที่ 2 · ${thDate(v.date)} คาบ ${esc(v.period)} · กรรมการ 3 คน</small>${mainState}</span></button>
+        <i class="bi bi-clipboard2-check"></i><span><b>นิเทศภายใน</b><small>รอบที่ 2 · ${thDate(v.date)} คาบ ${esc(v.period)} · กรรมการ 3 คน</small>${mainState}</span></button>
     </div>`;
 
   if (st === 'obs') {
@@ -369,18 +369,18 @@ function renderVisit() {
     const pre = v.evals.find(e => e.round === 'pre' && e.status === 'submitted' && e.scores);
     if (pre) h += preView(formFor(v, 'pre'), pre, v.pre_result);
     else if (!mine) h += preE && preE.status === 'submitted'
-      ? '<div class="alert alert-info">เพื่อนคู่นิเทศส่งผลการสังเกตแล้ว — ผลเปิดให้ผู้รับการนิเทศเห็นทันที และกรรมการอีก 2 คนเห็นเมื่อนิเทศจริงครบ</div>'
+      ? '<div class="alert alert-info">เพื่อนคู่นิเทศส่งผลการสังเกตแล้ว — ผลเปิดให้ผู้รับการนิเทศเห็นทันที และกรรมการอีก 2 คนเห็นเมื่อนิเทศภายในครบ</div>'
       : `<div class="alert alert-light border">รอ${preE ? ' ' + esc(preE.evaluator_name) : 'เพื่อนคู่นิเทศ'} เข้าสังเกตการสอนและส่งผล</div>`;
   } else {
-    // ── รอบที่ 2 นิเทศจริง ──
-    h += `<div class="sec"><h2><i class="bi bi-clipboard2-check me-1"></i>นิเทศจริง <span class="fw-normal text-muted small">รอบที่ 2 · ${esc(f.name)}</span></h2><div class="body">
+    // ── รอบที่ 2 นิเทศภายใน ──
+    h += `<div class="sec"><h2><i class="bi bi-clipboard2-check me-1"></i>นิเทศภายใน <span class="fw-normal text-muted small">รอบที่ 2 · ${esc(f.name)}</span></h2><div class="body">
         <div class="row g-2">
           <div class="col-md-6"><span class="text-muted">วันที่นิเทศ</span> ${thDate(v.date)} · คาบที่ ${esc(v.period)}</div>
           <div class="col-md-6"><span class="text-muted">วิชา</span> ${esc(v.code)} ${esc(v.title)} · ${esc(v.class_label)}</div>
         </div>
         <div class="mt-2"><span class="text-muted">กรรมการนิเทศ 3 คน</span>
           ${[1, 2, 3].map(n => v.committee.find(c => c.seat === n) || { seat: n, unset: true }).map(c => c.unset
-            ? `<div class="text-muted">${c.seat}. ยังไม่ได้กำหนด${v.can_manage ? ' — กด "แก้นัด" เพื่อเพิ่มก่อนวันนิเทศจริง' : ''}</div>`
+            ? `<div class="text-muted">${c.seat}. ยังไม่ได้กำหนด${v.can_manage ? ' — กด "แก้นัด" เพื่อเพิ่มก่อนวันนิเทศภายใน' : ''}</div>`
             : `<div>${c.seat}. ${esc(c.name)}${c.position ? ` <span class="text-muted">(${esc(c.position)})</span>` : ''}
             ${c.peer ? '<span class="badge text-bg-light border">เพื่อนคู่นิเทศ</span>' : ''}
             ${c.submitted ? '<i class="bi bi-check-circle-fill text-success" title="ส่งผลแล้ว"></i>' : '<span class="text-muted small">ยังไม่ส่ง</span>'}</div>`).join('')}
@@ -673,7 +673,7 @@ const linkUrl = l => `${location.origin}/sv/${l.token}`;
 function linkText(l) {
   const v = CUR, d = x => x ? thDate(x) : '';
   let job = l.seat === 0 ? `รับการนิเทศ ${d(v.date)} คาบ ${v.period} (${v.code} ${v.title} ${v.class_label})\nก่อนวันสอนกรอก "ข้อมูลก่อนสอน" ในลิงก์ · หลังกรรมการส่งครบ ดูผล เขียนสะท้อนคิด และกดรับทราบ`
-    : l.peer ? `เพื่อนคู่นิเทศของ ${v.teacher_name}\n1) เข้าสังเกตการสอนคาบไหนก็ได้ แล้วกรอกแบบบันทึกการสังเกตชั้นเรียนในลิงก์ (เลือกวันและคาบที่เข้าสังเกตเอง กรอกย้อนหลังได้) แล้วกดส่ง\n2) วันนิเทศจริง ${d(v.date)} คาบ ${v.period} ให้คะแนนร่วมกับกรรมการอีก 2 คน`
+    : l.peer ? `เพื่อนคู่นิเทศของ ${v.teacher_name}\n1) เข้าสังเกตการสอนคาบไหนก็ได้ แล้วกรอกแบบบันทึกการสังเกตชั้นเรียนในลิงก์ (เลือกวันและคาบที่เข้าสังเกตเอง กรอกย้อนหลังได้) แล้วกดส่ง\n2) วันนิเทศภายใน ${d(v.date)} คาบ ${v.period} ให้คะแนนร่วมกับกรรมการอีก 2 คน`
     : `กรรมการนิเทศ ${v.teacher_name}\nวันนิเทศ ${d(v.date)} คาบ ${v.period} (${v.code} ${v.title} ${v.class_label})`;
   return `📋 นิเทศการสอน ภาคเรียนที่ ${v.term}\nเรียน ${l.name}\nหน้าที่: ${l.role}\n${job}\n\nกดลิงก์เพื่อกรอก (ไม่ต้องล็อกอิน):\n${linkUrl(l)}\n\n* ลิงก์นี้สำหรับ ${l.name} เท่านั้น กรุณาอย่าส่งต่อ`;
 }
