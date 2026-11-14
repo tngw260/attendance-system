@@ -5216,6 +5216,8 @@ import remedial                                      # สอบแก้ตั�
 remedial.init(app, get_db, login_required, current_user, get_settings)
 import supervision                                   # นิเทศการสอนออนไลน์ — กรรมการ 3 คน (1 คนเป็นเพื่อนคู่นิเทศ) ให้คะแนน คอมเมนต์ แปลผล
 supervision.init(app, get_db, login_required, current_user, get_settings)
+import teachlog                                      # บันทึกหลังสอนตามตารางสอน — ครูกรอกรายครั้งที่สอน วิชาการรับทราบรายสัปดาห์
+teachlog.init(app, get_db, login_required, current_user, get_settings)
 
 if __name__ == '__main__':
     import sys

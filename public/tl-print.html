@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>พิมพ์บันทึกหลังสอน</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <link rel="preload" href="/fonts/THSarabunNew-Regular.woff" as="font" type="font/woff" crossorigin>
+  <link rel="preload" href="/fonts/THSarabunNew-Bold.woff" as="font" type="font/woff" crossorigin>
+  <style>
+    /* ฟอนต์ฝังในเว็บ → ทุกเครื่องพิมพ์ออกมาขนาดเท่ากับ Word (ดู css/docforms.css) */
+    @font-face { font-family: 'THSarabunDoc'; font-weight: 400; font-display: block; src: url('/fonts/THSarabunNew-Regular.woff') format('woff'); }
+    @font-face { font-family: 'THSarabunDoc'; font-weight: 700; font-display: block; src: url('/fonts/THSarabunNew-Bold.woff') format('woff'); }
+    /* @page อยู่ชั้นนอก (Safari/iPad ไม่อ่าน @page ใน @media print) — ใบแนวนอนเติม <style id="pg"> ทับตอนโหลด */
+    @page { size: A4; margin: 12mm 14mm 12mm 20mm; }
+
+    .controls { max-width: 210mm; margin: 14px auto 0; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    .paper { width: 210mm; min-height: 297mm; margin: 14px auto; padding: 12mm 14mm 12mm 20mm; box-sizing: border-box;
+             background: #fff; color: #000; box-shadow: 0 2px 14px rgba(0,0,0,.15);
+             font-family: 'THSarabunDoc', 'TH Sarabun New', 'TH SarabunPSK', sans-serif; font-size: 16pt; line-height: 1.25; }
+    .paper * { font-family: inherit; }
+    .paper, .paper * { color: #000 !important; }
+    .paper.land { width: 297mm; min-height: 210mm; padding: 10mm 10mm 10mm 12mm; }
+    .paper h1 { font-size: 17pt; font-weight: 700; text-align: center; margin: 0; line-height: 1.25; }
+    .paper .sub { text-align: center; }
+    .paper .logo { display: block; height: 20mm; margin: 0 auto 1mm; }
+    .paper .b { font-weight: 700; }
+    .paper p { margin: 0; }
+    .paper .muted { color: #555 !important; }
+    /* แบบเต็มรายครั้ง (ตามแบบท้ายแผน) */
+    .paper .blk { break-inside: avoid; border: .75pt solid #000; padding: 2mm 3.5mm 2.5mm; margin-top: 3mm; }
+    .paper .blk .hd { font-weight: 700; border-bottom: .75pt solid #000; margin: -2mm -3.5mm 1.5mm; padding: 1mm 3.5mm; display: flex; justify-content: space-between; gap: 4mm; }
+    .paper .blk .ind { padding-left: 7mm; }
+    .paper .blk .ind2 { padding-left: 14mm; text-indent: -7mm; }
+    .paper .cb { display: inline-block; width: 3.6mm; height: 3.6mm; border: .9pt solid #000; margin-right: 1.5mm; vertical-align: -0.4mm;
+                 text-align: center; text-indent: 0; line-height: 3.2mm; font-size: 12pt; font-weight: 700; }
+    .paper .u { border-bottom: .9pt dotted #000; padding: 0 1.5mm; }
+    .paper .wait { text-align: center; padding: 3mm 0; }
+    /* ตาราง */
+    .paper table.g { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 2.5mm; }
+    .paper table.g th, .paper table.g td { border: .75pt solid #000; padding: .5mm 1.4mm; vertical-align: top; line-height: 1.12; font-size: 14pt;
+                                           overflow-wrap: anywhere; }
+    .paper table.g th { font-weight: 700; text-align: center; vertical-align: middle; }
+    .paper table.g td.c { text-align: center; }
+    .paper table.g tr { break-inside: avoid; }
+    .paper table.g thead { display: table-header-group; }
+    .paper.land table.g th, .paper.land table.g td { font-size: 13.5pt; }
+    .paper .sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin-top: 7mm; break-inside: avoid; text-align: center;
+                   font-size: 15pt; line-height: 1.3; }
+    .paper .sign.two { grid-template-columns: repeat(2, 1fr); }
+    .paper .cmt { margin-top: 3mm; break-inside: avoid; }
+    .paper .stat { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2.5mm; margin: 2.5mm 0 1mm; }
+    .paper .stat div { border: .75pt solid #000; text-align: center; padding: 1mm; line-height: 1.15; font-size: 14pt; }
+    .paper .stat b { display: block; font-size: 19pt; }
+
+    @media print {
+      html { color-scheme: light !important; }
+      html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+      nav, footer, .controls, .no-print { display: none !important; }
+      .paper, .paper.land { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="controls no-print">
+  <button class="btn btn-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>พิมพ์ / บันทึกเป็น PDF</button>
+  <span id="modeBtns"></span>
+  <span class="text-muted small" id="hint"></span>
+</div>
+<div id="out"><div class="controls text-muted">กำลังโหลด…</div></div>
+
+<script src="/js/common.js?v=20261114a"></script>
+<script>
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const P = new URLSearchParams(location.search);
+const KEY = P.get('k') || '';
+const api = url => apiFetch(url, KEY ? { headers: { 'X-TL-Key': KEY } } : {});
+const DAYS_TH = ['', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์', 'อาทิตย์'];
+const MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+const MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const dLong = s => { const [y, m, d] = s.split('-').map(Number); return `${d} ${MONTHS[m - 1]} ${y + 543}`; };
+const dShort = s => { const [y, m, d] = s.split('-').map(Number); return `${d} ${MON[m - 1]} ${String(y + 543).slice(2)}`; };
+const dowOf = s => { const d = new Date(s + 'T00:00:00').getDay(); return d === 0 ? 7 : d; };
+const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
+const pct = (n, t) => (n * 100 / t).toFixed(2);
+const cb = on => `<span class="cb">${on ? '✓' : ''}</span>`;
+const dots = n => '.'.repeat(n);
+const br = s => esc(s).replace(/\n/g, '<br>');
+const kindTag = s => s.kind === 'sub' ? ' (สอนแทน)' : s.kind === 'swap' ? ' (แลกคาบ)' : '';
+const DEF = { k: 'นักเรียนมีความรู้ความเข้าใจเรื่อง', p: 'นักเรียนมีทักษะกระบวนการในเรื่อง', a: 'นักเรียนมีคุณลักษณะอันพึงประสงค์ตามจุดประสงค์ของเรื่อง' };
+let D = null;
+
+function landscape(on) {
+  document.getElementById('pg')?.remove();
+  if (!on) return;
+  const st = document.createElement('style'); st.id = 'pg';
+  st.textContent = '@page { size: A4 landscape; margin: 10mm 10mm 10mm 12mm; }';
+  document.head.appendChild(st);
+}
+
+function head(title, lines) {
+  return `${D.logo ? `<img class="logo" src="${esc(D.logo)}" alt="" onerror="this.remove()">` : ''}<h1>${title}</h1>${lines.map(l => `<p class="sub">${l}</p>`).join('')}`;
+}
+
+function signBlock(teacher, sg, two) {
+  const one = (name, title) => `<div>ลงชื่อ${dots(34)}<br>(${name ? esc(name) : dots(40)})<br>${esc(title)}</div>`;
+  return `<div class="sign ${two ? 'two' : ''}">${two ? '' : one(teacher, 'ครูผู้สอน')}${one(sg.academic.name, sg.academic.title)}${one(sg.director.name, sg.director.title)}</div>`;
+}
+
+// ── ผล K P A 1 บรรทัด ──
+function kpaLine(L, k, name) {
+  const n = L[k + '_pass'], text = L[k + '_text'] || `${DEF[k]} ${L.topic}`;
+  return `<p class="ind"><b>${name}</b></p><p class="ind2">${br(text)}${n != null ? ` ผ่านเกณฑ์การประเมิน จำนวน ${n} คน${L.total ? ` คิดเป็นร้อยละ ${pct(n, L.total)}` : ''}` : ''}</p>`;
+}
+
+// ── แบบเต็ม 1 ครั้งที่สอน (ตามแบบท้ายแผนการจัดการเรียนรู้) ──
+function block(it, showSubject) {
+  const s = it.session, L = it.log;
+  const hd = `<div class="hd"><span>${DAYS_TH[dowOf(s.date)]}ที่ ${dLong(s.date)} คาบ ${s.period} (${esc(s.time)} น.)${kindTag(s)}</span>
+    <span>${showSubject ? `${esc(s.code)} ${esc(s.title)} ` : ''}${esc(s.class_label)}</span></div>`;
+  if (!L) return `<div class="blk">${hd}<p class="wait muted">${it.state === 'future' ? 'ยังไม่ถึงวันสอน' : 'ยังไม่ได้บันทึก'}</p></div>`;
+  const P_ = D.problems, probs = L.problems || [], none = !L.improve && !L.remedy;
+  return `<div class="blk">${hd}
+    <p><b>บันทึกหลังสอน</b>${L.unit ? ` หน่วยการเรียนรู้ที่ ${esc(L.unit)}` : ''}${L.plan_no ? ` แผนการจัดการเรียนรู้ที่ ${esc(L.plan_no)}` : ''}${L.topic ? ` <b>เรื่อง</b> ${esc(L.topic)}` : ''}</p>
+    ${L.total ? `<p>นักเรียน ${L.total} คน${L.present != null ? ` มาเรียน ${L.present} คน` : ''}</p>` : ''}
+    <p><b>1. ผลการสอน</b></p>
+    <p class="ind">${cb(L.taught === 'plan')}สอนได้ตามแผนการจัดการเรียนรู้</p>
+    <p class="ind2">${cb(L.taught !== 'plan')}สอนไม่ได้ตามแผนการจัดการเรียนรู้ เนื่องจาก ${L.taught !== 'plan' ? br((L.taught === 'none' ? 'ไม่มีการเรียนการสอน — ' : '') + L.reason) : dots(60)}</p>
+    ${L.taught === 'none' ? '' : `<p><b>2. ผลการจัดการเรียนรู้</b></p>
+    ${kpaLine(L, 'k', 'ด้านความรู้ (K)')}${kpaLine(L, 'p', 'ด้านทักษะกระบวนการ (P)')}${kpaLine(L, 'a', 'ด้านคุณลักษณะอันพึงประสงค์ (A)')}`}
+    <p><b>${L.taught === 'none' ? '2' : '3'}. ปัญหาและอุปสรรค</b></p>
+    ${P_.map(([k, v]) => `<p class="ind">${cb(probs.includes(k))}${esc(v)}</p>`).join('')}
+    <p class="ind2">${cb(!!L.problem_other)}อื่น ๆ ${L.problem_other ? br(L.problem_other) : dots(90)}</p>
+    <p><b>${L.taught === 'none' ? '3' : '4'}. ข้อเสนอแนะ/แนวทางแก้ไข</b></p>
+    <p class="ind2">${cb(!!L.improve)}ควรนำแผนไปปรับปรุง เรื่อง ${L.improve ? br(L.improve) : dots(70)}</p>
+    <p class="ind2">${cb(!!L.remedy)}แนวทางแก้ไขนักเรียนที่ไม่ผ่านการประเมิน ${L.remedy ? br(L.remedy) : dots(45)}</p>
+    <p class="ind">${cb(none)}ไม่มีข้อเสนอแนะ</p>
+  </div>`;
+}
+
+function ackLine() {
+  const a = D.ack;
+  return `<div class="cmt"><b>ความเห็น/ข้อเสนอแนะของฝ่ายวิชาการ</b> ${a ? `${cb(true)}รับทราบแล้ว เมื่อวันที่ ${dLong(a.ack_at.slice(0, 10))}${a.comment ? ` — ${br(a.comment)}` : ''}` : dots(150)}</div>`;
+}
+
+// ── ใบรายสัปดาห์ แบบตารางสรุป (แนวนอน) ──
+function weekTable() {
+  const cell = L => {
+    if (L.taught === 'none') return ['ไม่มีการเรียนการสอน<br>' + br(L.reason), '–'];
+    const res = L.taught === 'plan' ? 'สอนได้ตามแผน' : 'สอนไม่ได้ตามแผน เนื่องจาก ' + br(L.reason);
+    const kpa = ['k', 'p', 'a'].map(k => L[k + '_pass'] != null ? `${k.toUpperCase()} ผ่าน ${L[k + '_pass']} คน${L.total ? ` (${pct(L[k + '_pass'], L.total)}%)` : ''}` : '').filter(Boolean);
+    return [res, (L.total ? `นักเรียน ${L.total} คน${L.present != null ? ` มา ${L.present}` : ''}<br>` : '') + (kpa.join('<br>') || '–')];
+  };
+  const rows = D.items.map(it => {
+    const s = it.session, L = it.log;
+    const day = `${DAYS_TH[dowOf(s.date)]}<br>${dShort(s.date)}`, per = `${s.period}<br><span style="font-size:12pt">${esc(s.time)}</span>`;
+    const subj = `${esc(s.code)}<br>${esc(s.class_label)}${kindTag(s)}`;
+    if (!L) return `<tr><td class="c">${day}</td><td class="c">${per}</td><td>${subj}</td><td colspan="5" class="c muted">${it.state === 'future' ? 'ยังไม่ถึงวันสอน' : 'ยังไม่ได้บันทึก'}</td></tr>`;
+    const [res, kpa] = cell(L);
+    const probs = D.problems.filter(([k]) => (L.problems || []).includes(k)).map(([, v]) => '• ' + esc(v));
+    if (L.problem_other) probs.push('• ' + br(L.problem_other));
+    const sug = [L.improve && 'ปรับปรุงแผน: ' + br(L.improve), L.remedy && 'นักเรียนที่ไม่ผ่าน: ' + br(L.remedy)].filter(Boolean);
+    return `<tr><td class="c">${day}</td><td class="c">${per}</td><td>${subj}</td>
+      <td>${[L.unit && 'หน่วยที่ ' + esc(L.unit), L.plan_no && 'แผนที่ ' + esc(L.plan_no)].filter(Boolean).join(' ')}${L.unit || L.plan_no ? '<br>' : ''}${esc(L.topic)}</td>
+      <td>${res}</td><td>${kpa}</td><td>${probs.join('<br>') || 'ไม่มี'}</td><td>${sug.join('<br>') || 'ไม่มีข้อเสนอแนะ'}</td></tr>`;
+  }).join('');
+  return `<table class="g"><colgroup><col style="width:19mm"><col style="width:20mm"><col style="width:25mm"><col style="width:48mm">
+      <col style="width:36mm"><col style="width:36mm"><col><col style="width:46mm"></colgroup>
+    <thead><tr><th>วัน/วันที่</th><th>คาบ</th><th>วิชา/ชั้น</th><th>หน่วย / แผน / เรื่องที่สอน</th><th>ผลการสอน</th><th>ผลการจัดการเรียนรู้</th>
+      <th>ปัญหาและอุปสรรค</th><th>ข้อเสนอแนะ/แนวทางแก้ไข</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="8" class="c">สัปดาห์นี้ไม่มีคาบสอนรายวิชา</td></tr>'}</tbody></table>`;
+}
+
+function renderWeek() {
+  const full = P.get('full') === '1', w = D.week;
+  landscape(!full);
+  const range = `${dLong(w.start)} – ${dLong(addDays(w.start, 4))}`;
+  const done = D.items.filter(i => i.log).length;
+  const top = head(`บันทึกหลังสอน ประจำสัปดาห์ที่ ${w.no}`, [
+    `ระหว่างวันที่ ${range} ภาคเรียนที่ ${esc(D.term)}`,
+    `ครูผู้สอน <b>${esc(D.teacher.name)}</b> ${esc(D.school)} · สอน ${D.items.length} ครั้ง บันทึกแล้ว ${done} ครั้ง`]);
+  document.title = `บันทึกหลังสอน สัปดาห์ที่ ${w.no} ครู${D.teacher.name}`;
+  const q = new URLSearchParams(P); full ? q.delete('full') : q.set('full', '1');
+  document.getElementById('modeBtns').innerHTML = `<a class="btn btn-outline-secondary" href="?${q}">${full ? 'ดูแบบตารางสรุป (แนวนอน)' : 'ดูแบบเต็มรายครั้ง (แนวตั้ง)'}</a>`;
+  document.getElementById('hint').textContent = full ? 'กระดาษ A4 แนวตั้ง' : 'กระดาษ A4 แนวนอน';
+  return `<div class="paper ${full ? '' : 'land'}">${top}${full ? D.items.map(i => block(i, true)).join('') : weekTable()}${ackLine()}${signBlock(D.teacher.full, D.signers)}</div>`;
+}
+
+// ── เล่มรายวิชาทั้งภาคเรียน ──
+function renderLesson() {
+  landscape(false);
+  const s0 = D.items[0]?.session;
+  if (!s0) return '<div class="paper"><p class="sub">ยังไม่มีคาบสอนของรายวิชานี้</p></div>';
+  const done = D.items.filter(i => i.log);
+  document.title = `บันทึกหลังสอน ${s0.code} ${s0.class_label} ครู${D.teacher.name}`;
+  const onlyDone = P.get('all') !== '1';
+  const q = new URLSearchParams(P); onlyDone ? q.set('all', '1') : q.delete('all');
+  document.getElementById('modeBtns').innerHTML = `<a class="btn btn-outline-secondary" href="?${q}">${onlyDone ? 'แสดงคาบที่ยังไม่บันทึกด้วย' : 'แสดงเฉพาะที่บันทึกแล้ว'}</a>`;
+  const top = head('บันทึกหลังสอน', [
+    `รายวิชา <b>${esc(s0.title)} (${esc(s0.code)})</b> ชั้น ${esc(s0.class_label)} ภาคเรียนที่ ${esc(D.term)}`,
+    `ครูผู้สอน <b>${esc(D.teacher.name)}</b> ${esc(D.school)} · สอน ${D.items.length} ครั้ง บันทึกแล้ว ${done.length} ครั้ง (ข้อมูลถึงวันที่ ${dLong(D.today)})`]);
+  const list = onlyDone ? done : D.items;
+  return `<div class="paper">${top}${list.map(i => block(i, false)).join('') || '<p class="sub" style="margin-top:6mm">ยังไม่มีบันทึก</p>'}${signBlock(D.teacher.full, D.signers)}</div>`;
+}
+
+// ── ใบสรุปฝ่ายวิชาการ ──
+function renderSummary() {
+  landscape(false);
+  const T = D.totals;
+  document.title = `สรุปการบันทึกหลังสอน ภาคเรียนที่ ${D.term}`;
+  const top = head('สรุปการบันทึกหลังสอนของครูผู้สอน', [
+    `ภาคเรียนที่ ${esc(D.term)} ${esc(D.school)}`, `ข้อมูลระหว่างวันที่ ${dLong(D.start)} – ${dLong(D.end)}`]);
+  const rows = D.teachers.map((t, i) => `<tr><td class="c">${i + 1}</td><td>${esc(t.name)}</td><td class="c">${t.should}</td><td class="c">${t.done}</td>
+    <td class="c">${t.pending}</td><td class="c">${t.percent ?? '–'}</td><td class="c">${t.notplan || '–'}</td>
+    <td class="c">${t.acked}/${Object.values(t.weeks).filter(c => c.should).length}</td></tr>`).join('');
+  return `<div class="paper">${top}
+    <div class="stat"><div><b>${T.should}</b>ครั้งที่ต้องบันทึก</div><div><b>${T.done}</b>บันทึกแล้ว</div><div><b>${T.pending}</b>ยังค้าง</div>
+      <div><b>${T.percent ?? '–'}</b>ร้อยละที่บันทึก</div><div><b>${T.complete}/${T.teachers}</b>ครูที่บันทึกครบ</div></div>
+    <table class="g"><colgroup><col style="width:10mm"><col><col style="width:20mm"><col style="width:20mm"><col style="width:14mm"><col style="width:17mm">
+      <col style="width:22mm"><col style="width:26mm"></colgroup>
+      <thead><tr><th>ที่</th><th>ครูผู้สอน</th><th>ต้องบันทึก (ครั้ง)</th><th>บันทึกแล้ว (ครั้ง)</th><th>ค้าง</th><th>ร้อยละ</th><th>สอนไม่ได้ตามแผน</th>
+        <th>วิชาการรับทราบ (สัปดาห์)</th></tr></thead>
+      <tbody>${rows}<tr><td colspan="2" class="c b">รวม</td><td class="c b">${T.should}</td><td class="c b">${T.done}</td><td class="c b">${T.pending}</td>
+        <td class="c b">${T.percent ?? '–'}</td><td colspan="2"></td></tr></tbody></table>
+    <p style="margin-top:3mm"><b>ปัญหาและอุปสรรคที่ครูบันทึก</b> (จาก ${T.logs} บันทึก)</p>
+    ${D.problems.map(p => `<p style="padding-left:7mm">• ${esc(p.label)} จำนวน ${p.count} ครั้ง</p>`).join('')}
+    <p style="padding-left:7mm">• ปัญหาอื่น ๆ ${D.others.length} รายการ · สอนไม่ได้ตามแผน/ไม่มีการเรียนการสอน ${D.notplan.length} ครั้ง · ข้อเสนอให้ปรับปรุงแผน ${D.improves.length} รายการ</p>
+    <p class="muted" style="font-size:13pt;margin-top:2mm">หมายเหตุ: นับเฉพาะคาบสอนรายวิชาที่ถึงวันสอนแล้ว ไม่นับวันหยุดและคาบที่ครูลาโดยไม่มีผู้สอนแทน คาบติดกันของวิชาเดียวกันนับเป็น 1 ครั้ง</p>
+    ${signBlock('', D.signers, true)}</div>`;
+}
+
+(async () => {
+  const doc = P.get('doc') || 'week', out = document.getElementById('out');
+  const pass = ['teacher_id', 'start', 'lesson_id', 'from', 'to', 'term'].filter(k => P.get(k)).map(k => `${k}=${encodeURIComponent(P.get(k))}`).join('&');
+  try {
+    D = await api(doc === 'summary' ? `/api/tl/summary?${pass}` : `/api/tl/print?doc=${doc}&${pass}`);
+    out.innerHTML = doc === 'summary' ? renderSummary() : doc === 'lesson' ? renderLesson() : renderWeek();
+  } catch (e) {
+    if (e.message !== 'unauthorized') out.innerHTML = `<div class="controls"><div class="alert alert-warning w-100">${esc(e.message)}</div></div>`;
+  }
+})();
+</script>
+</body>
+</html>

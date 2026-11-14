@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>บันทึกหลังสอน</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/style.css?v=20261102f" rel="stylesheet">
+  <style>
+    .tl-tabs .btn { min-width: 8rem; }
+    .day-h { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-weight: 700; margin: 1.1rem 0 .4rem; }
+    .day-h .d { color: var(--primary-dark, #12532c); }
+    .ses { display: flex; gap: .75rem; align-items: center; width: 100%; text-align: left; padding: .6rem .85rem; margin-bottom: .45rem;
+           background: var(--surface, #fff); border: 1px solid var(--border, #dfe9e2); border-left-width: 5px; border-radius: 12px;
+           color: inherit; }
+    button.ses:hover { box-shadow: var(--card-shadow); }
+    .ses .per { flex: 0 0 4.6rem; text-align: center; line-height: 1.15; }
+    .ses .per b { display: block; font-size: 1.05rem; } .ses .per small { color: var(--text-muted, #6c757d); font-size: .72rem; }
+    .ses .body { flex: 1 1 auto; min-width: 0; }
+    .ses .body .t { font-weight: 600; } .ses .body .s { font-size: .86rem; color: var(--text-muted, #6c757d); overflow-wrap: anywhere; }
+    .ses .st { flex: 0 0 auto; text-align: right; }
+    .ses.done { border-left-color: #198754; } .ses.todo { border-left-color: #dc3545; }
+    .ses.future { border-left-color: #adb5bd; opacity: .75; } .ses.off { border-left-color: #adb5bd; background: var(--surface-2, #f4f6f5); }
+    .prog { height: .8rem; border-radius: 99px; background: var(--surface-2, #e9ecef); overflow: hidden; }
+    .prog > div { height: 100%; background: var(--primary, #1d7a41); }
+    .wk-nav { display: flex; align-items: center; gap: .4rem; }
+    .wk-nav select { flex: 1 1 auto; min-width: 0; max-width: 21rem; }
+    .wk-nav .btn { flex: 0 0 auto; white-space: nowrap; }
+    .kpa { border: 1px solid var(--border, #dfe9e2); border-radius: 12px; padding: .6rem .75rem; margin-bottom: .5rem; }
+    .kpa .n { width: 5.2rem; }
+    .sec { font-weight: 700; margin: 1rem 0 .4rem; color: var(--primary-dark, #12532c); }
+    .chip { border: 1px solid var(--border, #ced4da); background: var(--surface, #fff); color: inherit; border-radius: 99px;
+            padding: .15rem .65rem; font-size: .84rem; }
+    #sumTable th, #sumTable td { white-space: nowrap; vertical-align: middle; text-align: center; }
+    #sumTable td.nm, #sumTable th.nm { text-align: left; position: sticky; left: 0; background: var(--surface, #fff); }
+    .wc { display: inline-block; min-width: 3.1rem; padding: .1rem .35rem; border-radius: 8px; font-size: .84rem; border: 0; }
+    .wc.full { background: #d9f2e1; color: #17653a; } .wc.part { background: #fff1d6; color: #9a5b00; }
+    .wc.zero { background: #fde2e1; color: #b42318; } .wc.none { color: #adb5bd; background: transparent; }
+    .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: .6rem; }
+    .stat-box { background: var(--surface, #fff); border: 1px solid var(--border, #dfe9e2); border-radius: 14px; padding: .6rem .8rem; }
+    .stat-box b { display: block; font-size: 1.5rem; line-height: 1.2; } .stat-box span { font-size: .85rem; color: var(--text-muted, #6c757d); }
+    .bar { height: .7rem; background: var(--primary, #1d7a41); border-radius: 99px; min-width: 2px; }
+    .note-list { max-height: 19rem; overflow: auto; font-size: .9rem; }
+    .note-list > div { padding: .35rem 0; border-bottom: 1px solid var(--border, #dfe9e2); }
+    .lk { font-family: ui-monospace, monospace; font-size: .8rem; overflow-wrap: anywhere; }
+    body.link-mode nav.navbar { display: none; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+  <div class="container">
+    <a class="navbar-brand" href="/"><i class="bi bi-mortarboard-fill me-2"></i>ตะกั่วทุ่งงานทวีวิทยาคม</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto"></ul>
+      <div id="userBadge" class="d-flex align-items-center"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page-header no-print">
+  <div class="container">
+    <h1><i class="bi bi-journal-check me-2"></i>บันทึกหลังสอน</h1>
+    <div class="subtitle" id="subtitle">บันทึกตามวันและคาบที่สอนจริงจากตารางสอน</div>
+  </div>
+</div>
+
+<div class="container pb-5">
+  <div id="alertBox"></div>
+
+  <div class="d-flex flex-wrap gap-2 align-items-end mb-3" id="topbar">
+    <div class="btn-group tl-tabs" id="tabs" hidden>
+      <button class="btn btn-outline-primary active" data-tab="log" onclick="setTab('log')"><i class="bi bi-journal-text me-1"></i>บันทึกรายครู</button>
+      <button class="btn btn-outline-primary" data-tab="sum" onclick="setTab('sum')"><i class="bi bi-bar-chart me-1"></i>สรุปฝ่ายวิชาการ</button>
+      <button class="btn btn-outline-primary" data-tab="links" onclick="setTab('links')"><i class="bi bi-link-45deg me-1"></i>ลิงก์ครู</button>
+    </div>
+    <div id="teacherWrap" hidden>
+      <label class="form-label small mb-1">ครูผู้สอน</label>
+      <select class="form-select" id="teacher" onchange="loadWeek()"></select>
+    </div>
+    <div class="ms-auto text-end small text-muted" id="termLabel"></div>
+  </div>
+
+  <!-- ── บันทึกรายครู ── -->
+  <div id="viewLog">
+    <div class="card mb-3"><div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <div><span class="fw-bold" id="tName"></span> <span class="text-muted small" id="tStat"></span></div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-sm btn-outline-danger" id="btnPending" onclick="showPending()" hidden></button>
+          <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-printer me-1"></i>พิมพ์</button>
+            <ul class="dropdown-menu dropdown-menu-end" id="printMenu"></ul>
+          </div>
+        </div>
+      </div>
+      <div class="prog"><div id="progBar" style="width:0"></div></div>
+    </div></div>
+
+    <div class="wk-nav mb-2">
+      <button class="btn btn-outline-secondary" onclick="moveWeek(-1)" aria-label="สัปดาห์ก่อน"><i class="bi bi-chevron-left"></i></button>
+      <select class="form-select" id="week" onchange="loadWeek()"></select>
+      <button class="btn btn-outline-secondary" onclick="moveWeek(1)" aria-label="สัปดาห์ถัดไป"><i class="bi bi-chevron-right"></i></button>
+      <button class="btn btn-link btn-sm px-1" onclick="goToday()">สัปดาห์นี้</button>
+    </div>
+    <div id="ackBox"></div>
+    <div id="sessions"></div>
+  </div>
+
+  <!-- ── สรุปฝ่ายวิชาการ ── -->
+  <div id="viewSum" hidden>
+    <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+      <div>
+        <label class="form-label small mb-1">ช่วงเวลา</label>
+        <select class="form-select" id="range" onchange="loadSummary()"></select>
+      </div>
+      <a class="btn btn-outline-secondary ms-auto" id="btnPrintSum" target="_blank"><i class="bi bi-printer me-1"></i>พิมพ์ใบสรุป</a>
+    </div>
+    <div id="sumBody"></div>
+  </div>
+
+  <!-- ── ลิงก์ครู ── -->
+  <div id="viewLinks" hidden>
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-1"></i>ลิงก์ส่วนตัวของครูแต่ละคน — เปิดแล้วกรอกบันทึกหลังสอนของตัวเองได้เลยโดยไม่ต้องล็อกอิน
+      ส่งให้เจ้าตัวเท่านั้น ถ้าลิงก์หลุดไปถึงคนอื่นให้กด "ออกลิงก์ใหม่" ลิงก์เดิมจะใช้ไม่ได้ทันที
+    </div>
+    <div class="mb-2"><button class="btn btn-outline-primary btn-sm" onclick="copyAllLinks()"><i class="bi bi-clipboard me-1"></i>คัดลอกทุกลิงก์</button></div>
+    <div class="card"><div class="card-body p-0"><div id="linkBox"></div></div></div>
+  </div>
+</div>
+
+<!-- แบบบันทึก -->
+<div class="modal fade" id="logModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0" id="mTitle"></h5>
+          <div class="small text-muted" id="mSub"></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="mBody"></div>
+      <div class="modal-footer" id="mFoot"></div>
+    </div>
+  </div>
+</div>
+
+<!-- คาบค้าง -->
+<div class="modal fade" id="pendModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">คาบที่ยังไม่ได้บันทึก</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" id="pendBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- รับทราบ -->
+<div class="modal fade" id="ackModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">รับทราบบันทึกหลังสอน</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div id="ackInfo" class="mb-2"></div>
+        <label class="form-label">ข้อเสนอแนะถึงครู (ไม่ใส่ก็ได้)</label>
+        <textarea class="form-control" id="ackComment" rows="3" maxlength="1000"></textarea>
+        <div class="form-text">เมื่อรับทราบแล้ว ครูจะแก้ไขบันทึกของสัปดาห์นี้ไม่ได้ จนกว่าจะยกเลิกการรับทราบ</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>
+        <button class="btn btn-primary" onclick="saveAck()"><i class="bi bi-check2-circle me-1"></i>รับทราบ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="mainToast" class="toast" role="alert"><div class="d-flex"><div class="toast-body"></div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/common.js?v=20261114a"></script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const modal = id => bootstrap.Modal.getOrCreateInstance($(id));
+// เข้าทางลิงก์ส่วนตัว /tl/<รหัส> → ไม่ต้องล็อกอิน เห็นเฉพาะของครูคนนั้น
+const LINK = (location.pathname.match(/^\/tl\/([\w-]{10,64})$/) || [])[1] || '';
+const api = (url, opt = {}) => apiFetch(url, LINK ? { ...opt, headers: { ...(opt.headers || {}), 'X-TL-Key': LINK } } : opt);
+const DAYS_TH = ['', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์', 'อาทิตย์'];
+const MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const dShort = s => { const [y, m, d] = s.split('-').map(Number); return `${d} ${MON[m - 1]} ${String(y + 543).slice(2)}`; };
+const dowOf = s => { const d = new Date(s + 'T00:00:00').getDay(); return d === 0 ? 7 : d; };
+const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
+const pctOf = (n, t) => t ? (n * 100 / t).toFixed(2) : '';
+const TAUGHT = { plan: 'สอนได้ตามแผน', not: 'สอนไม่ได้ตามแผน', none: 'ไม่มีการเรียนการสอน' };
+const REASONS = { not: ['เวลาไม่พอ', 'นักเรียนร่วมกิจกรรมของโรงเรียน', 'อุปกรณ์/สื่อไม่พร้อม', 'ต้องทบทวนเนื้อหาเดิม'],
+                  none: ['กิจกรรมของโรงเรียน', 'สอบกลางภาค', 'สอบปลายภาค', 'นักเรียนไปทัศนศึกษา/แข่งขัน'] };
+
+let META = null, WEEK = null, TAB = 'log', CUR = null, SUM = null, LINKS = [];
+const tid = () => META.me.manage ? Number($('teacher').value) || META.me.tid : META.me.tid;
+const tq = () => META.me.manage && tid() ? `&teacher_id=${tid()}` : '';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  if (LINK) document.body.classList.add('link-mode'); else await loadCurrentUser();
+  try { META = await api('/api/tl/me'); }
+  catch (e) { if (e.message !== 'unauthorized') fail(e.message); return; }
+  if (!META.term.name) return fail('ยังไม่มีภาคเรียนในตารางสอน');
+  $('termLabel').textContent = `ภาคเรียนที่ ${META.term.name}`;
+  if (LINK) $('subtitle').textContent = `ครู${META.me.name} · กรอกผ่านลิงก์ส่วนตัว ไม่ต้องล็อกอิน`;
+  $('week').innerHTML = META.weeks.map(w => `<option value="${w.start}">สัปดาห์ที่ ${w.no} (${dShort(w.start)} – ${dShort(addDays(w.start, 4))})</option>`).join('');
+  if (META.me.manage) {
+    $('tabs').hidden = $('teacherWrap').hidden = false;
+    $('teacher').innerHTML = META.teachers.map(t => `<option value="${t.id}">ครู${esc(t.name)}</option>`).join('');
+    if (META.me.tid && META.teachers.some(t => t.id === META.me.tid)) $('teacher').value = META.me.tid;
+    $('range').innerHTML = '<option value="">ทั้งภาคเรียน (ถึงวันนี้)</option>' +
+      META.weeks.filter(w => w.start <= META.today).map(w => `<option value="${w.start}|${w.end}">สัปดาห์ที่ ${w.no} (${dShort(w.start)} – ${dShort(addDays(w.start, 4))})</option>`).join('');
+  } else if (!META.me.tid) {
+    return fail('บัญชีนี้ยังไม่ได้ผูกกับครูในตารางสอน — แจ้งแอดมินให้ผูกบัญชี หรือขอลิงก์ส่วนตัวจากฝ่ายวิชาการ');
+  }
+  const p = new URLSearchParams(location.search);
+  if (p.get('teacher') && META.me.manage) $('teacher').value = p.get('teacher');
+  goToday(p.get('week'));
+  if (p.get('tab') === 'sum' && META.me.manage) setTab('sum');
+});
+
+function fail(msg) {
+  $('topbar').classList.add('d-none'); $('viewLog').hidden = true;
+  $('alertBox').innerHTML = `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>${esc(msg)}</div>`;
+}
+
+function setTab(t) {
+  TAB = t;
+  document.querySelectorAll('#tabs .btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  $('viewLog').hidden = t !== 'log'; $('viewSum').hidden = t !== 'sum'; $('viewLinks').hidden = t !== 'links';
+  $('teacherWrap').hidden = t !== 'log';
+  if (t === 'sum') loadSummary();
+  if (t === 'links') loadLinks();
+}
+
+// ── สัปดาห์ ───────────────────────────────────────────
+function goToday(start) {
+  const ws = META.weeks.map(w => w.start);
+  let cur = start && ws.includes(start) ? start : ws.filter(s => s <= META.today).pop() || ws[0];
+  $('week').value = cur;
+  loadWeek();
+}
+function moveWeek(n) {
+  const sel = $('week'), i = sel.selectedIndex + n;
+  if (i < 0 || i >= sel.options.length) return;
+  sel.selectedIndex = i; loadWeek();
+}
+
+async function loadWeek() {
+  if (!tid()) { $('sessions').innerHTML = '<div class="text-muted text-center py-4">เลือกครูผู้สอน</div>'; return; }
+  try { WEEK = await api(`/api/tl/week?start=${$('week').value}${tq()}`); }
+  catch (e) { showToast(e.message, 'danger'); return; }
+  const w = WEEK, st = w.stats;
+  $('tName').textContent = 'ครู' + w.teacher.name;
+  $('tStat').textContent = st.should ? `· บันทึกแล้ว ${st.done} จาก ${st.should} ครั้ง (${st.percent}%)` : '· ยังไม่มีคาบสอนที่ถึงกำหนดบันทึก';
+  $('progBar').style.width = (st.percent || 0) + '%';
+  $('btnPending').hidden = !w.pending_count;
+  $('btnPending').innerHTML = `<i class="bi bi-exclamation-circle me-1"></i>ค้าง ${w.pending_count} ครั้ง`;
+  const pk = LINK ? `&k=${LINK}` : '';
+  $('printMenu').innerHTML =
+    `<li><a class="dropdown-item" target="_blank" href="/tl-print.html?doc=week&start=${w.start}${tq()}${pk}"><i class="bi bi-table me-2"></i>สัปดาห์นี้ (ตารางสรุป)</a></li>
+     <li><a class="dropdown-item" target="_blank" href="/tl-print.html?doc=week&full=1&start=${w.start}${tq()}${pk}"><i class="bi bi-file-text me-2"></i>สัปดาห์นี้ (แบบเต็มรายครั้ง)</a></li>
+     ${w.lessons.length ? '<li><hr class="dropdown-divider"></li><li><h6 class="dropdown-header">เล่มรายวิชาทั้งภาคเรียน (แนบท้ายแผน)</h6></li>' : ''}` +
+    w.lessons.map(l => `<li><a class="dropdown-item" target="_blank" href="/tl-print.html?doc=lesson&lesson_id=${l.id}${tq()}${pk}">${esc(l.code)} ${esc(l.class_label)}</a></li>`).join('');
+  renderAck(); renderSessions();
+}
+
+function renderAck() {
+  const a = WEEK.ack, mine = WEEK.sessions.filter(s => s.mine && s.state !== 'future');
+  let h = '';
+  if (a) {
+    h = `<div class="alert alert-success d-flex flex-wrap gap-2 align-items-center">
+      <div class="flex-grow-1"><i class="bi bi-check2-circle me-1"></i>ฝ่ายวิชาการรับทราบแล้ว <span class="small">(${esc(a.ack_by)} · ${dShort(a.ack_at.slice(0, 10))})</span>
+      ${a.comment ? `<div class="mt-1"><b>ข้อเสนอแนะ:</b> ${esc(a.comment)}</div>` : ''}</div>
+      ${META.me.manage ? '<button class="btn btn-sm btn-outline-secondary" onclick="unAck()">ยกเลิกการรับทราบ</button>' : ''}</div>`;
+  } else if (META.me.manage && mine.length) {
+    const todo = mine.filter(s => s.state === 'todo').length;
+    h = `<div class="alert alert-light border d-flex flex-wrap gap-2 align-items-center">
+      <div class="flex-grow-1">สัปดาห์นี้บันทึกแล้ว ${mine.length - todo} จาก ${mine.length} ครั้ง${todo ? ` <span class="text-danger">(ค้าง ${todo})</span>` : ''}</div>
+      <button class="btn btn-sm btn-primary" onclick="openAck()"><i class="bi bi-check2-circle me-1"></i>รับทราบสัปดาห์นี้</button></div>`;
+  }
+  $('ackBox').innerHTML = h;
+}
+
+const ST = {
+  done: ['bg-success', 'บันทึกแล้ว'], todo: ['bg-danger', 'ยังไม่บันทึก'],
+  future: ['bg-secondary', 'ยังไม่ถึงวัน'], off: ['bg-secondary', 'ไม่ได้สอน'],
+};
+function sesRow(s, withDate) {
+  const [cls, label] = ST[s.state];
+  const can = s.mine && s.state !== 'future';
+  const sub = s.log ? (s.log.taught === 'none' ? `ไม่มีการเรียนการสอน: ${esc(s.log.reason)}` : esc(s.log.topic) + (s.log.taught === 'not' ? ' <span class="text-warning-emphasis">· สอนไม่ได้ตามแผน</span>' : ''))
+    : s.mine ? '' : esc(s.note);
+  const inner = `<div class="per"><b>คาบ ${s.period}</b><small>${esc(s.time)}</small></div>
+    <div class="body"><div class="t">${esc(s.code)} ${esc(s.title)} <span class="badge text-bg-light border">${esc(s.class_label)}</span>
+      ${s.mine && s.note ? `<span class="badge text-bg-warning">${esc(s.note)}</span>` : ''}</div>
+      <div class="s">${withDate ? `${DAYS_TH[dowOf(s.date)]} ${dShort(s.date)}${sub ? ' · ' : ''}` : ''}${sub}</div></div>
+    <div class="st"><span class="badge ${cls}">${label}</span></div>`;
+  return can ? `<button type="button" class="ses ${s.state}" onclick="openLog('${s.date}',${s.lesson_id},${s.pf})">${inner}</button>`
+             : `<div class="ses ${s.state}">${inner}</div>`;
+}
+
+function renderSessions() {
+  const w = WEEK; let h = '';
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(w.start, i), list = w.sessions.filter(s => s.date === d), hol = w.holidays.find(x => x.date === d);
+    if (!list.length && !(hol && i < 5)) continue;
+    const hb = hol ? `<span class="badge ${hol.type === 'holiday' ? 'bg-danger' : hol.type === 'makeup' ? 'bg-warning text-dark' : 'bg-info'}">${
+      hol.type === 'holiday' ? 'วันหยุด' : hol.type === 'makeup' ? 'สอนชดเชย' : hol.type === 'exam' ? 'สอบ' : 'กิจกรรม'}: ${esc(hol.name)}</span>` : '';
+    h += `<div class="day-h"><span class="d">${DAYS_TH[i + 1]} ${dShort(d)}</span>${d === META.today ? '<span class="badge bg-primary">วันนี้</span>' : ''}${hb}</div>`;
+    h += list.length ? list.map(s => sesRow(s)).join('') : '<div class="text-muted small ms-1">ไม่มีการเรียนการสอน</div>';
+  }
+  $('sessions').innerHTML = h || '<div class="text-muted text-center py-4">สัปดาห์นี้ไม่มีคาบสอนรายวิชา</div>';
+}
+
+function showPending() {
+  $('pendBody').innerHTML = WEEK.pending.slice().reverse().map(s => sesRow(s, true)).join('') +
+    (WEEK.pending_count > WEEK.pending.length ? `<div class="small text-muted">แสดง ${WEEK.pending.length} ครั้งล่าสุด จากทั้งหมด ${WEEK.pending_count} ครั้ง</div>` : '');
+  modal('pendModal').show();
+}
+
+// ── แบบบันทึก ─────────────────────────────────────────
+async function openLog(date, lessonId, pf) {
+  modal('pendModal').hide();
+  let d;
+  try { d = await api(`/api/tl/log?date=${date}&lesson_id=${lessonId}&pf=${pf}${tq()}`); }
+  catch (e) { showToast(e.message, 'danger'); return; }
+  CUR = d;
+  const s = d.session, L = d.log || {}, pre = d.prefill, ro = !d.can_edit;
+  $('mTitle').innerHTML = `${esc(s.code)} ${esc(s.title)} <span class="badge text-bg-light border">${esc(s.class_label)}</span>`;
+  $('mSub').textContent = `${DAYS_TH[dowOf(s.date)]} ${dShort(s.date)} · คาบ ${s.period} (${s.time})` + (s.kind === 'sub' ? ' · สอนแทน' : s.kind === 'swap' ? ' · แลกคาบ' : '');
+  const taught = L.taught || (s.holiday && s.holiday.type !== 'makeup' ? 'none' : 'plan');
+  const total = L.total ?? pre.total ?? '', present = L.present ?? pre.present ?? '';
+  const dis = ro ? 'disabled' : '';
+  const kpa = (k, name, ph) => `<div class="kpa">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+        <b>${name}</b>
+        <div class="d-flex align-items-center gap-1 small">ผ่านเกณฑ์
+          <input type="number" min="0" inputmode="numeric" class="form-control form-control-sm n" id="f_${k}_pass" value="${L[k + '_pass'] ?? ''}" oninput="calcPct()" ${dis}>
+          คน <span class="text-muted" id="pct_${k}"></span>
+          ${ro ? '' : `<button type="button" class="chip" onclick="allPass('${k}')">ทุกคน</button>`}</div>
+      </div>
+      <textarea class="form-control form-control-sm" id="f_${k}_text" rows="2" maxlength="600" placeholder="${ph}" ${dis}>${esc(L[k + '_text'] || '')}</textarea></div>`;
+  $('mBody').innerHTML = `
+    ${d.locked ? '<div class="alert alert-secondary py-2"><i class="bi bi-lock me-1"></i>ฝ่ายวิชาการรับทราบสัปดาห์นี้แล้ว จึงแก้ไขไม่ได้</div>' : ''}
+    ${s.holiday && s.holiday.type !== 'makeup' ? `<div class="alert alert-info py-2">วันนี้มี${s.holiday.type === 'exam' ? 'การสอบ' : 'กิจกรรม'}: ${esc(s.holiday.name)}</div>` : ''}
+    ${!ro && pre.prev ? `<button type="button" class="btn btn-sm btn-outline-primary mb-2" onclick="copyPrev()"><i class="bi bi-files me-1"></i>คัดลอกจากครั้งก่อน (${dShort(pre.prev.date)})</button>` : ''}
+    <div class="row g-2">
+      <div class="col-8 col-md-5"><label class="form-label small mb-1">หน่วยการเรียนรู้</label>
+        <input class="form-control" id="f_unit" maxlength="150" placeholder="เช่น 1 ระบบทางเทคโนโลยี" value="${esc(L.unit || '')}" ${dis}></div>
+      <div class="col-4 col-md-2"><label class="form-label small mb-1">แผนที่</label>
+        <input class="form-control" id="f_plan_no" maxlength="20" value="${esc(L.plan_no || '')}" ${dis}></div>
+      <div class="col-12 col-md-5"><label class="form-label small mb-1">เรื่องที่สอน <span class="text-danger">*</span></label>
+        <input class="form-control" id="f_topic" maxlength="300" value="${esc(L.topic || '')}" ${dis}></div>
+    </div>
+
+    <div class="sec">1. ผลการสอน</div>
+    ${Object.entries(TAUGHT).map(([k, v]) => `<div class="form-check">
+      <input class="form-check-input" type="radio" name="taught" id="t_${k}" value="${k}" ${taught === k ? 'checked' : ''} onchange="taughtChanged()" ${dis}>
+      <label class="form-check-label" for="t_${k}">${v}${k === 'plan' ? 'การจัดการเรียนรู้' : k === 'not' ? 'การจัดการเรียนรู้ เนื่องจาก…' : ' (สอบ / กิจกรรม ฯลฯ) เนื่องจาก…'}</label></div>`).join('')}
+    <div id="reasonWrap" class="mt-2">
+      <div class="d-flex flex-wrap gap-1 mb-1" id="reasonChips"></div>
+      <textarea class="form-control" id="f_reason" rows="2" maxlength="500" placeholder="เหตุผล" ${dis}>${esc(L.reason || '')}</textarea>
+    </div>
+
+    <div id="learnWrap">
+      <div class="sec">2. ผลการจัดการเรียนรู้</div>
+      <div class="d-flex flex-wrap gap-3 align-items-center mb-2 small">
+        <div class="d-flex align-items-center gap-1">นักเรียนทั้งหมด
+          <input type="number" min="0" inputmode="numeric" class="form-control form-control-sm" style="width:5.2rem" id="f_total" value="${total}" oninput="calcPct()" ${dis}> คน</div>
+        <div class="d-flex align-items-center gap-1">มาเรียน
+          <input type="number" min="0" inputmode="numeric" class="form-control form-control-sm" style="width:5.2rem" id="f_present" value="${present}" ${dis}> คน</div>
+        ${!d.log && pre.present != null ? '<span class="text-muted">(จำนวนมาเรียนจากการเช็กชื่อวันนั้น แก้ได้)</span>' : ''}
+      </div>
+      ${kpa('k', 'ด้านความรู้ (K)', 'นักเรียนมีความรู้ความเข้าใจเรื่อง…')}
+      ${kpa('p', 'ด้านทักษะกระบวนการ (P)', 'นักเรียนมีทักษะ…')}
+      ${kpa('a', 'ด้านคุณลักษณะอันพึงประสงค์ (A)', 'นักเรียนมี…')}
+    </div>
+
+    <div class="sec">3. ปัญหาและอุปสรรค</div>
+    ${META.problems.map(([k, v]) => `<div class="form-check">
+      <input class="form-check-input" type="checkbox" id="pb_${k}" value="${k}" ${(L.problems || []).includes(k) ? 'checked' : ''} ${dis}>
+      <label class="form-check-label" for="pb_${k}">${esc(v)}</label></div>`).join('')}
+    <textarea class="form-control mt-2" id="f_problem_other" rows="2" maxlength="600" placeholder="อื่น ๆ (ถ้ามี)" ${dis}>${esc(L.problem_other || '')}</textarea>
+
+    <div class="sec">4. ข้อเสนอแนะ / แนวทางแก้ไข</div>
+    <label class="form-label small mb-1">ควรนำแผนไปปรับปรุง เรื่อง</label>
+    <textarea class="form-control mb-2" id="f_improve" rows="2" maxlength="600" ${dis}>${esc(L.improve || '')}</textarea>
+    <label class="form-label small mb-1">แนวทางแก้ไขนักเรียนที่ไม่ผ่านการประเมิน</label>
+    <textarea class="form-control" id="f_remedy" rows="2" maxlength="600" ${dis}>${esc(L.remedy || '')}</textarea>
+    <div class="form-text">เว้นว่างทั้งสองช่อง = ไม่มีข้อเสนอแนะ</div>
+    ${d.log ? `<div class="small text-muted mt-3">บันทึกโดย ครู${esc(L.teacher_name)} · ล่าสุด ${dShort(L.updated_at.slice(0, 10))} ${L.updated_at.slice(11, 16)} น.</div>` : ''}`;
+  $('mFoot').innerHTML = ro
+    ? '<button class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>'
+    : `${d.log ? '<button class="btn btn-outline-danger me-auto" onclick="delLog()"><i class="bi bi-trash me-1"></i>ลบ</button>' : ''}
+       <button class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+       <button class="btn btn-primary" id="btnSave" onclick="saveLog()"><i class="bi bi-check2 me-1"></i>บันทึก</button>`;
+  taughtChanged(); calcPct();
+  modal('logModal').show();
+}
+
+const taughtVal = () => document.querySelector('input[name=taught]:checked')?.value || 'plan';
+function taughtChanged() {
+  const t = taughtVal();
+  $('reasonWrap').hidden = t === 'plan';
+  $('learnWrap').hidden = t === 'none';
+  $('reasonChips').innerHTML = CUR.can_edit ? (REASONS[t] || []).map(r => `<button type="button" class="chip" onclick="addReason(this)">${esc(r)}</button>`).join('') : '';
+  if (t === 'none' && CUR.can_edit && !$('f_reason').value && CUR.session.holiday) $('f_reason').value = CUR.session.holiday.name;
+}
+function addReason(b) { const f = $('f_reason'); f.value = f.value ? f.value + ' ' + b.textContent : b.textContent; f.focus(); }
+function calcPct() {
+  const total = Number($('f_total').value);
+  for (const k of ['k', 'p', 'a']) {
+    const v = $(`f_${k}_pass`).value;
+    $(`pct_${k}`).textContent = v !== '' && total ? `(${pctOf(Number(v), total)}%)` : '';
+  }
+}
+function allPass(k) {
+  const total = $('f_total').value;
+  if (!total) { showToast('ใส่จำนวนนักเรียนทั้งหมดก่อน', 'warning'); $('f_total').focus(); return; }
+  $(`f_${k}_pass`).value = total; calcPct();
+}
+function copyPrev() {
+  const p = CUR.prefill.prev;
+  for (const f of ['unit', 'plan_no', 'topic', 'k_text', 'p_text', 'a_text']) if (!$('f_' + f).value) $('f_' + f).value = p[f] || '';
+  showToast('คัดลอกหน่วย แผน เรื่อง และข้อความ K P A จากครั้งก่อนแล้ว — ตรวจแก้ให้ตรงกับครั้งนี้');
+}
+
+async function saveLog() {
+  const s = CUR.session, v = id => $('f_' + id).value.trim();
+  const body = { date: s.date, lesson_id: s.lesson_id, pf: s.pf, taught: taughtVal(),
+    problems: META.problems.map(([k]) => k).filter(k => $('pb_' + k).checked) };
+  for (const f of ['unit', 'plan_no', 'topic', 'reason', 'total', 'present', 'k_text', 'k_pass', 'p_text', 'p_pass', 'a_text', 'a_pass',
+                   'problem_other', 'improve', 'remedy']) body[f] = v(f);
+  $('btnSave').disabled = true;
+  try {
+    const r = await api('/api/tl/log', { method: 'PUT', body: JSON.stringify(body) });
+    showToast(r.message); modal('logModal').hide(); loadWeek();
+  } catch (e) { showToast(e.message, 'danger'); }
+  finally { if ($('btnSave')) $('btnSave').disabled = false; }
+}
+
+async function delLog() {
+  if (!confirm('ลบบันทึกหลังสอนของคาบนี้?')) return;
+  const s = CUR.session;
+  try {
+    const r = await api(`/api/tl/log?date=${s.date}&lesson_id=${s.lesson_id}&pf=${s.pf}`, { method: 'DELETE' });
+    showToast(r.message); modal('logModal').hide(); loadWeek();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
+// ── รับทราบ (ฝ่ายวิชาการ) ───────────────────────────────
+function openAck() {
+  const wk = META.weeks.find(w => w.start === WEEK.start);
+  $('ackInfo').innerHTML = `ครู${esc(WEEK.teacher.name)} · สัปดาห์ที่ ${wk ? wk.no : ''} (${dShort(WEEK.start)} – ${dShort(addDays(WEEK.start, 4))})`;
+  $('ackComment').value = '';
+  modal('ackModal').show();
+}
+async function saveAck() {
+  try {
+    const r = await api('/api/tl/ack', { method: 'POST', body: JSON.stringify({ teacher_id: WEEK.teacher.id, week: WEEK.start, comment: $('ackComment').value }) });
+    showToast(r.message); modal('ackModal').hide(); loadWeek();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+async function unAck() {
+  if (!confirm('ยกเลิกการรับทราบ? ครูจะกลับมาแก้ไขบันทึกสัปดาห์นี้ได้')) return;
+  try {
+    const r = await api('/api/tl/ack', { method: 'POST', body: JSON.stringify({ teacher_id: WEEK.teacher.id, week: WEEK.start, on: false }) });
+    showToast(r.message); loadWeek();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
+// ── สรุปฝ่ายวิชาการ ─────────────────────────────────────
+async function loadSummary() {
+  const [f, t] = ($('range').value || '|').split('|');
+  const q = f ? `?from=${f}&to=${t}` : '';
+  $('btnPrintSum').href = '/tl-print.html?doc=summary' + (f ? `&from=${f}&to=${t}` : '');
+  try { SUM = await api('/api/tl/summary' + q); }
+  catch (e) { $('sumBody').innerHTML = `<div class="alert alert-warning">${esc(e.message)}</div>`; return; }
+  const s = SUM, T = s.totals;
+  const cell = (t, w) => {
+    const c = t.weeks[w.start];
+    if (!c || !c.should) return '<span class="wc none">–</span>';
+    const cls = c.done >= c.should ? 'full' : c.done ? 'part' : 'zero';
+    return `<button class="wc ${cls}" title="เปิดดูบันทึกสัปดาห์ที่ ${w.no}" onclick="openTeacherWeek(${t.id},'${w.start}')">${c.done}/${c.should}${c.ack ? ' <i class="bi bi-check2-circle"></i>' : ''}</button>`;
+  };
+  const maxP = Math.max(1, ...s.problems.map(p => p.count));
+  const notes = (title, list, fmt) => `<div class="col-lg-6"><div class="card h-100"><div class="card-header">${title} <span class="badge text-bg-secondary">${list.length}</span></div>
+    <div class="card-body note-list">${list.length ? list.slice().reverse().map(x =>
+      `<div><span class="text-muted">${dShort(x.date)} คาบ ${esc(x.period)} · ${esc(x.code)} ${esc(x.class_label)} · ครู${esc(x.teacher)}</span><br>${fmt(x)}</div>`).join('')
+      : '<div class="text-muted border-0">ไม่มี</div>'}</div></div></div>`;
+  $('sumBody').innerHTML = `
+    <div class="stat-row mb-3">
+      <div class="stat-box"><b>${T.should}</b><span>ครั้งที่ต้องบันทึก</span></div>
+      <div class="stat-box"><b class="text-success">${T.done}</b><span>บันทึกแล้ว</span></div>
+      <div class="stat-box"><b class="text-danger">${T.pending}</b><span>ยังค้าง</span></div>
+      <div class="stat-box"><b>${T.percent ?? '–'}${T.percent != null ? '%' : ''}</b><span>ร้อยละที่บันทึก</span></div>
+      <div class="stat-box"><b>${T.complete}/${T.teachers}</b><span>ครูที่บันทึกครบ</span></div>
+    </div>
+    <div class="small text-muted mb-2">ข้อมูล ${dShort(s.start)} – ${dShort(s.end)} (นับเฉพาะคาบที่ถึงวันสอนแล้ว ไม่นับวันหยุดและคาบที่ครูลาโดยไม่มีผู้สอนแทน) ·
+      กดตัวเลขในช่องสัปดาห์เพื่อเปิดดูบันทึกและรับทราบ · <i class="bi bi-check2-circle"></i> = รับทราบแล้ว</div>
+    <div class="card mb-3"><div class="table-responsive"><table class="table table-sm mb-0" id="sumTable">
+      <thead><tr><th class="nm">ครูผู้สอน</th><th>ต้องบันทึก</th><th>บันทึกแล้ว</th><th>ค้าง</th><th>ร้อยละ</th>
+        <th title="สอนไม่ได้ตามแผน">ไม่ตามแผน</th>${s.weeks.map(w => `<th title="${dShort(w.start)} – ${dShort(addDays(w.start, 4))}">ส.${w.no}</th>`).join('')}<th>บันทึกล่าสุด</th></tr></thead>
+      <tbody>${s.teachers.map(t => `<tr>
+        <td class="nm">ครู${esc(t.name)}</td><td>${t.should}</td><td>${t.done}</td>
+        <td class="${t.pending ? 'text-danger fw-bold' : ''}">${t.pending}</td><td>${t.percent ?? '–'}</td><td>${t.notplan || ''}</td>
+        ${s.weeks.map(w => `<td>${cell(t, w)}</td>`).join('')}
+        <td class="small text-muted">${t.last_at ? dShort(t.last_at.slice(0, 10)) : '–'}</td></tr>`).join('')}</tbody>
+    </table></div></div>
+    <div class="row g-3">
+      <div class="col-lg-6"><div class="card h-100"><div class="card-header">ปัญหาและอุปสรรคที่พบ (จาก ${T.logs} บันทึก)</div><div class="card-body">
+        ${s.problems.map(p => `<div class="mb-2"><div class="d-flex justify-content-between small"><span>${esc(p.label)}</span><b>${p.count}</b></div>
+          <div class="bar" style="width:${p.count * 100 / maxP}%"></div></div>`).join('')}</div></div></div>
+      ${notes('สอนไม่ได้ตามแผน / ไม่มีการเรียนการสอน', s.notplan, x => `<b>${x.taught === 'none' ? 'ไม่มีการเรียนการสอน' : 'สอนไม่ได้ตามแผน'}:</b> ${esc(x.text)}`)}
+      ${notes('ปัญหาอื่น ๆ ที่ครูบันทึก', s.others, x => esc(x.text))}
+      ${notes('ข้อเสนอให้ปรับปรุงแผน', s.improves, x => esc(x.text))}
+    </div>`;
+}
+
+function openTeacherWeek(id, start) {
+  $('teacher').value = id; $('week').value = start;
+  setTab('log'); loadWeek();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── ลิงก์ครู ───────────────────────────────────────────
+const linkUrl = l => `${location.origin}/tl/${l.token}`;
+const linkText = l => `บันทึกหลังสอน — ครู${l.name}\nเปิดลิงก์นี้เพื่อกรอกบันทึกหลังสอนของตัวเอง (ไม่ต้องล็อกอิน ห้ามส่งต่อ)\n${linkUrl(l)}`;
+async function loadLinks() {
+  try { LINKS = (await api('/api/tl/links')).links; }
+  catch (e) { $('linkBox').innerHTML = `<div class="p-3 text-danger">${esc(e.message)}</div>`; return; }
+  renderLinks();
+}
+function renderLinks() {
+  $('linkBox').innerHTML = LINKS.map((l, i) => `<div class="d-flex flex-wrap align-items-center gap-2 px-3 py-2 border-bottom">
+    <div style="flex:1 1 14rem;min-width:0"><b>ครู${esc(l.name)}</b>
+      ${l.has_account ? '<span class="badge text-bg-light border">มีบัญชี</span>' : ''}
+      <div class="lk text-muted">${esc(linkUrl(l))}</div></div>
+    <button class="btn btn-sm btn-outline-primary" onclick="copyLink(${i},true)"><i class="bi bi-chat-dots me-1"></i>คัดลอกพร้อมข้อความ</button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="copyLink(${i})"><i class="bi bi-clipboard"></i></button>
+    <button class="btn btn-sm btn-outline-danger" onclick="renewLink(${i})">ออกลิงก์ใหม่</button></div>`).join('')
+    || '<div class="p-3 text-muted">ยังไม่มีครูในตารางสอนของภาคเรียนนี้</div>';
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); showToast('คัดลอกแล้ว'); }
+  catch { prompt('คัดลอกข้อความนี้', t); }
+}
+function copyLink(i, full) { copyText(full ? linkText(LINKS[i]) : linkUrl(LINKS[i])); }
+function copyAllLinks() { copyText(LINKS.map(l => `ครู${l.name}\n${linkUrl(l)}`).join('\n\n')); }
+async function renewLink(i) {
+  if (!confirm(`ออกลิงก์ใหม่ให้ครู${LINKS[i].name}? ลิงก์เดิมจะใช้ไม่ได้ทันที`)) return;
+  try {
+    const r = await api('/api/tl/links/renew', { method: 'POST', body: JSON.stringify({ teacher_id: LINKS[i].id }) });
+    LINKS[i].token = r.token; renderLinks(); showToast(r.message);
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+</script>
+</body>
+</html>
